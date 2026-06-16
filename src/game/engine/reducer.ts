@@ -32,6 +32,7 @@ import {
   WINTER_FACTS,
 } from "../content/facts";
 import { initialState } from "./state";
+import { MAIN_QUESTS } from "../content/quests";
 import {
   addLog,
   chance,
@@ -43,6 +44,7 @@ import {
   invCount,
   learnFact,
   pick,
+  pushDialog,
   randInt,
   take,
 } from "./util";
@@ -70,6 +72,9 @@ export type Action =
   | { type: "CLOSE_ANIMALS" }
   | { type: "ADVANCE_PHASE" }
   | { type: "SLEEP" }
+  | { type: "PUSH_DIALOG"; speaker?: string; lines: string[] }
+  | { type: "DISMISS_DIALOG" }
+  | { type: "SET_FLAG"; key: string }
   | { type: "DISMISS_FLASH" };
 
 const has = (s: GameState, id: string) => s.buildings.includes(id);
@@ -134,6 +139,38 @@ function randomWeather(season: Season): Weather {
 // ---------------------------------------------------------------------------
 
 export function reducer(state: GameState, action: Action): GameState {
+  const next = core(state, action);
+  if (next === state) return next;
+  if (
+    action.type === "DISMISS_FLASH" ||
+    action.type === "DISMISS_DIALOG" ||
+    action.type === "PUSH_DIALOG" ||
+    action.type === "START" ||
+    action.type === "RESET" ||
+    action.type === "LOAD"
+  )
+    return next;
+  advanceQuests(next);
+  return next;
+}
+
+function advanceQuests(s: GameState) {
+  while (s.questLine < MAIN_QUESTS.length) {
+    const q = MAIN_QUESTS[s.questLine];
+    if (!q.done(s)) break;
+    s.questCompleted.push(q.id);
+    s.questLine += 1;
+    if (q.reward?.money) {
+      s.money += q.reward.money;
+      s.totalEarned += q.reward.money;
+    }
+    if (q.reward?.energy) s.energy = clamp(s.energy + q.reward.energy, 0, s.maxEnergy);
+    pushDialog(s, q.speaker ?? "Louka", [q.onComplete]);
+    addLog(s, `✓ Splněn úkol: ${q.title}`, "good");
+  }
+}
+
+function core(state: GameState, action: Action): GameState {
   switch (action.type) {
     case "START": {
       const s = cloneState(state);
@@ -152,6 +189,27 @@ export function reducer(state: GameState, action: Action): GameState {
       if (!state.flash) return state;
       const s = cloneState(state);
       s.flash = null;
+      return s;
+    }
+
+    case "PUSH_DIALOG": {
+      const s = cloneState(state);
+      pushDialog(s, action.speaker, action.lines);
+      return s;
+    }
+
+    case "DISMISS_DIALOG": {
+      if (!state.dialog) return state;
+      const s = cloneState(state);
+      const rest = state.dialog.lines.slice(1);
+      s.dialog = rest.length ? { speaker: state.dialog.speaker, lines: rest } : null;
+      return s;
+    }
+
+    case "SET_FLAG": {
+      if (state.flags[action.key]) return state;
+      const s = cloneState(state);
+      s.flags[action.key] = true;
       return s;
     }
 
@@ -374,6 +432,7 @@ export function reducer(state: GameState, action: Action): GameState {
       const usesHerbs = recipe.inputs.some((i) => i.item === "byliny");
       const bonus = usesHerbs && has(s, "susarna") ? 1 : 0;
       for (const out of recipe.outputs) give(s, out.item, out.qty + bonus);
+      if (recipe.id === "make_salve") s.flags.made_mast = true;
       addLog(s, `Vyrobil jsi: ${recipe.name}.`, "good");
       flash(
         s,
@@ -441,6 +500,7 @@ export function reducer(state: GameState, action: Action): GameState {
       take(s, [{ item: action.itemId, qty }]);
       s.money += total;
       s.totalEarned += total;
+      s.flags.sold = true;
       addLog(s, `Prodal jsi ${qty}× ${item.name} za ${total} Kč.`, "good");
       flash(s, `+${total} Kč za ${item.name}. 💰`, "good");
       return s;

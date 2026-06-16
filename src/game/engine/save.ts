@@ -1,7 +1,7 @@
 import type { GameState } from "../types";
 import { initialState } from "./state";
 
-const KEY = "louka-save-v1";
+const KEY = "louka-save-v2";
 
 export function saveGame(s: GameState) {
   try {

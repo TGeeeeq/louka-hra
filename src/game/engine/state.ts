@@ -60,6 +60,11 @@ export function initialState(): GameState {
     daysSurvived: 0,
     gameOver: null,
 
+    questLine: 0,
+    questCompleted: [],
+    flags: {},
+    dialog: null,
+
     log: [],
     logSeq: 0,
     flash: null,

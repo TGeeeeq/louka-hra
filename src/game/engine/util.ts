@@ -30,8 +30,16 @@ export function cloneState(s: GameState): GameState {
     tasksDone: { ...s.tasksDone },
     knownFacts: [...s.knownFacts],
     seenAnimals: [...s.seenAnimals],
+    questCompleted: [...s.questCompleted],
+    flags: { ...s.flags },
     log: s.log,
   };
+}
+
+/** Přidá repliky do dialogového okna (nebo je připojí k existujícímu). */
+export function pushDialog(s: GameState, speaker: string | undefined, lines: string[]) {
+  if (s.dialog) s.dialog = { speaker: s.dialog.speaker ?? speaker, lines: [...s.dialog.lines, ...lines] };
+  else s.dialog = { speaker, lines: [...lines] };
 }
 
 export function addLog(

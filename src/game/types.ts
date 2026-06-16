@@ -168,6 +168,12 @@ export interface GameState {
   daysSurvived: number;
   gameOver: string | null;
 
+  // Questy a dialogy
+  questLine: number; // index v MAIN_QUESTS
+  questCompleted: string[];
+  flags: Record<string, boolean>; // např. pet_flicek, made_mast, sold
+  dialog: { speaker?: string; lines: string[] } | null;
+
   log: LogEntry[];
   logSeq: number;
 

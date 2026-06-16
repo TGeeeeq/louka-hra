@@ -19,6 +19,18 @@ Jeden **level = jeden den**. Den má tři fáze a střídají se roční období
 
 Spokojená zvířata = dary od příznivců. Zanedbaná = veterinář a ztráty. Bankrot = konec.
 
+## Jak se hraje (prozkoumatelný svět)
+
+Chodíš postavou po Louce (top-down mapa ve stylu Pokémon / Zoo Tycoon):
+
+- **Pohyb:** šipky nebo **WASD**; na mobilu kříž (D-pad) vlevo dole.
+- **Akce:** **mezerník / Enter** (na mobilu tlačítko **A**) — když stojíš u zvířete nebo
+  stavení, uděláš, co je potřeba (vypustit, nakrmit, sebrat vejce, vařit, prodat, spát…).
+- **Stavení:** 🐔 kurník · 🐖 chlívek · 🌾 pastvina · 🦴 pelíšky · ⛲ studna · 🔥 ohniště &
+  kuchyně · 🛠️ dílna (výroba) · 🏪 stánek (obchod) · 🏡 chalupa (spánek) · 🪧 cedule (nápověda).
+- **Questy** vedou nahoře (vtipná příběhová linka), **zvuky** jsou chiptune + ambient
+  (🔊 / 🎵 v HUD je vypneš), 🎒 batoh = najíst se a napít.
+
 ## Spuštění (lokálně v prohlížeči)
 
 ```bash

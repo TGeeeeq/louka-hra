@@ -3,6 +3,8 @@ import { PEOPLE } from "../../game/content/people";
 import { PersonSprite } from "../sprites/PersonSprite";
 import { ANIMAL_BY_ID } from "../../game/content/animals";
 import { AnimalSprite } from "../sprites/AnimalSprite";
+import AFLogo from "./AFLogo";
+import { sound } from "../../audio/sound";
 
 const PEEK = ["karel", "princezna", "avala", "pogo", "riky", "roman", "husy", "kralici"];
 
@@ -39,16 +41,20 @@ export function Intro() {
         </div>
 
         <div className="intro-actions">
-          <button className="big-btn" onClick={() => dispatch({ type: "START" })}>
+          <button className="big-btn" onClick={() => { sound.ensure(); dispatch({ type: "START" }); }}>
             {hasSave ? "Pokračovat 🌱" : "Začít hrát 🌱"}
           </button>
           {hasSave && (
-            <button className="ghost-btn" onClick={() => dispatch({ type: "RESET" })}>
+            <button className="ghost-btn" onClick={() => { sound.ensure(); dispatch({ type: "RESET" }); }}>
               Nová hra od začátku
             </button>
           )}
         </div>
         <p className="intro-credit">Postavičky a příběhy podle skutečných obyvatel Louky · nechmerust.org</p>
+        <a className="af-credit" href="https://www.antoninfigueroa.cz" target="_blank" rel="noopener noreferrer" style={{ marginTop: 10 }}>
+          <AFLogo size={34} />
+          <span>web vytvořil <span className="af-name">Antonín Figueroa</span></span>
+        </a>
       </div>
     </div>
   );
