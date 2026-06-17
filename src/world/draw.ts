@@ -288,49 +288,65 @@ function arch(ctx: CanvasRenderingContext2D, cx: number, baseY: number, ww: numb
 function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: number, y: number, w: number, h: number, time: number) {
   const cx = x + w / 2;
   const baseY = y + h;
-  const wall = (top: number, col = BC.wood) => {
+  const D = Math.max(11, w * 0.24); // hloubka 3D boku (dozadu-vpravo)
+  const dy = D * 0.55;
+
+  // 3D kvádr stavby: pravý bok (tmavý parallelogram) + čelo + horní/levá hrana
+  const box = (top: number, face: string, side: string) => {
     const hgt = baseY - top;
+    ctx.fillStyle = side;
+    ctx.beginPath();
+    ctx.moveTo(x + w - 3, top); ctx.lineTo(x + w - 3 + D, top - dy);
+    ctx.lineTo(x + w - 3 + D, baseY - dy); ctx.lineTo(x + w - 3, baseY);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = face;
+    roundRect(ctx, x + 3, top, w - 6, hgt, 3); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.16)"; ctx.fillRect(x + 4, top, w - 7, 3); // horní hrana
+    ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(x + 4, top, 3, hgt); // levá hrana
+  };
+  // 3D sedlová střecha: čelní štít (světlý) + pravá střešní plocha dozadu-vpravo (tmavá)
+  const roof = (topY: number, col: string, dark: string, rh: number) => {
+    const ax = cx;
+    const ay = topY - rh;
+    ctx.fillStyle = dark;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay); ctx.lineTo(x + w + 3, topY); ctx.lineTo(x + w + 3 + D, topY - dy); ctx.lineTo(ax + D, ay - dy);
+    ctx.closePath(); ctx.fill();
     ctx.fillStyle = col;
-    roundRect(ctx, x + 3, top, w - 6, hgt, 4); ctx.fill();
-    ctx.fillStyle = "rgba(0,0,0,0.17)"; // pravá stěna ve stínu = objem
-    roundRect(ctx, x + w - 13, top + 2, 10, hgt - 2, 4); ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.14)"; // levá světlá hrana
-    ctx.fillRect(x + 5, top + 2, 4, hgt - 4);
-    ctx.fillStyle = "rgba(0,0,0,0.18)"; // usazení dole
-    ctx.fillRect(x + 4, baseY - 3, w - 8, 3);
+    ctx.beginPath();
+    ctx.moveTo(x - 3, topY); ctx.lineTo(ax, ay); ctx.lineTo(x + w + 3, topY); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.28)"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + D, ay - dy); ctx.stroke(); // hřeben
+    ctx.fillStyle = "rgba(0,0,0,0.14)"; ctx.fillRect(x - 3, topY, w + 6, 2.5); // okap
   };
 
   switch (kind) {
     case "chalupa": {
-      const wt = y + h * 0.46;
-      ctx.fillStyle = BC.stoneD; ctx.fillRect(x + w - 22, y - 6, 8, h * 0.5); // komín
-      ctx.fillStyle = "rgba(211,206,191,0.7)"; for (let i = 0; i < 3; i++) ctx.beginPath(), ctx.arc(x + w - 18, y - 10 - i * 7 + Math.sin(time * 0.003 + i) * 2, 3 + i, 0, 7), ctx.fill();
-      wall(wt);
-      gable(ctx, x, wt + 4, w, h * 0.5, BC.roof, BC.roofD);
-      arch(ctx, cx, baseY, 9, 22, BC.door);
-      ctx.fillStyle = BC.lock; ctx.beginPath(); ctx.arc(cx + 5, baseY - 12, 1.5, 0, 7); ctx.fill();
-      ctx.fillStyle = BC.win; roundRect(ctx, x + 10, wt + 8, 14, 14, 3); ctx.fill();
-      ctx.strokeStyle = BC.winF; ctx.lineWidth = 1.5; ctx.strokeRect(x + 10, wt + 8, 14, 14); ctx.beginPath(); ctx.moveTo(x + 17, wt + 8); ctx.lineTo(x + 17, wt + 22); ctx.stroke();
+      const top = y + h * 0.2;
+      ctx.fillStyle = BC.stoneD; ctx.fillRect(x + w - 20, y - h * 0.5, 9, h * 0.6); // vysoký komín
+      ctx.fillStyle = "rgba(211,206,191,0.7)"; for (let i = 0; i < 3; i++) ctx.beginPath(), ctx.arc(x + w - 15, y - h * 0.5 - i * 7 + Math.sin(time * 0.003 + i) * 2, 3 + i, 0, 7), ctx.fill();
+      box(top, BC.wood, BC.woodD);
+      roof(top, BC.roof, BC.roofD, h * 0.62);
+      arch(ctx, cx, baseY, 9, h * 0.42, BC.door);
+      ctx.fillStyle = BC.win; roundRect(ctx, x + 9, top + 8, 14, 14, 3); ctx.fill();
+      ctx.strokeStyle = BC.winF; ctx.lineWidth = 1.5; ctx.strokeRect(x + 9, top + 8, 14, 14); ctx.beginPath(); ctx.moveTo(x + 16, top + 8); ctx.lineTo(x + 16, top + 22); ctx.stroke();
       break;
     }
     case "kurnik": {
-      const wt = y + h * 0.5;
-      wall(wt);
-      for (let k = 1; k < 3; k++) { ctx.strokeStyle = BC.woodD; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + 4, wt + k * (baseY - wt) / 3); ctx.lineTo(x + w - 4, wt + k * (baseY - wt) / 3); ctx.stroke(); }
-      gable(ctx, x, wt + 3, w, h * 0.52, BC.roof, BC.roofD);
-      arch(ctx, cx - 2, baseY, 8, 18, BC.door); // vlez
+      const top = y + h * 0.24;
+      box(top, BC.wood, BC.woodD);
+      roof(top, BC.roof, BC.roofD, h * 0.6);
+      arch(ctx, cx - 2, baseY, 8, h * 0.36, BC.door); // vlez
       ctx.fillStyle = BC.woodD; ctx.fillRect(cx - 12, baseY - 2, 20, 4); // rampa
-      ctx.fillStyle = "#e88"; ctx.beginPath(); ctx.arc(x + w / 2, wt - h * 0.5 + 4, 3, 0, 7); ctx.fill(); // hřebínek korouhvičky
-      ctx.fillStyle = BC.win; roundRect(ctx, x + w - 22, wt + 6, 12, 10, 2); ctx.fill();
+      ctx.fillStyle = BC.win; roundRect(ctx, x + w - 22, top + 8, 12, 10, 2); ctx.fill();
       break;
     }
     case "chlivek": {
-      const wt = y + h * 0.56;
-      wall(wt, "#b6855a");
-      gable(ctx, x, wt + 3, w, h * 0.46, BC.straw, BC.strawD); // došková
-      arch(ctx, cx, baseY, 13, 18, BC.door);
+      const top = y + h * 0.3;
+      box(top, "#b6855a", "#8c6038");
+      roof(top, BC.straw, BC.strawD, h * 0.5); // došková
+      arch(ctx, cx, baseY, 13, h * 0.34, BC.door);
       ctx.fillStyle = "#e8b0b0"; ctx.beginPath(); ctx.arc(cx - 4, baseY - 8, 2, 0, 7); ctx.arc(cx + 4, baseY - 8, 2, 0, 7); ctx.fill(); // rypák ve tmě
-      ctx.fillStyle = BC.strawD; ctx.fillRect(x + 4, baseY - 4, w - 8, 4); // sláma
       break;
     }
     case "pastvina": {
@@ -346,11 +362,10 @@ function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: num
       break;
     }
     case "buda": {
-      const wt = y + h * 0.5;
-      wall(wt, "#b07a44");
-      gable(ctx, x + w * 0.16, wt + 2, w * 0.68, h * 0.5, BC.roof, BC.roofD);
-      arch(ctx, cx, baseY, 9, 18, "#3a2a1a");
-      ctx.fillStyle = BC.cream; ctx.font = "10px " + EMOJI_FONT; ctx.textAlign = "center"; ctx.fillText("🦴", cx, wt - 2);
+      const top = y + h * 0.34;
+      box(top, "#b07a44", "#8a5c30");
+      roof(top, BC.roof, BC.roofD, h * 0.48);
+      arch(ctx, cx, baseY, 9, h * 0.34, "#3a2a1a");
       break;
     }
     case "studna": {
@@ -371,12 +386,11 @@ function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: num
       break;
     }
     case "dilna": {
-      const wt = y + h * 0.5;
-      wall(wt, "#b88a52");
-      gable(ctx, x, wt + 2, w, h * 0.46, BC.woodD, "#6f5128");
-      ctx.fillStyle = "#4a3420"; roundRect(ctx, x + 8, wt + 8, w - 16, baseY - wt - 10, 3); ctx.fill(); // tmavý vnitřek
+      const top = y + h * 0.26;
+      box(top, "#b88a52", "#8a6536");
+      roof(top, BC.woodD, "#6f5128", h * 0.5);
+      ctx.fillStyle = "#4a3420"; roundRect(ctx, x + 8, top + 10, w - 16, baseY - top - 12, 3); ctx.fill(); // tmavý vnitřek
       ctx.fillStyle = BC.wood; ctx.fillRect(x + 10, baseY - 12, w - 20, 5); // ponk
-      ctx.strokeStyle = "#cfcabb"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(cx - 6, wt + 12); ctx.lineTo(cx + 6, wt + 18); ctx.stroke(); // pila
       break;
     }
     case "stanek": {
