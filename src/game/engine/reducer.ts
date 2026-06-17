@@ -75,6 +75,7 @@ export type Action =
   | { type: "PUSH_DIALOG"; speaker?: string; lines: string[] }
   | { type: "DISMISS_DIALOG" }
   | { type: "SET_FLAG"; key: string }
+  | { type: "REWARD"; money?: number; energy?: number; items?: { item: string; qty: number }[]; flag?: string }
   | { type: "DISMISS_FLASH" };
 
 const has = (s: GameState, id: string) => s.buildings.includes(id);
@@ -210,6 +211,18 @@ function core(state: GameState, action: Action): GameState {
       if (state.flags[action.key]) return state;
       const s = cloneState(state);
       s.flags[action.key] = true;
+      return s;
+    }
+
+    case "REWARD": {
+      const s = cloneState(state);
+      if (action.money) {
+        s.money += action.money;
+        if (action.money > 0) s.totalEarned += action.money;
+      }
+      if (action.energy) s.energy = clamp(s.energy + action.energy, 0, s.maxEnergy);
+      if (action.items) for (const it of action.items) give(s, it.item, it.qty);
+      if (action.flag) s.flags[action.flag] = true;
       return s;
     }
 

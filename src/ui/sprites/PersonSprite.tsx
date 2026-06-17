@@ -1,15 +1,30 @@
 import type { PersonDef } from "../../game/content/people";
 
+export type Facing = "down" | "up" | "side";
+
+/** Roztomilá lidská postavička. `dir` = směr pohledu (z profilu se kreslí
+ *  doprava, vlevo se zrcadlí na Canvasu), `frame` 0/1 = krok chůze. */
 export function PersonSprite({
   person,
   size = 88,
   className,
+  dir = "down",
+  frame = 0,
 }: {
   person: PersonDef;
   size?: number;
   className?: string;
+  dir?: Facing;
+  frame?: 0 | 1;
 }) {
   const { skin, hair, shirt, variant } = person;
+  // krok: jedna noha/ruka dopředu, druhá dozadu
+  const swing = frame === 0 ? 1 : -1;
+  const lL = 44 + (dir === "side" ? -swing * 3 : 0);
+  const lR = 54 + (dir === "side" ? swing * 3 : 0);
+  const legYL = 92 + swing * 2;
+  const legYR = 92 - swing * 2;
+
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -20,18 +35,29 @@ export function PersonSprite({
       role="img"
       aria-label={person.name}
     >
-      <ellipse cx={50} cy={92} rx={22} ry={4} fill="#000" opacity={0.12} />
+      <ellipse cx={50} cy={94} rx={20} ry={3.5} fill="#000" opacity={0.12} />
+      {/* nohy (animované) */}
+      <rect x={lL - 3} y={legYL - 6} width={6} height={10} rx={3} fill="#5a4636" />
+      <rect x={lR - 3} y={legYR - 6} width={6} height={10} rx={3} fill="#5a4636" />
       {/* tělo / triko */}
-      <path d="M30 92 Q30 64 50 64 Q70 64 70 92 Z" fill={shirt} />
-      <path d="M50 64 L50 92" stroke="#000" strokeWidth={0.6} opacity={0.08} />
-      {/* ruce */}
-      <circle cx={30} cy={78} r={5} fill={skin} />
-      <circle cx={70} cy={78} r={5} fill={skin} />
+      <path d="M31 90 Q31 62 50 62 Q69 62 69 90 Z" fill={shirt} />
+      {/* ruce (švih s krokem) */}
+      <circle cx={29 + (dir === "side" ? swing * 2 : 0)} cy={76 + swing} r={5} fill={dir === "up" ? shirt : skin} />
+      <circle cx={71 - (dir === "side" ? swing * 2 : 0)} cy={76 - swing} r={5} fill={dir === "up" ? shirt : skin} />
       {/* krk */}
       <rect x={45} y={52} width={10} height={10} fill={skin} />
-      {/* hlava */}
+
+      {dir === "down" && <HeadFront skin={skin} hair={hair} variant={variant} />}
+      {dir === "up" && <HeadBack hair={hair} variant={variant} />}
+      {dir === "side" && <HeadSide skin={skin} hair={hair} variant={variant} />}
+    </svg>
+  );
+}
+
+function HeadFront({ skin, hair, variant }: { skin: string; hair: string; variant?: string }) {
+  return (
+    <g>
       <circle cx={50} cy={42} r={17} fill={skin} />
-      {/* vlasy */}
       <path d="M33 40 Q33 22 50 22 Q67 22 67 40 Q60 30 50 30 Q40 30 33 40 Z" fill={hair} />
       {variant === "ponytail" && (
         <>
@@ -45,18 +71,54 @@ export function PersonSprite({
           <path d="M38 28 Q40 14 50 14 Q60 14 62 28 Z" fill="#b08a52" />
         </>
       )}
-      {/* oči */}
       <circle cx={43} cy={43} r={2.3} fill="#241f1c" />
       <circle cx={57} cy={43} r={2.3} fill="#241f1c" />
       <circle cx={42.3} cy={42.3} r={0.7} fill="#fff" />
       <circle cx={56.3} cy={42.3} r={0.7} fill="#fff" />
-      {/* tváře + úsměv */}
       <circle cx={40} cy={48} r={2.6} fill="#ef9a9a" opacity={0.5} />
       <circle cx={60} cy={48} r={2.6} fill="#ef9a9a" opacity={0.5} />
       <path d="M45 50 Q50 54 55 50" stroke="#7a4a3a" strokeWidth={1.6} fill="none" strokeLinecap="round" />
-      {variant === "beard" && (
-        <path d="M37 47 Q39 62 50 62 Q61 62 63 47 Q57 56 50 56 Q43 56 37 47 Z" fill={hair} />
+      {variant === "beard" && <path d="M37 47 Q39 62 50 62 Q61 62 63 47 Q57 56 50 56 Q43 56 37 47 Z" fill={hair} />}
+    </g>
+  );
+}
+
+function HeadBack({ hair, variant }: { hair: string; variant?: string }) {
+  return (
+    <g>
+      <circle cx={50} cy={42} r={17} fill={hair} />
+      <path d="M34 46 Q34 60 50 60 Q66 60 66 46" fill="none" stroke={hair} strokeWidth={3} />
+      {variant === "ponytail" && <ellipse cx={50} cy={44} rx={6} ry={13} fill={hair} stroke="#0002" strokeWidth={0.5} />}
+      {variant === "hat" && (
+        <>
+          <ellipse cx={50} cy={30} rx={22} ry={5} fill="#9a7b4a" />
+          <path d="M36 30 Q38 16 50 16 Q62 16 64 30 Z" fill="#a07e48" />
+        </>
       )}
-    </svg>
+    </g>
+  );
+}
+
+function HeadSide({ skin, hair, variant }: { skin: string; hair: string; variant?: string }) {
+  return (
+    <g>
+      <circle cx={50} cy={42} r={17} fill={skin} />
+      {/* vlasy vzadu (vlevo) a nahoře */}
+      <path d="M33 44 Q31 22 50 22 Q60 22 63 30 Q54 28 46 30 Q37 33 36 46 Z" fill={hair} />
+      {variant === "hat" && (
+        <>
+          <ellipse cx={48} cy={28} rx={22} ry={5} fill="#9a7b4a" />
+          <path d="M40 28 Q42 14 52 15 Q60 16 60 28 Z" fill="#b08a52" />
+        </>
+      )}
+      {variant === "ponytail" && <ellipse cx={34} cy={42} rx={5} ry={11} fill={hair} />}
+      {/* nos a oko na pravé (čelní) straně */}
+      <path d="M65 42 q4 2 0 5" stroke={skin} strokeWidth={3} fill="none" strokeLinecap="round" />
+      <circle cx={60} cy={42} r={2.3} fill="#241f1c" />
+      <circle cx={59.3} cy={41.3} r={0.7} fill="#fff" />
+      <circle cx={56} cy={48} r={2.4} fill="#ef9a9a" opacity={0.5} />
+      <path d="M58 50 Q62 52 64 49" stroke="#7a4a3a" strokeWidth={1.5} fill="none" strokeLinecap="round" />
+      {variant === "beard" && <path d="M52 48 Q54 60 62 56 Q64 50 62 47 Q58 52 52 48 Z" fill={hair} />}
+    </g>
   );
 }

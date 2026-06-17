@@ -4,20 +4,24 @@ import { MAP_H, MAP_W, TS } from "../../world/tiles";
 import {
   ANIMAL_SPAWNS,
   INTERACTABLES,
+  NPC_SPAWNS,
   PLAYER_START,
   isBlocked,
   type Interactable,
 } from "../../world/entities";
-import { drawBuilding, drawGround } from "../../world/draw";
+import { PERSON_BY_ID } from "../../game/content/people";
+import { drawBuilding, drawGround, getMinimapBase, roundRect } from "../../world/draw";
 import { animalImg, personImg, preloadSprites, ready } from "../../world/spriteCache";
-import { ANIMALS } from "../../game/content/animals";
+import { ANIMALS, ANIMAL_BY_ID, animalScale } from "../../game/content/animals";
+import type { Facing } from "../sprites/PersonSprite";
 import { PEOPLE } from "../../game/content/people";
 import { consumeAction, input } from "../../world/input";
 import { sound } from "../../audio/sound";
 
 export type InteractTarget =
   | { kind: "building"; it: Interactable }
-  | { kind: "animal"; animalId: string };
+  | { kind: "animal"; animalId: string }
+  | { kind: "npc"; npcId: string };
 
 interface Props {
   season: Season;
@@ -228,10 +232,14 @@ export function WorldCanvas({ season, phase, paused, onInteract }: Props) {
         const d = Math.hypot(m.x - p.x, m.y - p.y);
         if (d < bestD) { bestD = d; nearest = { kind: "animal", animalId: m.id }; }
       }
+      for (const npc of NPC_SPAWNS) {
+        const d = Math.hypot(npc.x - p.x, npc.y - p.y);
+        if (d < bestD) { bestD = d; nearest = { kind: "npc", npcId: npc.id }; }
+      }
 
       // --- RENDER ---
       ctx.clearRect(0, 0, viewW, viewH);
-      drawGround(ctx, camX, camY, viewW, viewH, P.season, now);
+      drawGround(ctx, camX, camY, viewW, viewH, P.season);
 
       // seznam objektů seřazený dle baseY
       type Item = { y: number; draw: () => void };
@@ -249,6 +257,10 @@ export function WorldCanvas({ season, phase, paused, onInteract }: Props) {
           draw: () => drawMob(ctx, m, camX, camY, near, now),
         });
       }
+      for (const npc of NPC_SPAWNS) {
+        const near = nearest?.kind === "npc" && nearest.npcId === npc.id;
+        items.push({ y: npc.y, draw: () => drawNpc(ctx, npc, camX, camY, near, now) });
+      }
       items.push({
         y: player.current.y,
         draw: () => drawPlayer(ctx, player.current, camX, camY),
@@ -259,6 +271,9 @@ export function WorldCanvas({ season, phase, paused, onInteract }: Props) {
 
       // tint dle fáze/období
       drawTint(ctx, viewW, viewH, P.phase, P.season);
+
+      // mini-mapa
+      drawMinimap(ctx, viewW, p.x, p.y, nearest);
 
       raf = requestAnimationFrame(loop);
     };
@@ -291,7 +306,8 @@ function drawMob(
   const img = animalImg(m.id);
   const sx = m.x - camX;
   const sy = m.y - camY;
-  const size = TS * 1.25;
+  const a = ANIMAL_BY_ID[m.id];
+  const size = TS * 0.95 * (a ? animalScale(a) : 1);
   const bob = Math.sin(m.bob) * 1.5;
   ctx.fillStyle = "rgba(0,0,0,0.16)";
   ctx.beginPath();
@@ -323,25 +339,77 @@ function drawMob(
   }
 }
 
+function drawNpc(
+  ctx: CanvasRenderingContext2D,
+  npc: { id: string; x: number; y: number },
+  camX: number,
+  camY: number,
+  near: boolean,
+  time: number,
+) {
+  const img = personImg(npc.id, "down", 0);
+  const sx = npc.x - camX;
+  const sy = npc.y - camY;
+  const size = TS * 1.7;
+  const bob = Math.sin(time * 0.003 + npc.x * 0.1) * 1.6;
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.beginPath();
+  ctx.ellipse(sx, sy, size * 0.24, size * 0.09, 0, 0, Math.PI * 2);
+  ctx.fill();
+  if (near) {
+    ctx.save();
+    ctx.shadowColor = "rgba(240,232,146,0.95)";
+    ctx.shadowBlur = 16;
+  }
+  if (ready(img)) {
+    ctx.save();
+    ctx.translate(sx, sy - size * 0.52 + bob);
+    ctx.drawImage(img, -size / 2, -size / 2, size, size);
+    ctx.restore();
+  }
+  if (near) ctx.restore();
+  // jmenovka
+  const name = PERSON_BY_ID[npc.id]?.name ?? "";
+  ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
+  ctx.textAlign = "center";
+  const tw = ctx.measureText(name).width;
+  const ny = sy - size + 4;
+  ctx.fillStyle = near ? "rgba(184,92,60,0.95)" : "rgba(45,90,61,0.9)";
+  roundRect(ctx, sx - tw / 2 - 6, ny - 11, tw + 12, 16, 8);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.textBaseline = "middle";
+  ctx.fillText(name, sx, ny - 3);
+  if (near) {
+    const b = Math.sin(time * 0.006) * 3;
+    ctx.font = `20px ${EMOJI_FONT}`;
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("💬", sx, ny - 18 + b);
+  }
+}
+
 function drawPlayer(
   ctx: CanvasRenderingContext2D,
-  p: { x: number; y: number; flip: boolean; moving: boolean; anim: number },
+  p: { x: number; y: number; dir: string; moving: boolean; anim: number },
   camX: number,
   camY: number,
 ) {
-  const img = personImg("ty");
+  const spriteDir: Facing = p.dir === "up" ? "up" : p.dir === "left" || p.dir === "right" ? "side" : "down";
+  const flip = p.dir === "left";
+  const frame: 0 | 1 = p.moving ? ((Math.floor(performance.now() / 170) % 2) as 0 | 1) : 0;
+  const img = personImg("ty", spriteDir, frame);
   const sx = p.x - camX;
   const sy = p.y - camY;
   const size = TS * 1.7;
-  const bob = p.moving ? Math.abs(Math.sin(p.anim)) * 4 : Math.sin(performance.now() * 0.002) * 1;
+  const bob = p.moving ? Math.abs(Math.sin(performance.now() * 0.013)) * 3 : Math.sin(performance.now() * 0.002) * 1;
   ctx.fillStyle = "rgba(0,0,0,0.2)";
   ctx.beginPath();
-  ctx.ellipse(sx, sy, size * 0.26, size * 0.1, 0, 0, Math.PI * 2);
+  ctx.ellipse(sx, sy, size * 0.24, size * 0.09, 0, 0, Math.PI * 2);
   ctx.fill();
   if (ready(img)) {
     ctx.save();
     ctx.translate(sx, sy - size * 0.52 - bob);
-    if (p.flip) ctx.scale(-1, 1);
+    if (flip) ctx.scale(-1, 1);
     ctx.drawImage(img, -size / 2, -size / 2, size, size);
     ctx.restore();
   }
@@ -361,4 +429,49 @@ function drawTint(
   if (!color) return;
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, w, h);
+}
+
+function drawMinimap(
+  ctx: CanvasRenderingContext2D,
+  viewW: number,
+  px: number,
+  py: number,
+  nearest: InteractTarget | null,
+) {
+  const base = getMinimapBase();
+  const mw = Math.min(150, viewW * 0.26);
+  const mh = (mw * base.height) / base.width;
+  const x = viewW - mw - 12;
+  const y = 64;
+  ctx.save();
+  ctx.fillStyle = "rgba(26,31,28,0.55)";
+  roundRect(ctx, x - 5, y - 5, mw + 10, mh + 10, 10);
+  ctx.fill();
+  roundRect(ctx, x, y, mw, mh, 6);
+  ctx.clip();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(base, 0, 0, base.width, base.height, x, y, mw, mh);
+  ctx.imageSmoothingEnabled = true;
+  const tx = mw / base.width;
+  const ty = mh / base.height;
+  for (const it of INTERACTABLES) {
+    const cx = x + (it.tx + it.fw / 2) * tx;
+    const cy = y + (it.ty + it.fh / 2) * ty;
+    const isNear = nearest?.kind === "building" && nearest.it.id === it.id;
+    ctx.fillStyle =
+      it.kind === "chalupa" ? "#f0e892" : it.kind === "stanek" ? "#e8a04a" : it.kind === "byliny" ? "#8fe08a" : "#f7f2e7";
+    ctx.beginPath();
+    ctx.arc(cx, cy, isNear ? 3.4 : 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const pxm = x + (px / TS) * tx;
+  const pym = y + (py / TS) * ty;
+  ctx.fillStyle = "#ff5a4a";
+  ctx.beginPath();
+  ctx.arc(pxm, pym, 3.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  ctx.restore();
 }

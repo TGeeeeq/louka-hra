@@ -1,6 +1,6 @@
 // Skuteční obyvatelé Louky. Jména a povahy přebrané z nechmerust.org
 // (stránka "Zvířecí obyvatelé"). Naučná fakta jsou ověřená a česky.
-import type { AnimalDef } from "../types";
+import type { AnimalDef, Species } from "../types";
 
 export const ANIMALS: AnimalDef[] = [
   // ---- DRŮBEŽ (ráno se vypouští, večer zavírá) ----------------------------
@@ -318,3 +318,33 @@ export const ANIMALS_BY_GROUP = {
   stado: ANIMALS.filter((a) => a.feedGroup === "stado"),
   mazlici: ANIMALS.filter((a) => a.feedGroup === "mazlici"),
 } as const;
+
+// Reálné relativní velikosti druhů (násobič základní velikosti spritu ve světě).
+export const SPECIES_SCALE: Record<Species, number> = {
+  krava: 1.75,
+  osel: 1.5,
+  muflon: 1.4,
+  prase: 1.4,
+  ovce: 1.18,
+  pes: 1.12,
+  kocka: 0.82,
+  kralik: 0.62,
+  husa: 0.92,
+  kachna: 0.74,
+  slepice: 0.64,
+  holub: 0.52,
+};
+
+// Výjimky pro konkrétní zvířata (mimo druhový průměr).
+const SCALE_OVERRIDE: Record<string, number> = {
+  kesy: 1.55, // „obří chlupatý medvěd"
+  list: 0.74, // štěně
+  princezna: 1.5, // statná divočačí kříženka
+  flicek: 1.2,
+  lucinka: 1.08, // babička
+  yakul: 1.2, // „mladý" muflon
+};
+
+export function animalScale(a: AnimalDef): number {
+  return a.scale ?? SCALE_OVERRIDE[a.id] ?? SPECIES_SCALE[a.species];
+}

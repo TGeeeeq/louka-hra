@@ -1,8 +1,16 @@
-import { MAP, TILE, TS, isSolidTile } from "./tiles";
+import { MAP, TILE, TS, isSolidTile, setTile } from "./tiles";
 import { ANIMALS_BY_GROUP } from "../game/content/animals";
+import { NPCS } from "../game/content/people";
 
 const SPAWN_TX = 22;
 const SPAWN_TY = 20;
+
+// Kde u startu stojí uvítací NPC (dlaždice).
+const NPC_POS: Record<string, [number, number]> = {
+  tomas: [19, 18],
+  maruska: [26, 18],
+  tony: [22, 15],
+};
 
 export type InteractKind =
   | "kurnik"
@@ -15,7 +23,9 @@ export type InteractKind =
   | "stanek"
   | "chalupa"
   | "cedule"
-  | "byliny";
+  | "byliny"
+  | "brana"
+  | "truhla";
 
 export interface Interactable {
   id: string;
@@ -41,10 +51,17 @@ export const INTERACTABLES: Interactable[] = [
   B("buda", "buda", "Psí bouda & pelíšky", 27, 20, 2, 2),
   B("studna", "studna", "Studna", 16, 19, 1, 1),
   B("cedule", "cedule", "Cedule", 24, 20, 1, 1, false),
-  // sběr bylin na okrajích lesa
-  B("byliny1", "byliny", "Bylinky", 6, 7, 1, 1, false),
-  B("byliny2", "byliny", "Bylinky", 39, 18, 1, 1, false),
+  // sběr bylin — nejvíc na „bylinkové louce" na východě
+  B("byliny1", "byliny", "Bylinky", 6, 8, 1, 1, false),
+  B("byliny2", "byliny", "Bylinky", 39, 12, 1, 1, false),
   B("byliny3", "byliny", "Bylinky", 8, 27, 1, 1, false),
+  B("byliny4", "byliny", "Bylinková louka", 54, 12, 1, 1, false),
+  B("byliny5", "byliny", "Bylinková louka", 61, 18, 1, 1, false),
+  B("byliny6", "byliny", "Bylinková louka", 57, 21, 1, 1, false),
+  B("byliny7", "byliny", "Bylinky u rybníka", 31, 45, 1, 1, false),
+  // hlavolam: lesní brána na cestě k hájku + truhla se zásobami v hájku
+  B("brana", "brana", "Lesní brána", 44, 41, 1, 1, false),
+  B("truhla", "truhla", "Truhla se zásobami", 60, 41, 1, 1, false),
 ];
 
 export const INTERACTABLE_BY_ID: Record<string, Interactable> = Object.fromEntries(
@@ -63,7 +80,19 @@ function carveClearing(tx: number, ty: number, w: number, h: number, margin: num
     }
 }
 for (const it of INTERACTABLES) carveClearing(it.tx, it.ty, it.fw, it.fh, 1);
-carveClearing(SPAWN_TX, SPAWN_TY, 1, 1, 2);
+carveClearing(SPAWN_TX, SPAWN_TY, 1, 1, 3);
+for (const id of NPCS) carveClearing(NPC_POS[id][0], NPC_POS[id][1], 1, 1, 1);
+
+// Lesní brána přehradí cestu k hájku, dokud hráč nevyřeší hlavolam.
+export const GATE_TILES: [number, number][] = [
+  [44, 39], [44, 40], [44, 41], [44, 42], [44, 43],
+];
+for (const [gx, gy] of GATE_TILES) setTile(gx, gy, TILE.FENCE);
+
+/** Otevře lesní bránu (po vyřešení hlavolamu) — uvolní cestu k hájku. */
+export function openGate() {
+  for (const [gx, gy] of GATE_TILES) setTile(gx, gy, TILE.PATH);
+}
 
 // Solidní dlaždice staveb (pro kolize).
 const solidBuildingTiles = new Set<string>();
@@ -132,6 +161,17 @@ function buildSpawns(): AnimalSpawn[] {
 }
 
 export const ANIMAL_SPAWNS = buildSpawns();
+
+export interface NpcSpawn {
+  id: string;
+  x: number;
+  y: number;
+}
+export const NPC_SPAWNS: NpcSpawn[] = NPCS.map((id) => ({
+  id,
+  x: (NPC_POS[id][0] + 0.5) * TS,
+  y: (NPC_POS[id][1] + 0.5) * TS,
+}));
 
 // Startovní pozice hráče — uprostřed mýtiny na cestě (zaručeně průchozí).
 export const PLAYER_START = { x: (SPAWN_TX + 0.5) * TS, y: (SPAWN_TY + 0.5) * TS };

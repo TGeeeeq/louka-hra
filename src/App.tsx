@@ -13,9 +13,33 @@ import { FlashToast } from "./ui/components/FlashToast";
 import { Intro } from "./ui/components/Intro";
 import { GameOver } from "./ui/components/GameOver";
 import { ANIMAL_BY_ID } from "./game/content/animals";
+import { PERSON_BY_ID } from "./game/content/people";
+import { NpcPanel } from "./ui/world/NpcPanel";
+import { HerbQuiz } from "./ui/minigames/HerbQuiz";
+import { ChopWood } from "./ui/minigames/ChopWood";
+import { AnimalMemory } from "./ui/minigames/AnimalMemory";
+import { ForestGate } from "./ui/minigames/ForestGate";
+import { openGate } from "./world/entities";
+import { invalidateGround } from "./world/draw";
 import { sound } from "./audio/sound";
 
 type Overlay = "shop" | "craft" | "denik" | null;
+type Minigame = "herb" | "chop" | "memory";
+
+type RewardPayload = { money?: number; energy?: number; items?: { item: string; qty: number }[] };
+
+const MG_FOR_NPC: Record<string, Minigame> = { maruska: "herb", tomas: "chop", tony: "memory" };
+const MG_TITLE: Record<Minigame, string> = { herb: "🌿 Poznej bylinku", chop: "🪓 Naseč dřevo", memory: "🐾 Pexeso zvířat" };
+const MG_REWARD: Record<Minigame, { flag: string; first: RewardPayload; again: RewardPayload; speaker: string; msg: string }> = {
+  herb: { flag: "taught_maruska", first: { items: [{ item: "byliny", qty: 5 }] }, again: { items: [{ item: "byliny", qty: 1 }] }, speaker: "Maruška", msg: "Bylinkář se z tebe stává! Tahle hrst se hodí na mast." },
+  chop: { flag: "taught_tomas", first: { items: [{ item: "drevo", qty: 8 }] }, again: { items: [{ item: "drevo", qty: 2 }] }, speaker: "Tomáš", msg: "Máš v sobě sílu! Dřevo na zimu se vždycky hodí." },
+  memory: { flag: "taught_tony", first: { money: 120 }, again: { money: 20 }, speaker: "Tony", msg: "Paměť jako slon! Pár korun do kasy, zasloužíš si." },
+};
+const WELCOME = [
+  "Tomáš: Vítej na Louce! My tři — já, Maruška a Tony — postáváme kousek od cedule.",
+  "Maruška: Zastav se u nás. Naučíme tě poznávat byliny, sekat dřevo i bystřit paměť.",
+  "Tony: A za každou minihru kápne odměna. Tak hurá do toho — sto zvířat se samo nenakrmí!",
+];
 
 const CEDULE_HELP = [
   "Vítej na Louce! 🌿 Chodíš šipkami / WASD (na mobilu křížem vlevo dole).",
@@ -69,6 +93,10 @@ export default function App() {
   const { state, dispatch } = useGame();
   const [overlay, setOverlay] = useState<Overlay>(null);
   const [sel, setSel] = useState<AnimalDef | null>(null);
+  const [npc, setNpc] = useState<string | null>(null);
+  const [minigame, setMinigame] = useState<Minigame | null>(null);
+  const [puzzle, setPuzzle] = useState(false);
+  const welcomeOnce = useRef(false);
   useGameSounds();
 
   useEffect(() => {
@@ -76,13 +104,36 @@ export default function App() {
       sound.ensure();
       sound.startAmbient(state.season);
       sound.startMusic();
+      if (!state.flags.welcomed && !welcomeOnce.current) {
+        welcomeOnce.current = true;
+        dispatch({ type: "PUSH_DIALOG", speaker: "Louka", lines: WELCOME });
+        dispatch({ type: "SET_FLAG", key: "welcomed" });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.started]);
 
   if (!state.started) return <Intro />;
 
-  const paused = !!state.dialog || overlay !== null || !!sel || !!state.gameOver;
+  const paused = !!state.dialog || overlay !== null || !!sel || !!npc || !!minigame || puzzle || !!state.gameOver;
+
+  const winMinigame = (mg: Minigame) => {
+    const r = MG_REWARD[mg];
+    const taught = !!state.flags[r.flag];
+    dispatch({ type: "REWARD", ...(taught ? r.again : r.first), flag: r.flag });
+    dispatch({ type: "PUSH_DIALOG", speaker: r.speaker, lines: [r.msg] });
+    sound.questDone();
+    setMinigame(null);
+  };
+
+  const solveGate = () => {
+    openGate();
+    invalidateGround();
+    dispatch({ type: "SET_FLAG", key: "gate_open" });
+    dispatch({ type: "PUSH_DIALOG", speaker: "Louka", lines: ["Brána se rozevřela — k hájku teď vede volná cesta. 🌲"] });
+    sound.build();
+    setPuzzle(false);
+  };
 
   const feedStation = (group: FeedGroup) => {
     if (state.phase === "rano") dispatch({ type: "FEED", group });
@@ -99,6 +150,11 @@ export default function App() {
   };
 
   const onInteract = (t: InteractTarget) => {
+    if (t.kind === "npc") {
+      sound.select();
+      setNpc(t.npcId);
+      return;
+    }
     if (t.kind === "animal") {
       const a = ANIMAL_BY_ID[t.animalId];
       if (!a) return;
@@ -138,6 +194,20 @@ export default function App() {
         break;
       case "cedule": dispatch({ type: "PUSH_DIALOG", speaker: "Cedule", lines: CEDULE_HELP }); break;
       case "byliny": dispatch({ type: "FORAGE" }); break;
+      case "brana":
+        if (state.flags.gate_open)
+          dispatch({ type: "PUSH_DIALOG", speaker: "Lesní brána", lines: ["Brána je dokořán. Cesta k hájku je volná."] });
+        else { sound.select(); setPuzzle(true); }
+        break;
+      case "truhla":
+        if (!state.flags.gate_open)
+          dispatch({ type: "PUSH_DIALOG", speaker: "Truhla", lines: ["K truhle se nedostaneš — cestu hlídá zavřená lesní brána."] });
+        else if (!state.flags.chest) {
+          dispatch({ type: "REWARD", money: 80, items: [{ item: "tuk", qty: 2 }, { item: "sklenice", qty: 2 }, { item: "obili", qty: 4 }, { item: "seno", qty: 1 }], flag: "chest" });
+          dispatch({ type: "PUSH_DIALOG", speaker: "Truhla", lines: ["Uvnitř je poctivá zásoba: sádlo, skleničky, obilí a balík sena — a pár korun navrch! 🎁"] });
+          sound.coin();
+        } else dispatch({ type: "PUSH_DIALOG", speaker: "Truhla", lines: ["Prázdná. Tu už jsi vybral."] });
+        break;
     }
   };
 
@@ -153,6 +223,29 @@ export default function App() {
       {overlay === "denik" && (
         <Overlay title="📖 Deník" onClose={() => setOverlay(null)}>
           <Journal onSelect={(a) => setSel(a)} />
+        </Overlay>
+      )}
+
+      {npc && (
+        <Overlay title={PERSON_BY_ID[npc].name} onClose={() => setNpc(null)}>
+          <NpcPanel
+            person={PERSON_BY_ID[npc]}
+            taught={!!state.flags[MG_REWARD[MG_FOR_NPC[npc]].flag]}
+            onPlay={() => { setMinigame(MG_FOR_NPC[npc]); setNpc(null); }}
+            onClose={() => setNpc(null)}
+          />
+        </Overlay>
+      )}
+      {minigame && (
+        <Overlay title={MG_TITLE[minigame]} onClose={() => setMinigame(null)}>
+          {minigame === "herb" && <HerbQuiz onWin={() => winMinigame("herb")} onClose={() => setMinigame(null)} />}
+          {minigame === "chop" && <ChopWood onWin={() => winMinigame("chop")} onClose={() => setMinigame(null)} />}
+          {minigame === "memory" && <AnimalMemory onWin={() => winMinigame("memory")} onClose={() => setMinigame(null)} />}
+        </Overlay>
+      )}
+      {puzzle && (
+        <Overlay title="🚪 Lesní brána" onClose={() => setPuzzle(false)}>
+          <ForestGate onWin={solveGate} onClose={() => setPuzzle(false)} />
         </Overlay>
       )}
 

@@ -1,5 +1,5 @@
-// Mapa Louky: mýtina obklopená lesem. Generuje se jednou, deterministicky
-// (seedovaný RNG), takže je při každém renderu stejná.
+// Mapa Louky: víc mýtin obklopených lesem, propojených cestami — velká a
+// cestovatelná. Generuje se jednou, deterministicky (seedovaný RNG).
 
 export const TS = 36; // velikost dlaždice v px (world souřadnice)
 
@@ -10,103 +10,115 @@ export const TILE = {
   PATH: 3,
   FLOWERS: 4, // walkable deko
   DIRT: 5,
-  FENCE: 6, // solid
+  FENCE: 6, // solid (brány hlavolamů)
   BUSH: 7, // solid deko
   TALL: 8, // vysoká tráva (walkable)
 } as const;
 
 export type Tile = (typeof TILE)[keyof typeof TILE];
 
-export const MAP_W = 46;
-export const MAP_H = 32;
+export const MAP_W = 72;
+export const MAP_H = 52;
 
-function mulberry32(seed: number) {
-  return function () {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+interface Region {
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
 }
 
+// Mýtiny: hlavní statek + bylinková louka (V) + rybníková louka (J) + hájek (JV).
+const REGIONS: Region[] = [
+  { cx: 22, cy: 17, rx: 20, ry: 13 },
+  { cx: 57, cy: 16, rx: 12, ry: 9 },
+  { cx: 25, cy: 41, rx: 15, ry: 8 },
+  { cx: 59, cy: 41, rx: 10, ry: 7 },
+];
+
+// Cesty (koridory) lesem mezi mýtinami.
+const CORRIDORS = [
+  { ax: 40, ay: 17, bx: 47, by: 16, half: 2 }, // statek → bylinková
+  { ax: 24, ay: 29, bx: 26, by: 34, half: 2 }, // statek → rybník
+  { ax: 38, ay: 41, bx: 52, by: 41, half: 2 }, // rybník → hájek (jen přes lesní bránu)
+];
+
 function buildMap() {
-  const rng = mulberry32(20260617);
   const w = MAP_W;
   const h = MAP_H;
   const tiles = new Uint8Array(w * h);
-
-  // šum tloušťky lesního lemu na každé hraně
-  const top: number[] = [];
-  const bot: number[] = [];
-  for (let x = 0; x < w; x++) {
-    top.push(3 + Math.floor(rng() * 3) + (Math.sin(x * 0.4) + 1) * 1.2);
-    bot.push(3 + Math.floor(rng() * 3) + (Math.cos(x * 0.3) + 1) * 1.2);
-  }
-  const left: number[] = [];
-  const right: number[] = [];
-  for (let y = 0; y < h; y++) {
-    left.push(3 + Math.floor(rng() * 3) + (Math.sin(y * 0.5) + 1) * 1.1);
-    right.push(3 + Math.floor(rng() * 3) + (Math.cos(y * 0.45) + 1) * 1.1);
-  }
-
+  const idx = (x: number, y: number) => y * w + x;
+  const get = (x: number, y: number) => tiles[idx(x, y)] as Tile;
   const set = (x: number, y: number, t: number) => {
-    tiles[y * w + x] = t;
+    if (x >= 0 && y >= 0 && x < w && y < h) tiles[idx(x, y)] = t;
   };
-  const get = (x: number, y: number) => tiles[y * w + x] as Tile;
+  // stabilní šum na dlaždici
+  const n = (x: number, y: number) => {
+    const hh = ((x * 374761393) ^ (y * 668265263)) >>> 0;
+    return ((hh ^ (hh >>> 13)) % 1000) / 1000;
+  };
 
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const inForest =
-        y < top[x] || y >= h - bot[x] || x < left[y] || x >= w - right[y];
-      set(x, y, inForest ? TILE.FOREST : TILE.GRASS);
-    }
-  }
-
-  // lesní "prst" zasahující dovnitř (rozbije pravidelnost)
-  for (let y = 6; y < 14; y++) {
-    const fx = 30 + Math.floor(Math.sin(y * 0.6) * 1.5);
-    for (let x = fx; x < fx + 2; x++) if (get(x, y) === TILE.GRASS) set(x, y, TILE.FOREST);
-  }
-
-  // rybník (vlevo dole)
-  const px = 9;
-  const py = 23;
+  // 1) les + mýtiny (rozmazaný okraj šumem)
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
-      const d = Math.hypot((x - px) * 0.85, (y - py));
-      if (d < 3.4 && get(x, y) === TILE.GRASS) set(x, y, TILE.WATER);
-      else if (d < 4.2 && get(x, y) === TILE.GRASS && rng() < 0.5) set(x, y, TILE.DIRT);
+      let clear = false;
+      for (const r of REGIONS) {
+        const e = ((x - r.cx) / r.rx) ** 2 + ((y - r.cy) / r.ry) ** 2;
+        if (e < 1 - 0.1 + (n(x, y) - 0.5) * 0.5) {
+          clear = true;
+          break;
+        }
+      }
+      set(x, y, clear ? TILE.GRASS : TILE.FOREST);
     }
 
-  // hlavní cestička (had napříč mýtinou, spojuje stavení)
-  const path: [number, number][] = [
-    [22, 27], [22, 24], [21, 21], [20, 18], [20, 15], [21, 12], [23, 10], [26, 8], [30, 7],
-  ];
-  const carvePath = (x: number, y: number) => {
-    if (x >= 0 && x < w && y >= 0 && y < h && get(x, y) !== TILE.WATER && get(x, y) !== TILE.FOREST)
-      set(x, y, TILE.PATH);
-  };
-  for (let i = 0; i < path.length - 1; i++) {
-    const [ax, ay] = path[i];
-    const [bx, by] = path[i + 1];
-    const steps = Math.max(Math.abs(bx - ax), Math.abs(by - ay)) * 2;
+  // 2) pevný lesní rám po obvodu
+  for (let x = 0; x < w; x++) {
+    set(x, 0, TILE.FOREST);
+    set(x, 1, TILE.FOREST);
+    set(x, h - 1, TILE.FOREST);
+    set(x, h - 2, TILE.FOREST);
+  }
+  for (let y = 0; y < h; y++) {
+    set(0, y, TILE.FOREST);
+    set(1, y, TILE.FOREST);
+    set(w - 1, y, TILE.FOREST);
+    set(w - 2, y, TILE.FOREST);
+  }
+
+  // 3) cesty mezi mýtinami
+  for (const c of CORRIDORS) {
+    const steps = Math.max(Math.abs(c.bx - c.ax), Math.abs(c.by - c.ay)) * 2;
     for (let s = 0; s <= steps; s++) {
-      const x = Math.round(ax + ((bx - ax) * s) / steps);
-      const y = Math.round(ay + ((by - ay) * s) / steps);
-      carvePath(x, y);
-      carvePath(x + 1, y);
+      const cx = c.ax + ((c.bx - c.ax) * s) / steps;
+      const cy = c.ay + ((c.by - c.ay) * s) / steps;
+      for (let dx = -c.half; dx <= c.half; dx++)
+        for (let dy = -c.half; dy <= c.half; dy++) {
+          const x = Math.round(cx + dx);
+          const y = Math.round(cy + dy);
+          if (x > 1 && y > 1 && x < w - 2 && y < h - 2 && get(x, y) !== TILE.WATER)
+            set(x, y, dx === 0 || dy === 0 ? TILE.PATH : TILE.GRASS);
+        }
     }
   }
 
-  // deko: květiny, keře, vysoká tráva
+  // 4) rybník v jižní mýtině
+  const pondCx = 18;
+  const pondCy = 43;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const d = Math.hypot((x - pondCx) * 0.82, y - pondCy);
+      if (d < 3.6 && get(x, y) === TILE.GRASS) set(x, y, TILE.WATER);
+      else if (d < 4.5 && get(x, y) === TILE.GRASS && n(x, y) < 0.5) set(x, y, TILE.DIRT);
+    }
+
+  // 5) detaily: květiny, vysoká tráva, keře
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       if (get(x, y) !== TILE.GRASS) continue;
-      const r = rng();
-      if (r < 0.05) set(x, y, TILE.FLOWERS);
-      else if (r < 0.08) set(x, y, TILE.TALL);
-      else if (r < 0.092) set(x, y, TILE.BUSH);
+      const r = n(x * 3 + 1, y * 7 + 2);
+      if (r < 0.09) set(x, y, TILE.FLOWERS);
+      else if (r < 0.17) set(x, y, TILE.TALL);
+      else if (r < 0.195) set(x, y, TILE.BUSH);
     }
 
   return { w, h, tiles, get };
@@ -119,4 +131,9 @@ const SOLID: Set<number> = new Set([TILE.FOREST, TILE.WATER, TILE.FENCE, TILE.BU
 export function isSolidTile(tx: number, ty: number): boolean {
   if (tx < 0 || ty < 0 || tx >= MAP.w || ty >= MAP.h) return true;
   return SOLID.has(MAP.get(tx, ty));
+}
+
+/** Nastaví dlaždici za běhu (hlavolamy otevírající cesty). */
+export function setTile(tx: number, ty: number, t: Tile) {
+  if (tx >= 0 && ty >= 0 && tx < MAP.w && ty < MAP.h) MAP.tiles[ty * MAP.w + tx] = t;
 }

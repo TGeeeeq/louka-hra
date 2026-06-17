@@ -90,6 +90,14 @@ function drawTile(
       ctx.stroke();
       break;
     }
+    case TILE.FENCE: {
+      ctx.fillStyle = pal.trunk;
+      ctx.fillRect(sx + 6, sy + 5, 5, TS - 9);
+      ctx.fillRect(sx + TS - 11, sy + 5, 5, TS - 9);
+      ctx.fillRect(sx + 4, sy + 11, TS - 8, 5);
+      ctx.fillRect(sx + 4, sy + TS - 14, TS - 8, 5);
+      break;
+    }
     case TILE.BUSH:
       ctx.fillStyle = pal.forest;
       ctx.beginPath();
@@ -126,6 +134,50 @@ function drawTile(
   }
 }
 
+// Celá mapa se jednou vyrenderuje do offscreen canvasu (na období) a každý
+// snímek se jen vystřihne viditelná část — místo stovek kreslení dlaždic je
+// to jediný drawImage (game-engine skill: „reduce draw calls").
+let groundCache: { season: Season; cv: HTMLCanvasElement } | null = null;
+
+function getGroundCache(season: Season): HTMLCanvasElement {
+  if (groundCache && groundCache.season === season) return groundCache.cv;
+  const cv = document.createElement("canvas");
+  cv.width = MAP.w * TS;
+  cv.height = MAP.h * TS;
+  const c = cv.getContext("2d")!;
+  const pal = seasonPalette(season);
+  for (let ty = 0; ty < MAP.h; ty++)
+    for (let tx = 0; tx < MAP.w; tx++)
+      drawTile(c, MAP.get(tx, ty), tx * TS, ty * TS, pal, tx, ty, 0);
+  groundCache = { season, cv };
+  return cv;
+}
+
+// Podklad mini-mapy: 1 px na dlaždici, pevné barvy. Vykreslí se jednou.
+let miniBase: HTMLCanvasElement | null = null;
+export function getMinimapBase(): HTMLCanvasElement {
+  if (miniBase) return miniBase;
+  const cv = document.createElement("canvas");
+  cv.width = MAP.w;
+  cv.height = MAP.h;
+  const c = cv.getContext("2d")!;
+  for (let ty = 0; ty < MAP.h; ty++)
+    for (let tx = 0; tx < MAP.w; tx++) {
+      const t = MAP.get(tx, ty);
+      c.fillStyle =
+        t === TILE.FOREST ? "#2f5a3a" : t === TILE.WATER ? "#4aa6d6" : t === TILE.PATH || t === TILE.DIRT ? "#cdb188" : t === TILE.BUSH ? "#3f6b46" : "#8cc56e";
+      c.fillRect(tx, ty, 1, 1);
+    }
+  miniBase = cv;
+  return cv;
+}
+
+/** Zneplatní cache terénu i mini-mapy (po změně mapy za běhu). */
+export function invalidateGround() {
+  groundCache = null;
+  miniBase = null;
+}
+
 export function drawGround(
   ctx: CanvasRenderingContext2D,
   camX: number,
@@ -133,16 +185,15 @@ export function drawGround(
   vw: number,
   vh: number,
   season: Season,
-  time: number,
 ) {
-  const pal = seasonPalette(season);
-  const x0 = Math.max(0, Math.floor(camX / TS));
-  const y0 = Math.max(0, Math.floor(camY / TS));
-  const x1 = Math.min(MAP.w - 1, Math.ceil((camX + vw) / TS));
-  const y1 = Math.min(MAP.h - 1, Math.ceil((camY + vh) / TS));
-  for (let ty = y0; ty <= y1; ty++)
-    for (let tx = x0; tx <= x1; tx++)
-      drawTile(ctx, MAP.get(tx, ty), tx * TS - camX, ty * TS - camY, pal, tx, ty, time);
+  const cv = getGroundCache(season);
+  ctx.fillStyle = seasonPalette(season).grass;
+  ctx.fillRect(0, 0, vw, vh);
+  const dw = Math.min(vw, cv.width);
+  const dh = Math.min(vh, cv.height);
+  const sx = Math.max(0, Math.min(cv.width - dw, camX));
+  const sy = Math.max(0, Math.min(cv.height - dh, camY));
+  ctx.drawImage(cv, sx, sy, dw, dh, 0, 0, dw, dh);
 }
 
 const KIND_EMOJI: Record<InteractKind, string> = {
@@ -157,6 +208,8 @@ const KIND_EMOJI: Record<InteractKind, string> = {
   studna: "⛲",
   cedule: "🪧",
   byliny: "🌿",
+  brana: "🚧",
+  truhla: "📦",
 };
 
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';

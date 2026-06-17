@@ -58,6 +58,7 @@ class SoundEngine {
   select() { this.tone(520, 0.06, "square", 0.12); }
   move() { this.tone(420, 0.05, "square", 0.1); }
   interact() { this.seq([{ f: 480, d: 0.07 }, { f: 700, d: 0.09 }]); }
+  note(freq: number) { this.tone(freq, 0.32, "triangle", 0.13); }
   error() { this.tone(140, 0.18, "sawtooth", 0.14); }
   coin() { this.seq([{ f: 988, d: 0.07, t: "square" }, { f: 1319, d: 0.12, t: "square" }]); }
   eat() { this.seq([{ f: 300, d: 0.06, t: "triangle" }, { f: 240, d: 0.08, t: "triangle" }]); }
@@ -112,22 +113,32 @@ class SoundEngine {
     if (this.ambientTimer != null) { window.clearTimeout(this.ambientTimer); this.ambientTimer = null; }
   }
 
-  // --- hudba (jemný chiptune loop) ----------------------------------------
-  private MELODY = [
-    523, 0, 659, 784, 659, 0, 587, 523, 587, 659, 523, 0, 440, 523, 659, 0,
-    523, 0, 784, 659, 587, 0, 523, 494, 523, 587, 659, 0, 523, 0, 392, 0,
-  ];
+  // --- hudba: klidný pentatonický motiv podle ročního období --------------
+  // 0 = pomlka. Pentatonika = nic nezní falešně. Pomalejší a tišší než dřív.
+  private THEMES: Record<Season, number[]> = {
+    jaro: [659, 0, 784, 880, 0, 784, 659, 587, 659, 784, 0, 880, 784, 659, 0, 0],
+    leto: [523, 0, 659, 784, 0, 659, 587, 0, 523, 587, 659, 784, 0, 659, 0, 0],
+    podzim: [440, 0, 523, 587, 0, 523, 440, 392, 0, 440, 523, 0, 440, 392, 0, 0],
+    zima: [392, 0, 0, 440, 0, 0, 523, 0, 0, 440, 0, 0, 330, 0, 0, 0],
+  };
+  private BASS: Record<Season, number> = { jaro: 196, leto: 174, podzim: 220, zima: 165 };
+  private TEMPO: Record<Season, number> = { jaro: 340, leto: 360, podzim: 400, zima: 520 };
+
   startMusic() {
     if (this.musicTimer != null || !this.musicOn) return;
     const tick = () => {
+      const s = this.season;
       if (!this.muted && this.musicOn && this.ctx) {
-        const f = this.MELODY[this.musicStep % this.MELODY.length];
-        if (f > 0) this.tone(f, 0.22, "triangle", 0.07);
-        // basová linka každou 4. notu
-        if (this.musicStep % 4 === 0) this.tone(f > 0 ? f / 4 : 130, 0.3, "sine", 0.06);
+        const mel = this.THEMES[s];
+        const f = mel[this.musicStep % mel.length];
+        if (f > 0) {
+          this.tone(f, 0.26, "triangle", 0.055);
+          this.tone(f * 2, 0.18, "sine", 0.02); // jemný svrchní třpyt
+        }
+        if (this.musicStep % 4 === 0) this.tone(this.BASS[s], 0.42, "sine", 0.05);
         this.musicStep++;
       }
-      this.musicTimer = window.setTimeout(tick, 260);
+      this.musicTimer = window.setTimeout(tick, this.TEMPO[s]);
     };
     tick();
   }

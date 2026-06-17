@@ -484,11 +484,15 @@ button:disabled { cursor: not-allowed; }
 .world-canvas { display: block; width: 100%; height: 100%; image-rendering: auto; }
 
 /* --- HUD horní lišta --- */
-.hud-top {
+.hud-stack {
   position: absolute; top: 0; left: 0; right: 0; z-index: 20;
-  display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap;
+  display: flex; flex-direction: column; pointer-events: none;
+}
+.hud-top {
+  pointer-events: auto;
+  display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap;
   padding: 8px 12px;
-  background: linear-gradient(rgba(26, 31, 28, 0.62), rgba(26, 31, 28, 0.28));
+  background: linear-gradient(rgba(26, 31, 28, 0.66), rgba(26, 31, 28, 0.3));
   color: var(--cream); backdrop-filter: blur(3px);
 }
 .hud-when { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -509,7 +513,7 @@ button:disabled { cursor: not-allowed; }
 
 /* --- Quest tracker --- */
 .hud-quest {
-  position: absolute; top: 56px; left: 12px; z-index: 18; max-width: min(320px, 80vw);
+  align-self: flex-start; margin: 6px 0 0 10px; max-width: min(330px, 82vw);
   background: rgba(247, 242, 231, 0.95); border-radius: var(--r); padding: 8px 12px;
   box-shadow: var(--shadow); border-left: 5px solid var(--terracotta);
   display: flex; flex-direction: column; gap: 1px; pointer-events: none;
@@ -611,3 +615,45 @@ button:disabled { cursor: not-allowed; }
   box-shadow: 0 0 22px rgba(212,164,90,0.28), 0 0 0 1px rgba(212,164,90,0.45);
 }
 .af-credit .af-name { font-family: var(--font-serif); letter-spacing: 0.02em; }
+
+/* ===== NPC panel + minihry ===== */
+.npc-panel { display: flex; flex-direction: column; gap: 10px; }
+.npc-top { display: flex; align-items: center; gap: 14px; }
+.npc-portrait { background: var(--surface-alt); border-radius: var(--r); padding: 4px; box-shadow: var(--shadow-sm); }
+.npc-top h2 { font-size: 1.4rem; }
+.npc-role { font-size: 0.82rem; color: var(--muted); }
+.npc-line { font-family: var(--font-serif); font-style: italic; color: var(--moss-deep); font-size: 1.04rem; }
+.npc-help { background: #eef6ea; border-radius: var(--r-sm); padding: 8px 12px; font-size: 0.88rem; color: var(--good); font-weight: 600; }
+
+.mg { display: flex; flex-direction: column; gap: 12px; align-items: center; text-align: center; min-width: min(440px, 84vw); }
+.mg h3 { font-size: 1.5rem; }
+.mg-progress { font-size: 0.82rem; color: var(--muted); font-weight: 600; }
+.mg-clue { font-family: var(--font-serif); font-style: italic; color: var(--moss-deep); font-size: 1.08rem; background: var(--surface-alt); padding: 12px; border-radius: var(--r); }
+.mg-q { font-weight: 700; }
+.mg-result { color: var(--text); }
+.mg-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.mg-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+.mg-opt { padding: 12px; border-radius: var(--r-sm); background: var(--surface-alt); border: 2px solid var(--border); font-weight: 600; transition: all 0.12s ease; }
+.mg-opt:hover:not(:disabled) { border-color: var(--moss-soft); background: #fff; }
+.mg-opt.ok { background: #d6efce; border-color: var(--good); color: #2f6b2c; }
+.mg-opt.bad { background: #f3c8bd; border-color: var(--bad); color: #8a2f1c; }
+.mg-next { margin-top: 4px; }
+
+/* sekání dřeva */
+.chop-bar { position: relative; width: 100%; height: 38px; background: var(--surface-alt); border: 2px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
+.chop-zone { position: absolute; top: 0; bottom: 0; background: rgba(74, 124, 78, 0.35); border-left: 2px dashed var(--good); border-right: 2px dashed var(--good); }
+.chop-marker { position: absolute; top: -3px; width: 6px; height: 44px; background: var(--terracotta); border-radius: 3px; transform: translateX(-50%); box-shadow: var(--shadow); }
+
+/* pexeso */
+.memory-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: 100%; }
+.mem-card { aspect-ratio: 1; border-radius: var(--r-sm); background: var(--moss); display: grid; place-items: center; font-size: 1.5rem; transition: transform 0.14s ease, background 0.14s ease; box-shadow: var(--shadow-sm); }
+.mem-card:hover:not(:disabled) { transform: translateY(-2px); }
+.mem-card.open { background: var(--surface); }
+.mem-card.done { background: #eef6ea; opacity: 0.7; }
+.mem-back { color: var(--accent); }
+.mem-face { display: flex; flex-direction: column; align-items: center; }
+.mem-face em { font-size: 0.6rem; font-weight: 700; color: var(--moss-deep); margin-top: -6px; }
+
+/* lesní brána (Simon) */
+.gate-pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; }
+.gate-pad { aspect-ratio: 1; border-radius: var(--r); font-size: 1.8rem; box-shadow: var(--shadow); transition: transform 0.1s ease, opacity 0.1s ease; }

@@ -44,6 +44,7 @@ export function Hud({
 
   return (
     <>
+      <div className="hud-stack">
       <div className="hud-top">
         <div className="hud-when">
           <span className="day-badge">Den {state.day}</span>
@@ -79,6 +80,7 @@ export function Hud({
           <small>Teď je Louka jen tvoje — hospodař, jak umíš.</small>
         </div>
       )}
+      </div>
 
       <button className={`phase-fab ${phaseBtn.cls}`} onClick={phaseBtn.act}>{phaseBtn.label}</button>
 

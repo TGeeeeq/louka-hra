@@ -62,6 +62,8 @@ export interface AnimalDef {
   variant?: string;
   /** Příběhový příznak: "missing" (List se pohřešuje) apod. */
   special?: string;
+  /** Relativní velikost ve světě (násobí výchozí velikost druhu). */
+  scale?: number;
   /** Kde na louce postavička stojí (procenta scény). */
   spot?: { x: number; y: number };
 }
