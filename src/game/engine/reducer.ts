@@ -95,8 +95,11 @@ function feedPlan(group: FeedGroup, season: Season) {
       return { item: "krmna_smes", qty: Math.ceil(3 * m) };
     case "prasata":
       return { item: "vareno", qty: Math.ceil(2 * m) };
-    case "stado":
-      return { item: "seno", qty: season === "zima" ? 2 : 1 };
+    case "stado": {
+      // jaro/léto = pastva (zdarma), podzim/zima = seno
+      const pasture = season === "jaro" || season === "leto";
+      return { item: "seno", qty: pasture ? 0 : season === "zima" ? 2 : 1 };
+    }
     case "mazlici":
       return { item: "granule", qty: Math.ceil(2 * m) };
   }
@@ -257,26 +260,33 @@ function core(state: GameState, action: Action): GameState {
         return warnReturn(state, `${cap(FEED_LABEL[group])} už máš nakrmené.`);
 
       const plan = feedPlan(group, state.season);
-      const item = ITEM_BY_ID[plan.item];
-      if (invCount(state.inventory, plan.item) < plan.qty) {
+      const pasture = plan.qty === 0; // stádo na jaře/v létě
+      if (!pasture && invCount(state.inventory, plan.item) < plan.qty) {
         const hint =
           group === "prasata"
             ? "Nemáš dost vařeného krmiva — nejdřív navař na ohni."
-            : `Došlo ti krmivo: ${item.name}. Dokup ho v obchodě.`;
+            : `Došlo ti krmivo: ${ITEM_BY_ID[plan.item].name}. Dokup ho v obchodě.`;
         return warnReturn(state, hint);
       }
       const s = cloneState(state);
       const cost = feedEnergy(group, s);
       if (notEnoughEnergy(s, cost)) return s;
       s.energy -= cost;
-      take(s, [plan]);
+      if (!pasture) take(s, [plan]);
       s.tasksDone[`feed_${group}`] = true;
-      addLog(
-        s,
-        `Nakrmil jsi ${FEED_LABEL[group]} (${plan.qty}× ${item.name}).`,
-        "good",
-      );
-      flash(s, `${cap(FEED_LABEL[group])} spokojeně přežvykuje. 😊`, "good");
+      if (pasture) {
+        addLog(s, "Vyhnal jsi stádo na pastvu — spásá čerstvou trávu.", "good");
+        flash(s, "Stádo se pase na louce. 🌿 Na jaře a v létě je krmení zdarma!", "good");
+      } else {
+        addLog(s, `Nakrmil jsi ${FEED_LABEL[group]} (${plan.qty}× ${ITEM_BY_ID[plan.item].name}).`, "good");
+        flash(
+          s,
+          group === "stado"
+            ? "Rozdělal jsi balík sena pro stádo. 🟨 (v zimě se pase nedá)"
+            : `${cap(FEED_LABEL[group])} spokojeně žere. 😊`,
+          "good",
+        );
+      }
       return s;
     }
 

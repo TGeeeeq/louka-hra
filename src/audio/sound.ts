@@ -1,6 +1,6 @@
-// Chiptune zvukový engine na Web Audio API — žádné zvukové soubory.
-// Vše se syntetizuje oscilátory (GameBoy feeling). Spouští se až po
-// prvním gestu uživatele (autoplay policy).
+// Jemný zvukový engine na Web Audio API — žádné soubory. Měkké sinusové tóny
+// s pomalým náběhem/doozněním, nízká hlasitost. Cíl: příjemná atmosféra, ne
+// ostré pípání. Spouští se až po prvním gestu uživatele (autoplay policy).
 
 import type { Season } from "../game/types";
 
@@ -9,6 +9,7 @@ type Wave = OscillatorType;
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  private verb: ConvolverNode | null = null;
   muted = false;
   musicOn = true;
   private ambientTimer: number | null = null;
@@ -16,20 +17,38 @@ class SoundEngine {
   private musicStep = 0;
   private season: Season = "jaro";
 
-  /** Vytvoří/probudí AudioContext. Volat z user gesture. */
   ensure() {
     if (!this.ctx) {
       const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AC) return;
       this.ctx = new AC();
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.5;
+      this.master.gain.value = 0.3;
+      // jemný „prostor" — krátký šumový dozvuk, ať tóny nejsou tak suché
+      this.verb = this.ctx.createConvolver();
+      this.verb.buffer = this.makeReverb(1.1, 2.2);
+      const verbGain = this.ctx.createGain();
+      verbGain.gain.value = 0.18;
       this.master.connect(this.ctx.destination);
+      this.verb.connect(verbGain);
+      verbGain.connect(this.ctx.destination);
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
   }
 
-  private tone(freq: number, dur: number, type: Wave = "square", gain = 0.18, delay = 0) {
+  private makeReverb(seconds: number, decay: number): AudioBuffer {
+    const rate = this.ctx!.sampleRate;
+    const len = Math.floor(rate * seconds);
+    const buf = this.ctx!.createBuffer(2, len, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+    }
+    return buf;
+  }
+
+  // měkký tón: pomalý náběh, plynulé doznění, sinus jako základ
+  private tone(freq: number, dur: number, type: Wave = "sine", gain = 0.1, delay = 0) {
     if (!this.ctx || !this.master || this.muted) return;
     const t0 = this.ctx.currentTime + delay;
     const osc = this.ctx.createOscillator();
@@ -37,74 +56,65 @@ class SoundEngine {
     osc.type = type;
     osc.frequency.setValueAtTime(freq, t0);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + Math.min(0.06, dur * 0.3));
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     osc.connect(g);
     g.connect(this.master);
+    if (this.verb) g.connect(this.verb);
     osc.start(t0);
-    osc.stop(t0 + dur + 0.02);
+    osc.stop(t0 + dur + 0.05);
   }
 
-  private seq(notes: { f: number; d: number; t?: Wave; g?: number }[], gap = 0) {
+  private seq(notes: { f: number; d: number; t?: Wave; g?: number }[], gap = 0.02) {
     let when = 0;
     for (const n of notes) {
-      this.tone(n.f, n.d, n.t ?? "square", n.g ?? 0.16, when);
+      this.tone(n.f, n.d, n.t ?? "sine", n.g ?? 0.1, when);
       when += n.d + gap;
     }
   }
 
-  // --- jednotlivé efekty ---------------------------------------------------
-  step() { this.tone(180 + Math.random() * 30, 0.06, "triangle", 0.06); }
-  select() { this.tone(520, 0.06, "square", 0.12); }
-  move() { this.tone(420, 0.05, "square", 0.1); }
-  interact() { this.seq([{ f: 480, d: 0.07 }, { f: 700, d: 0.09 }]); }
-  note(freq: number) { this.tone(freq, 0.32, "triangle", 0.13); }
-  error() { this.tone(140, 0.18, "sawtooth", 0.14); }
-  coin() { this.seq([{ f: 988, d: 0.07, t: "square" }, { f: 1319, d: 0.12, t: "square" }]); }
-  eat() { this.seq([{ f: 300, d: 0.06, t: "triangle" }, { f: 240, d: 0.08, t: "triangle" }]); }
-  success() { this.seq([{ f: 659, d: 0.09 }, { f: 784, d: 0.09 }, { f: 1047, d: 0.16 }]); }
-  questDone() {
-    this.seq([
-      { f: 784, d: 0.1 }, { f: 880, d: 0.1 }, { f: 988, d: 0.1 }, { f: 1319, d: 0.26 },
-    ]);
-  }
-  build() { this.seq([{ f: 392, d: 0.08, t: "square" }, { f: 523, d: 0.08 }, { f: 659, d: 0.16 }]); }
-  newDay() {
-    this.seq([
-      { f: 523, d: 0.14 }, { f: 659, d: 0.14 }, { f: 784, d: 0.14 }, { f: 1047, d: 0.3 },
-    ]);
-  }
-  sleepy() { this.seq([{ f: 440, d: 0.16, t: "sine" }, { f: 330, d: 0.18, t: "sine" }, { f: 220, d: 0.3, t: "sine" }]); }
-  // zvuky zvířat
+  // --- efekty (vše jemné) --------------------------------------------------
+  step() {} // bez zvuku kroků (dřív to bylo otravné)
+  move() {}
+  select() { this.tone(560, 0.1, "sine", 0.08); }
+  interact() { this.seq([{ f: 520, d: 0.1 }, { f: 700, d: 0.14 }]); }
+  error() { this.seq([{ f: 360, d: 0.12 }, { f: 280, d: 0.18 }], 0.0); }
+  coin() { this.seq([{ f: 880, d: 0.1 }, { f: 1170, d: 0.16 }]); }
+  eat() { this.seq([{ f: 300, d: 0.1, t: "triangle", g: 0.07 }, { f: 360, d: 0.12, t: "triangle", g: 0.07 }]); }
+  success() { this.seq([{ f: 523, d: 0.12 }, { f: 659, d: 0.12 }, { f: 784, d: 0.2 }]); }
+  questDone() { this.seq([{ f: 587, d: 0.14 }, { f: 740, d: 0.14 }, { f: 880, d: 0.14 }, { f: 1175, d: 0.3 }]); }
+  build() { this.seq([{ f: 392, d: 0.12 }, { f: 523, d: 0.12 }, { f: 659, d: 0.2 }]); }
+  newDay() { this.seq([{ f: 523, d: 0.18 }, { f: 659, d: 0.18 }, { f: 784, d: 0.18 }, { f: 1047, d: 0.34 }]); }
+  sleepy() { this.seq([{ f: 440, d: 0.22 }, { f: 330, d: 0.24 }, { f: 220, d: 0.4 }]); }
+  note(freq: number) { this.tone(freq, 0.42, "sine", 0.13); }
+
   animal(kind: string) {
     switch (kind) {
-      case "drubez": this.seq([{ f: 900, d: 0.05, t: "square", g: 0.1 }, { f: 1100, d: 0.05 }, { f: 800, d: 0.06 }]); break;
-      case "prasata": this.tone(150, 0.16, "sawtooth", 0.14); break;
-      case "stado": this.tone(196, 0.3, "sawtooth", 0.13); break;
-      case "mazlici": this.seq([{ f: 700, d: 0.08, t: "square" }, { f: 520, d: 0.1 }]); break;
+      case "drubez": this.seq([{ f: 760, d: 0.09, g: 0.07 }, { f: 920, d: 0.08, g: 0.06 }, { f: 700, d: 0.1, g: 0.06 }]); break;
+      case "prasata": this.tone(180, 0.2, "triangle", 0.09); break;
+      case "stado": this.seq([{ f: 196, d: 0.34, t: "triangle", g: 0.09 }, { f: 175, d: 0.2, t: "triangle", g: 0.07 }]); break;
+      case "mazlici": this.seq([{ f: 620, d: 0.1, g: 0.07 }, { f: 500, d: 0.12, g: 0.06 }]); break;
       default: this.interact();
     }
   }
 
-  // --- ambient (ptáci/vítr dle období) ------------------------------------
+  // --- ambient (řídké, tiché) ---------------------------------------------
   startAmbient(season: Season) {
     this.season = season;
     if (this.ambientTimer != null) return;
     const tick = () => {
       if (!this.muted && this.ctx) {
         if (this.season === "zima") {
-          // vítr — tiché nízké tóny
-          if (Math.random() < 0.5) this.tone(80 + Math.random() * 40, 0.6, "sine", 0.04);
+          if (Math.random() < 0.4) this.tone(70 + Math.random() * 30, 1.4, "sine", 0.03);
         } else {
-          // cvrlikání
-          if (Math.random() < 0.7) {
-            const base = 1600 + Math.random() * 900;
-            this.tone(base, 0.05, "sine", 0.05);
-            this.tone(base * 1.3, 0.05, "sine", 0.04, 0.06);
+          if (Math.random() < 0.55) {
+            const base = 1700 + Math.random() * 700;
+            this.tone(base, 0.08, "sine", 0.035);
+            this.tone(base * 1.25, 0.07, "sine", 0.028, 0.09);
           }
         }
       }
-      this.ambientTimer = window.setTimeout(tick, 900 + Math.random() * 2200);
+      this.ambientTimer = window.setTimeout(tick, 2200 + Math.random() * 3500);
     };
     tick();
   }
@@ -113,16 +123,15 @@ class SoundEngine {
     if (this.ambientTimer != null) { window.clearTimeout(this.ambientTimer); this.ambientTimer = null; }
   }
 
-  // --- hudba: klidný pentatonický motiv podle ročního období --------------
-  // 0 = pomlka. Pentatonika = nic nezní falešně. Pomalejší a tišší než dřív.
+  // --- hudba: pomalé, tiché sinusové pady (pentatonika dle období) ---------
   private THEMES: Record<Season, number[]> = {
-    jaro: [659, 0, 784, 880, 0, 784, 659, 587, 659, 784, 0, 880, 784, 659, 0, 0],
-    leto: [523, 0, 659, 784, 0, 659, 587, 0, 523, 587, 659, 784, 0, 659, 0, 0],
-    podzim: [440, 0, 523, 587, 0, 523, 440, 392, 0, 440, 523, 0, 440, 392, 0, 0],
-    zima: [392, 0, 0, 440, 0, 0, 523, 0, 0, 440, 0, 0, 330, 0, 0, 0],
+    jaro: [659, 0, 0, 784, 0, 880, 0, 0, 784, 0, 659, 0, 587, 0, 0, 0],
+    leto: [523, 0, 0, 659, 0, 0, 784, 0, 659, 0, 587, 0, 0, 523, 0, 0],
+    podzim: [440, 0, 0, 523, 0, 0, 392, 0, 440, 0, 0, 349, 0, 0, 0, 0],
+    zima: [392, 0, 0, 0, 440, 0, 0, 0, 330, 0, 0, 0, 294, 0, 0, 0],
   };
-  private BASS: Record<Season, number> = { jaro: 196, leto: 174, podzim: 220, zima: 165 };
-  private TEMPO: Record<Season, number> = { jaro: 340, leto: 360, podzim: 400, zima: 520 };
+  private BASS: Record<Season, number> = { jaro: 196, leto: 174, podzim: 147, zima: 131 };
+  private TEMPO: Record<Season, number> = { jaro: 460, leto: 500, podzim: 560, zima: 680 };
 
   startMusic() {
     if (this.musicTimer != null || !this.musicOn) return;
@@ -131,11 +140,8 @@ class SoundEngine {
       if (!this.muted && this.musicOn && this.ctx) {
         const mel = this.THEMES[s];
         const f = mel[this.musicStep % mel.length];
-        if (f > 0) {
-          this.tone(f, 0.26, "triangle", 0.055);
-          this.tone(f * 2, 0.18, "sine", 0.02); // jemný svrchní třpyt
-        }
-        if (this.musicStep % 4 === 0) this.tone(this.BASS[s], 0.42, "sine", 0.05);
+        if (f > 0) this.tone(f, 0.9, "sine", 0.045);
+        if (this.musicStep % 8 === 0) this.tone(this.BASS[s], 1.6, "sine", 0.04);
         this.musicStep++;
       }
       this.musicTimer = window.setTimeout(tick, this.TEMPO[s]);
@@ -148,7 +154,7 @@ class SoundEngine {
 
   toggleMute() {
     this.muted = !this.muted;
-    if (this.master && this.ctx) this.master.gain.value = this.muted ? 0 : 0.5;
+    if (this.master) this.master.gain.value = this.muted ? 0 : 0.3;
     return this.muted;
   }
   toggleMusic() {

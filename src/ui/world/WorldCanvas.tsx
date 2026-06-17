@@ -10,7 +10,7 @@ import {
   type Interactable,
 } from "../../world/entities";
 import { PERSON_BY_ID } from "../../game/content/people";
-import { drawBuilding, drawGround, getMinimapBase, roundRect } from "../../world/draw";
+import { drawBuilding, drawGround, drawPaddocks, getMinimapBase, roundRect } from "../../world/draw";
 import { animalImg, personImg, preloadSprites, ready } from "../../world/spriteCache";
 import { ANIMALS, ANIMAL_BY_ID, animalScale } from "../../game/content/animals";
 import type { Facing } from "../sprites/PersonSprite";
@@ -240,6 +240,7 @@ export function WorldCanvas({ season, phase, paused, onInteract }: Props) {
       // --- RENDER ---
       ctx.clearRect(0, 0, viewW, viewH);
       drawGround(ctx, camX, camY, viewW, viewH, P.season);
+      drawPaddocks(ctx, camX, camY);
 
       // seznam objektů seřazený dle baseY
       type Item = { y: number; draw: () => void };

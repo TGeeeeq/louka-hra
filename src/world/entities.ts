@@ -47,7 +47,7 @@ export const INTERACTABLES: Interactable[] = [
   B("ohniste", "ohniste", "Ohniště & kuchyně", 24, 14, 2, 2),
   B("kurnik", "kurnik", "Kurník", 13, 9, 3, 2),
   B("chlivek", "chlivek", "Prasečí chlívek", 11, 15, 3, 2),
-  B("pastvina", "pastvina", "Pastvina (seno)", 19, 24, 3, 2),
+  B("pastvina", "pastvina", "Pastvina & seník", 19, 24, 3, 2),
   B("buda", "buda", "Psí bouda & pelíšky", 27, 20, 2, 2),
   B("studna", "studna", "Studna", 16, 19, 1, 1),
   B("cedule", "cedule", "Cedule", 24, 20, 1, 1, false),
@@ -93,6 +93,20 @@ for (const [gx, gy] of GATE_TILES) setTile(gx, gy, TILE.FENCE);
 export function openGate() {
   for (const [gx, gy] of GATE_TILES) setTile(gx, gy, TILE.PATH);
 }
+
+// Výběhy (ohrady) zvířat — jen vizuální ploty, hráč jimi projde.
+export interface Paddock {
+  label: string;
+  tx: number;
+  ty: number;
+  w: number;
+  h: number;
+}
+export const PADDOCKS: Paddock[] = [
+  { label: "Drůbeží výběh", tx: 10, ty: 10, w: 8, h: 6 },
+  { label: "Prasečí výběh", tx: 8, ty: 15, w: 8, h: 6 },
+  { label: "Pastvina", tx: 14, ty: 20, w: 13, h: 8 },
+];
 
 // Solidní dlaždice staveb (pro kolize).
 const solidBuildingTiles = new Set<string>();
