@@ -657,3 +657,50 @@ button:disabled { cursor: not-allowed; }
 /* lesní brána (Simon) */
 .gate-pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; }
 .gate-pad { aspect-ratio: 1; border-radius: var(--r); font-size: 1.8rem; box-shadow: var(--shadow); transition: transform 0.1s ease, opacity 0.1s ease; }
+
+/* NPC obor + rada */
+.npc-domain {
+  display: inline-block; margin-left: 8px; vertical-align: middle;
+  font-size: 0.7rem; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+  background: var(--moss); color: var(--cream);
+}
+.npc-tip {
+  background: var(--surface-alt); border: 1px solid var(--border); border-left: 4px solid var(--amber);
+  border-radius: var(--r-sm); padding: 8px 12px; font-size: 0.86rem; color: var(--text); line-height: 1.4;
+}
+.npc-tip b { color: var(--warn); margin-right: 4px; }
+.npc-tip-btn { margin-left: 8px; font-size: 0.76rem; font-weight: 700; color: var(--moss); white-space: nowrap; }
+.npc-tip-btn:hover { text-decoration: underline; }
+
+/* Tonyho technika (spojovačka) */
+.tech-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+.tech-col { display: flex; flex-direction: column; gap: 8px; }
+.tech-node {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  text-align: center; min-height: 60px; padding: 10px 8px; border-radius: var(--r-sm);
+  background: var(--surface-alt); border: 2px solid var(--border); font-size: 0.8rem; font-weight: 600;
+  color: var(--text); transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+.tech-node .tech-ico { font-size: 1.5rem; }
+.tech-node.fn { line-height: 1.25; }
+.tech-node:hover:not(:disabled) { border-color: var(--moss-soft); background: #fff; transform: translateY(-2px); }
+.tech-node.sel { border-color: var(--moss); background: #eef6ea; box-shadow: 0 0 0 3px rgba(45,90,61,0.18); }
+.tech-node.done { background: #d6efce; border-color: var(--good); color: #2f6b2c; opacity: 0.85; }
+.tech-node.bad { border-color: var(--bad); background: #f3c8bd; animation: shake 0.4s; }
+@keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+
+/* Kompaktní HUD na úzkém / mobilním displeji (na výšku), ať je vidět mapa */
+@media (max-width: 560px) {
+  .hud-top { gap: 3px 8px; padding: 5px 8px; }
+  .day-badge { font-size: 0.9rem; padding: 1px 8px; }
+  .season-pill { font-size: 0.72rem; padding: 2px 7px; }
+  .hud-weather { display: none; }
+  .hud-bars { gap: 6px; }
+  .mini-track { width: 38px; }
+  .hud-right { gap: 4px; }
+  .icon-btn { width: 30px; height: 30px; font-size: 1rem; border-radius: 8px; }
+  .money { font-size: 0.86rem; padding: 3px 8px; }
+  .hud-quest { margin: 4px 0 0 8px; max-width: 62vw; padding: 6px 10px; }
+  .hud-quest b { font-size: 0.86rem; }
+  .hud-quest small { font-size: 0.7rem; }
+}

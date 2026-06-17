@@ -17,28 +17,28 @@ import { PERSON_BY_ID } from "./game/content/people";
 import { NpcPanel } from "./ui/world/NpcPanel";
 import { HerbQuiz } from "./ui/minigames/HerbQuiz";
 import { ChopWood } from "./ui/minigames/ChopWood";
-import { AnimalMemory } from "./ui/minigames/AnimalMemory";
+import { TechFix } from "./ui/minigames/TechFix";
 import { ForestGate } from "./ui/minigames/ForestGate";
 import { openGate } from "./world/entities";
 import { invalidateGround } from "./world/draw";
 import { sound } from "./audio/sound";
 
 type Overlay = "shop" | "craft" | "denik" | null;
-type Minigame = "herb" | "chop" | "memory";
+type Minigame = "herb" | "chop" | "tech";
 
 type RewardPayload = { money?: number; energy?: number; items?: { item: string; qty: number }[] };
 
-const MG_FOR_NPC: Record<string, Minigame> = { maruska: "herb", tomas: "chop", tony: "memory" };
-const MG_TITLE: Record<Minigame, string> = { herb: "🌿 Poznej bylinku", chop: "🪓 Naseč dřevo", memory: "🐾 Pexeso zvířat" };
+const MG_FOR_NPC: Record<string, Minigame> = { maruska: "herb", tomas: "chop", tony: "tech" };
+const MG_TITLE: Record<Minigame, string> = { herb: "🌿 Poznej bylinku", chop: "🪓 Naseč dřevo", tech: "🔌 Zapoj vynález" };
 const MG_REWARD: Record<Minigame, { flag: string; first: RewardPayload; again: RewardPayload; speaker: string; msg: string }> = {
   herb: { flag: "taught_maruska", first: { items: [{ item: "byliny", qty: 5 }] }, again: { items: [{ item: "byliny", qty: 1 }] }, speaker: "Maruška", msg: "Bylinkář se z tebe stává! Tahle hrst se hodí na mast." },
   chop: { flag: "taught_tomas", first: { items: [{ item: "drevo", qty: 8 }] }, again: { items: [{ item: "drevo", qty: 2 }] }, speaker: "Tomáš", msg: "Máš v sobě sílu! Dřevo na zimu se vždycky hodí." },
-  memory: { flag: "taught_tony", first: { money: 120 }, again: { money: 20 }, speaker: "Tony", msg: "Paměť jako slon! Pár korun do kasy, zasloužíš si." },
+  tech: { flag: "taught_tony", first: { money: 120 }, again: { money: 20 }, speaker: "Tony", msg: "Zapojeno! Pár korun na další vychytávky — zasloužíš si." },
 };
 const WELCOME = [
-  "Tomáš: Vítej na Louce! My tři — já, Maruška a Tony — postáváme kousek od cedule.",
-  "Maruška: Zastav se u nás. Naučíme tě poznávat byliny, sekat dřevo i bystřit paměť.",
-  "Tony: A za každou minihru kápne odměna. Tak hurá do toho — sto zvířat se samo nenakrmí!",
+  "Tomáš: Vítej na Louce! My tři postáváme kousek od cedule — každý ti pomůže s něčím jiným.",
+  "Maruška: Já mám na starosti vše okolo — byliny, zásoby i peníze. Tomáš práci a rady, Tony techniku.",
+  "Tony: Za každou minihru kápne odměna. Klikni na nás u cedule — sto zvířat se samo nenakrmí!",
 ];
 
 const CEDULE_HELP = [
@@ -258,7 +258,7 @@ export default function App() {
         <Overlay title={MG_TITLE[minigame]} onClose={() => setMinigame(null)}>
           {minigame === "herb" && <HerbQuiz onWin={() => winMinigame("herb")} onClose={() => setMinigame(null)} />}
           {minigame === "chop" && <ChopWood onWin={() => winMinigame("chop")} onClose={() => setMinigame(null)} />}
-          {minigame === "memory" && <AnimalMemory onWin={() => winMinigame("memory")} onClose={() => setMinigame(null)} />}
+          {minigame === "tech" && <TechFix onWin={() => winMinigame("tech")} onClose={() => setMinigame(null)} />}
         </Overlay>
       )}
       {puzzle && (

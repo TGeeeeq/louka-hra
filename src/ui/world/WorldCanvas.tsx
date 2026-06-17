@@ -12,7 +12,7 @@ import {
   type Interactable,
 } from "../../world/entities";
 import { PERSON_BY_ID } from "../../game/content/people";
-import { drawBuilding, drawGround, drawPaddocks, drawVignette, drawWaterShimmer, getMinimapBase, roundRect } from "../../world/draw";
+import { drawBuilding, drawGround, drawPaddocks, drawSunlight, drawVignette, drawWaterShimmer, getMinimapBase, roundRect } from "../../world/draw";
 import { animalImg, personImg, preloadSprites, ready } from "../../world/spriteCache";
 import { ANIMALS, ANIMAL_BY_ID, animalScale } from "../../game/content/animals";
 import type { Facing } from "../sprites/PersonSprite";
@@ -88,6 +88,7 @@ export function WorldCanvas({ season, phase, paused, onInteract, onEvent }: Prop
   const stepAcc = useRef(0);
   const escapeAcc = useRef(0);
   const lastPhase = useRef<Phase>(phase);
+  const topInset = useRef(56); // výška horní HUD lišty — pod ni sázíme mini-mapu
 
   // init mobů jednou
   if (mobs.current.length === 0) {
@@ -135,6 +136,13 @@ export function WorldCanvas({ season, phase, paused, onInteract, onEvent }: Prop
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(wrapRef.current!);
+
+    // sleduj výšku horní HUD lišty (na mobilu na výšku se zalamuje a je vyšší)
+    const hudTop = document.querySelector(".hud-top") as HTMLElement | null;
+    const measureHud = () => { topInset.current = hudTop ? Math.ceil(hudTop.getBoundingClientRect().height) : 56; };
+    measureHud();
+    const hudRo = hudTop ? new ResizeObserver(measureHud) : null;
+    if (hudTop && hudRo) hudRo.observe(hudTop);
 
     // klávesnice
     const keymap: Record<string, keyof typeof input> = {
@@ -187,13 +195,17 @@ export function WorldCanvas({ season, phase, paused, onInteract, onEvent }: Prop
     };
     canvas.addEventListener("pointerdown", onCanvasPointer);
 
+    // Malý kruhový-ish kolizní rámeček u nohou — průchozí mezery i přiblížení
+    // ke stavbám jsou plynulé (keře už nejsou solid). Pohyb je po osách
+    // oddělený výš (klouže podél zdí), takže rohy nezasekávají.
     const canMoveTo = (nx: number, ny: number) => {
-      const hw = 9;
+      const hw = 8;
       return (
         !isBlocked(nx - hw, ny) &&
         !isBlocked(nx + hw, ny) &&
-        !isBlocked(nx - hw, ny - 6) &&
-        !isBlocked(nx + hw, ny - 6)
+        !isBlocked(nx - hw, ny - 8) &&
+        !isBlocked(nx + hw, ny - 8) &&
+        !isBlocked(nx, ny)
       );
     };
 
@@ -416,15 +428,16 @@ export function WorldCanvas({ season, phase, paused, onInteract, onEvent }: Prop
       for (const it of items) it.draw();
 
       drawWaterShimmer(ctx, camX, camY, viewW, viewH, now);
-      // tint dle fáze/období
+      // sluneční světlo (sjednocuje směr osvětlení) → tint fáze/období
+      drawSunlight(ctx, viewW, viewH, P.phase, P.season);
       drawTint(ctx, viewW, viewH, P.phase, P.season);
       // sezónní částice + vinětace
       drawParticles(P.season, viewW, viewH, dt, now);
       drawVignette(ctx, viewW, viewH);
       // kontextová akční nápověda
       if (actionLabel) drawActionChip(ctx, viewW, viewH, actionLabel);
-      // mini-mapa
-      drawMinimap(ctx, viewW, p.x, p.y, nearest);
+      // mini-mapa (pod horní HUD lištou — na mobilu na výšku ji nepřekryje)
+      drawMinimap(ctx, viewW, topInset.current, p.x, p.y, nearest);
 
       raf = requestAnimationFrame(loop);
     };
@@ -433,6 +446,7 @@ export function WorldCanvas({ season, phase, paused, onInteract, onEvent }: Prop
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      hudRo?.disconnect();
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       canvas.removeEventListener("pointerdown", onCanvasPointer);
@@ -620,19 +634,26 @@ function drawActionChip(ctx: CanvasRenderingContext2D, vw: number, vh: number, l
 function drawMinimap(
   ctx: CanvasRenderingContext2D,
   viewW: number,
+  topInset: number,
   px: number,
   py: number,
   nearest: InteractTarget | null,
 ) {
   const base = getMinimapBase();
-  const mw = Math.min(150, viewW * 0.26);
+  const mw = Math.min(160, Math.max(viewW * 0.3, 116));
   const mh = (mw * base.height) / base.width;
   const x = viewW - mw - 12;
-  const y = 64;
+  const y = topInset + 12; // vždy pod horní lištou (i když se na mobilu zalomí)
   ctx.save();
-  ctx.fillStyle = "rgba(26,31,28,0.55)";
+  ctx.fillStyle = "rgba(26,31,28,0.62)";
   roundRect(ctx, x - 5, y - 5, mw + 10, mh + 10, 10);
   ctx.fill();
+  // popisek „Mapa"
+  ctx.fillStyle = "rgba(247,242,231,0.9)";
+  ctx.font = '700 9px "Plus Jakarta Sans", sans-serif';
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText("MAPA", x, y - 7);
   roundRect(ctx, x, y, mw, mh, 6);
   ctx.clip();
   ctx.imageSmoothingEnabled = false;

@@ -8,9 +8,12 @@ export interface PersonDef {
   variant?: "beard" | "ponytail" | "hat";
   line: string; // uvítání
   help?: string; // čím hráči pomůže
+  domain?: string; // krátký štítek odbornosti
+  tips?: string[]; // rotující rady v jeho oboru
 }
 
-// Lidé z týmu Nech mě růst + ty jako pečovatel/ka.
+// Lidé z týmu Nech mě růst + ty jako pečovatel/ka. Každý má svůj obor:
+// Tomáš = práce a rady, Maruška = vše okolo, Tony = technika.
 export const PEOPLE: PersonDef[] = [
   {
     id: "ty",
@@ -25,35 +28,59 @@ export const PEOPLE: PersonDef[] = [
   {
     id: "tomas",
     name: "Tomáš",
-    role: "Předseda spolku",
+    role: "Předseda — práce & rady",
     skin: "#eebb92",
     hair: "#3a2a1c",
     shirt: "#b85c3c",
     variant: "beard",
-    line: "Vítej na Louce! Já jsem Tomáš. Tady každé zvíře dožije v klidu — to je celý smysl.",
-    help: "Posílí tě. Naučí tě sekat dřevo tak, ať z toho něco je.",
+    line: "Vítej na Louce! Já jsem Tomáš. Každé zvíře tu dožije v klidu — a práce kolem je až nad hlavu.",
+    help: "Práce a rady. Posílí tě a naučí sekat dřevo tak, ať z toho něco je — co kus, to teplo na zimu.",
+    domain: "Práce & rady",
+    tips: [
+      "Ráno nejdřív vypusť a nakrm — zvířata na tebe čekají. Úklid počká.",
+      "Dřevo nasekej do zásoby. V zimě ho spotřebuješ víc, než čekáš.",
+      "Dochází ti energie? Najez se dřív, než padneš. Práce nikam neuteče.",
+      "Na noc vždy zavři výběhy. Liška si počká na první tvou chybu.",
+      "V zimě je všechno těžší — nachystej krmení i dřevo už na podzim.",
+    ],
   },
   {
     id: "maruska",
     name: "Maruška",
-    role: "Srdce organizace",
+    role: "Srdce spolku — vše okolo",
     skin: "#f3cba6",
     hair: "#8a5a2c",
     shirt: "#c89858",
     variant: "ponytail",
-    line: "Ahoj, já jsem Maruška. Papíry, krmivo, rozpočet — ať to klape. A hlídej peníze!",
-    help: "Naučí tě poznávat byliny — základ mastí i čajů.",
+    line: "Ahoj, já jsem Maruška. Papíry, krmivo, byliny, rozpočet — držím pohromadě vše okolo. A hlídej peníze!",
+    help: "Vše okolo: byliny, zásoby i rozpočet. Naučí tě poznávat byliny — základ mastí a čajů.",
+    domain: "Vše okolo",
+    tips: [
+      "Řebříček a měsíček suš — z nich je nejlepší řebříčková mast na prodej.",
+      "Krmivo kupuj ve velkém, prodávej až je sklad plný. Ušetříš.",
+      "Vejce a vlnu sbírej každý den — stálý malý příjem se sečte.",
+      "Bylinek je nejvíc na východní louce. Vyplatí se tam zajít.",
+      "Mast a čaje nesou víc než suroviny. Vyrábět se vyplatí.",
+    ],
   },
   {
     id: "tony",
     name: "Tony",
-    role: "Kutil a parťák",
+    role: "Technik a kutil",
     skin: "#edc098",
     hair: "#241f1c",
     shirt: "#2f7d8a",
     variant: "beard",
-    line: "Čau, Tony. Postavím, opravím, vymyslím. Když na něčem uvázneš, stav se.",
-    help: "Vytříbí ti paměť — pexeso s obyvateli Louky. A hodí pár korun.",
+    line: "Čau, Tony. Dej mi dráty a chvíli a Louka si skoro pomáhá sama. Co je rozbité, spravím.",
+    help: "Technika a vychytávky: samokrmítka, pumpa, vyhřívané napáječky, ohradník na lišku. Naučí tě je zapojit.",
+    domain: "Technika",
+    tips: [
+      "Solární panel se přes den dobije — večer pak svítí u kurníku i bez proudu.",
+      "Vodní pumpa dotáhne vodu do napáječek. Ušetří ti cesty ke studni.",
+      "V zimě se hodí vyhřívaná napáječka — zvířatům nezamrzne voda.",
+      "Elektrický ohradník odradí lišku líp než plot. Hlídej ale spotřebu!",
+      "Samokrmítko nakrmí drůbež i ráno, kdy zrovna stíháš jinde.",
+    ],
   },
 ];
 

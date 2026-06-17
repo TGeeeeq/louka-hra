@@ -126,7 +126,9 @@ function buildMap() {
 
 export const MAP = buildMap();
 
-const SOLID: Set<number> = new Set([TILE.FOREST, TILE.WATER, TILE.FENCE, TILE.BUSH]);
+// BUSH záměrně NENÍ solid — roztroušené keře v mýtině dřív blokovaly pohyb
+// („pohyb poblíž objektů nesnadný"). Teď jsou to průchozí dekorace.
+const SOLID: Set<number> = new Set([TILE.FOREST, TILE.WATER, TILE.FENCE]);
 
 export function isSolidTile(tx: number, ty: number): boolean {
   if (tx < 0 || ty < 0 || tx >= MAP.w || ty >= MAP.h) return true;
