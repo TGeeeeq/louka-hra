@@ -30,6 +30,17 @@ Chodíš postavou po Louce (top-down mapa ve stylu Pokémon / Zoo Tycoon):
   kuchyně · 🛠️ dílna (výroba) · 🏪 stánek (obchod) · 🏡 chalupa (spánek) · 🪧 cedule (nápověda).
 - **Questy** vedou nahoře (vtipná příběhová linka), **zvuky** jsou chiptune + ambient
   (🔊 / 🎵 v HUD je vypneš), 🎒 batoh = najíst se a napít.
+- **Mini-mapa** v rohu ukazuje oblasti i tebe. Svět je velký a **cestovatelný** —
+  statek, bylinková louka, rybník a hájek propojené cestami lesem.
+
+### Lidé, minihry a hlavolamy
+
+- U startu potkáš **Tomáše, Marušku a Tonyho**. Každý tě naučí dovednost přes
+  **naučnou minihru** a dá odměnu: 🌿 poznávání bylin (Maruška), 🪓 sekání dřeva
+  na čas (Tomáš), 🐾 pexeso s obyvateli Louky (Tony).
+- Cestu k **hájku** hlídá **Lesní brána** — vyřeš ptačí Simon a otevřeš novou cestu
+  i **truhlu se zásobami**.
+- Zvířata mají **reálné rozdílné velikosti** a hráč i postavičky chodí ve čtyřech směrech.
 
 ## Spuštění (lokálně v prohlížeči)
 
