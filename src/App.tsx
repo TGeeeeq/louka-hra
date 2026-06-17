@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AnimalDef, FeedGroup } from "./game/types";
 import { useGame } from "./ui/store";
-import { WorldCanvas, type InteractTarget } from "./ui/world/WorldCanvas";
+import { WorldCanvas, type InteractTarget, type WorldEvent } from "./ui/world/WorldCanvas";
 import { Hud } from "./ui/world/Hud";
 import { DialogBox } from "./ui/world/DialogBox";
 import { Controls } from "./ui/world/Controls";
@@ -149,6 +149,20 @@ export default function App() {
     else dispatch({ type: "PUSH_DIALOG", speaker: "Kurník", lines: ["Drůbež spokojeně hrabe. Hotovo. 🐔"] });
   };
 
+  const onWorldEvent = (e: WorldEvent) => {
+    const name = ANIMAL_BY_ID[e.animalId]?.name ?? "Zvíře";
+    if (e.type === "escape") {
+      sound.error();
+      dispatch({ type: "PUSH_DIALOG", speaker: "Pozor!", lines: [`${name} se prodral(a) plotem a pádí k zahrádce! Dožeň ho a zmáčkni akci, ať ho zaženeš zpátky.`] });
+    } else if (e.type === "raid") {
+      dispatch({ type: "REWARD", money: -15, items: [{ item: "zelenina", qty: -2 }, { item: "brambory", qty: -1 }] });
+      dispatch({ type: "PUSH_DIALOG", speaker: name, lines: [`Mňam mňam! ${name} se cpe v zahrádce — ubyla zelenina i pár korun. Honem ho zažeň zpátky!`] });
+    } else {
+      sound.success();
+      dispatch({ type: "PUSH_DIALOG", speaker: name, lines: [`Uf! ${name} je zpátky ve výběhu. Plot zase drží. 🐑`] });
+    }
+  };
+
   const onInteract = (t: InteractTarget) => {
     if (t.kind === "npc") {
       sound.select();
@@ -194,6 +208,9 @@ export default function App() {
         break;
       case "cedule": dispatch({ type: "PUSH_DIALOG", speaker: "Cedule", lines: CEDULE_HELP }); break;
       case "byliny": dispatch({ type: "FORAGE" }); break;
+      case "zahrada":
+        dispatch({ type: "PUSH_DIALOG", speaker: "Zahrádka", lines: ["Permakulturní záhonky — zelí, mrkev, brambory. Ale pozor: uprchlíci z výběhů si tu rádi pochutnají!"] });
+        break;
       case "brana":
         if (state.flags.gate_open)
           dispatch({ type: "PUSH_DIALOG", speaker: "Lesní brána", lines: ["Brána je dokořán. Cesta k hájku je volná."] });
@@ -213,7 +230,7 @@ export default function App() {
 
   return (
     <div className="game-world">
-      <WorldCanvas season={state.season} phase={state.phase} paused={paused} onInteract={onInteract} />
+      <WorldCanvas season={state.season} phase={state.phase} paused={paused} onInteract={onInteract} onEvent={onWorldEvent} />
       <Hud onOpen={(p) => setOverlay(p)} />
       <Controls />
       <DialogBox />

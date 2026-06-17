@@ -1,16 +1,18 @@
 import { useEffect, useRef } from "react";
-import type { Phase, Season } from "../../game/types";
+import type { FeedGroup, Phase, Season } from "../../game/types";
 import { MAP_H, MAP_W, TS } from "../../world/tiles";
 import {
   ANIMAL_SPAWNS,
+  GARDEN,
   INTERACTABLES,
   NPC_SPAWNS,
   PLAYER_START,
   isBlocked,
+  type Bounds,
   type Interactable,
 } from "../../world/entities";
 import { PERSON_BY_ID } from "../../game/content/people";
-import { drawBuilding, drawGround, drawPaddocks, getMinimapBase, roundRect } from "../../world/draw";
+import { drawBuilding, drawGround, drawPaddocks, drawVignette, drawWaterShimmer, getMinimapBase, roundRect } from "../../world/draw";
 import { animalImg, personImg, preloadSprites, ready } from "../../world/spriteCache";
 import { ANIMALS, ANIMAL_BY_ID, animalScale } from "../../game/content/animals";
 import type { Facing } from "../sprites/PersonSprite";
@@ -23,15 +25,19 @@ export type InteractTarget =
   | { kind: "animal"; animalId: string }
   | { kind: "npc"; npcId: string };
 
+export type WorldEvent = { type: "escape" | "raid" | "caught"; animalId: string };
+
 interface Props {
   season: Season;
   phase: Phase;
   paused: boolean;
   onInteract: (t: InteractTarget) => void;
+  onEvent: (e: WorldEvent) => void;
 }
 
 interface Mob {
   id: string;
+  group: FeedGroup;
   x: number;
   y: number;
   hx: number;
@@ -42,29 +48,52 @@ interface Mob {
   rest: number;
   flip: boolean;
   bob: number;
+  bounds?: Bounds;
+  escaped: boolean;
+  raided: boolean;
 }
 
 const SPEED = 165; // px/s
 const INTERACT_RANGE = TS * 1.5;
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 
-export function WorldCanvas({ season, phase, paused, onInteract }: Props) {
+const BUILDING_VERB: Record<string, string> = {
+  kurnik: "Drůbež (krmení / vejce)",
+  chlivek: "Nakrmit prasata",
+  pastvina: "Stádo",
+  buda: "Nakrmit mazlíčky",
+  studna: "Napojit zvířata",
+  ohniste: "Oheň / vaření",
+  dilna: "Výroba",
+  stanek: "Obchod",
+  chalupa: "Domov",
+  cedule: "Nápověda",
+  byliny: "Sbírat byliny",
+  brana: "Lesní brána",
+  truhla: "Otevřít truhlu",
+  zahrada: "Zahrádka",
+};
+
+export function WorldCanvas({ season, phase, paused, onInteract, onEvent }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // měnící se props čteme přes ref, ať smyčku nemusíme restartovat
-  const propsRef = useRef({ season, phase, paused, onInteract });
-  propsRef.current = { season, phase, paused, onInteract };
+  const propsRef = useRef({ season, phase, paused, onInteract, onEvent });
+  propsRef.current = { season, phase, paused, onInteract, onEvent };
 
   const player = useRef({ x: PLAYER_START.x, y: PLAYER_START.y, dir: "down", moving: false, anim: 0, flip: false });
   const mobs = useRef<Mob[]>([]);
   const cam = useRef({ x: 0, y: 0 });
   const stepAcc = useRef(0);
+  const escapeAcc = useRef(0);
+  const lastPhase = useRef<Phase>(phase);
 
   // init mobů jednou
   if (mobs.current.length === 0) {
     mobs.current = ANIMAL_SPAWNS.map((s) => ({
       id: s.animalId,
+      group: s.group,
       x: s.hx,
       y: s.hy,
       hx: s.hx,
@@ -75,6 +104,9 @@ export function WorldCanvas({ season, phase, paused, onInteract }: Props) {
       rest: Math.random() * 2,
       flip: false,
       bob: Math.random() * 6,
+      bounds: s.bounds,
+      escaped: false,
+      raided: false,
     }));
   }
 
@@ -128,11 +160,32 @@ export function WorldCanvas({ season, phase, paused, onInteract }: Props) {
     let nearest: InteractTarget | null = null;
 
     const triggerAction = () => {
-      if (nearest) {
-        propsRef.current.onInteract(nearest);
-        sound.interact();
+      if (!nearest) return;
+      // chytání uprchlíka — zažene zpět do výběhu
+      if (nearest.kind === "animal") {
+        const id = nearest.animalId;
+        const m = mobs.current.find((mm) => mm.id === id);
+        if (m && m.escaped) {
+          m.escaped = false;
+          m.raided = false;
+          m.tx = m.hx;
+          m.ty = m.hy;
+          m.rest = 0;
+          propsRef.current.onEvent({ type: "caught", animalId: m.id });
+          sound.interact();
+          return;
+        }
       }
+      propsRef.current.onInteract(nearest);
+      sound.interact();
     };
+
+    // klik/ťuk přímo do světa = interakce s nejbližším cílem
+    const onCanvasPointer = (e: PointerEvent) => {
+      e.preventDefault();
+      if (!propsRef.current.paused) triggerAction();
+    };
+    canvas.addEventListener("pointerdown", onCanvasPointer);
 
     const canMoveTo = (nx: number, ny: number) => {
       const hw = 9;
@@ -142,6 +195,39 @@ export function WorldCanvas({ season, phase, paused, onInteract }: Props) {
         !isBlocked(nx - hw, ny - 6) &&
         !isBlocked(nx + hw, ny - 6)
       );
+    };
+
+    // sezónní částice (sníh / listí / okvětní lístky / pyl)
+    type Particle = { x: number; y: number; rot: number; rv: number; sz: number };
+    let particles: Particle[] = [];
+    let pSeason = "";
+    const seedParticles = (s: Season, w: number, h: number) => {
+      const n = s === "leto" ? 26 : 44;
+      particles = Array.from({ length: n }, () => ({ x: Math.random() * w, y: Math.random() * h, rot: Math.random() * 6, rv: (Math.random() - 0.5) * 2.5, sz: 2 + Math.random() * 1.6 }));
+      pSeason = s;
+    };
+    const drawParticles = (s: Season, w: number, h: number, dt: number, now: number) => {
+      if (pSeason !== s || !particles.length) seedParticles(s, w, h);
+      const col = s === "zima" ? "#ffffff" : s === "podzim" ? "#cf7a2e" : s === "jaro" ? "#f2b4d0" : "#f3e08a";
+      ctx.fillStyle = col;
+      for (const pt of particles) {
+        if (s === "zima") { pt.x += Math.sin(now * 0.001 + pt.rot) * 0.4 + 6 * dt; pt.y += 24 * dt; }
+        else if (s === "podzim") { pt.x += Math.sin(now * 0.0013 + pt.rot) * 0.9 + 10 * dt; pt.y += 30 * dt; pt.rot += pt.rv * dt; }
+        else if (s === "jaro") { pt.x += Math.sin(now * 0.001 + pt.rot) * 0.8 + 14 * dt; pt.y += 18 * dt; }
+        else { pt.x += Math.sin(now * 0.0008 + pt.rot) * 0.5 + 5 * dt; pt.y -= 7 * dt; }
+        if (pt.y > h + 10) { pt.y = -10; pt.x = Math.random() * w; }
+        else if (pt.y < -10) { pt.y = h + 10; pt.x = Math.random() * w; }
+        if (pt.x > w + 10) pt.x = -10;
+        else if (pt.x < -10) pt.x = w + 10;
+        if (s === "podzim") {
+          ctx.save(); ctx.translate(pt.x, pt.y); ctx.rotate(pt.rot); ctx.globalAlpha = 0.85;
+          ctx.fillRect(-pt.sz, -pt.sz * 0.6, pt.sz * 2, pt.sz * 1.2); ctx.restore();
+        } else {
+          ctx.globalAlpha = s === "leto" ? 0.7 : 0.85;
+          ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.sz, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
     };
 
     const loop = (now: number) => {
@@ -182,26 +268,69 @@ export function WorldCanvas({ season, phase, paused, onInteract }: Props) {
         p.moving = false;
       }
 
-      // --- mobové (procházejí se v zóně) ---
-      for (const m of mobs.current) {
-        m.rest -= dt;
-        if (m.rest <= 0) {
-          const a = Math.random() * Math.PI * 2;
-          const r = Math.random() * m.radius;
-          m.tx = m.hx + Math.cos(a) * r;
-          m.ty = m.hy + Math.sin(a) * r;
-          m.rest = 1.5 + Math.random() * 3.5;
+      // --- událost útěku: občas jedno zvíře vyrazí z výběhu do zahrádky ---
+      escapeAcc.current += dt;
+      if (!P.paused && escapeAcc.current > 14) {
+        escapeAcc.current = 0;
+        if (!mobs.current.some((m) => m.escaped) && Math.random() < 0.18) {
+          const cands = mobs.current.filter((m) => m.bounds);
+          const m = cands[Math.floor(Math.random() * cands.length)];
+          if (m) {
+            m.escaped = true;
+            m.raided = false;
+            m.tx = GARDEN.x;
+            m.ty = GARDEN.y;
+            m.rest = 3;
+            propsRef.current.onEvent({ type: "escape", animalId: m.id });
+          }
         }
-        const dx = m.tx - m.x;
-        const dy = m.ty - m.y;
-        const d = Math.hypot(dx, dy);
-        if (d > 1.5) {
-          const sp = 26 * dt;
-          const nx = m.x + (dx / d) * sp;
-          const ny = m.y + (dy / d) * sp;
-          if (!isBlocked(nx, ny)) { m.x = nx; m.y = ny; m.flip = dx < 0; }
-          else m.rest = 0;
-          m.bob += dt * 8;
+      }
+      // přes noc se uprchlíci sami vrátí
+      if (P.phase === "rano" && lastPhase.current !== "rano") {
+        for (const m of mobs.current) if (m.escaped) { m.escaped = false; m.raided = false; m.tx = m.hx; m.ty = m.hy; }
+      }
+      lastPhase.current = P.phase;
+
+      // --- mobové (pasou se ve výběhu; uprchlík míří do zahrádky) ---
+      if (!P.paused) {
+        for (const m of mobs.current) {
+          m.rest -= dt;
+          if (m.rest <= 0) {
+            if (m.escaped) {
+              m.tx = GARDEN.x;
+              m.ty = GARDEN.y;
+              m.rest = 2;
+            } else if (m.bounds) {
+              m.tx = m.bounds.x0 + Math.random() * (m.bounds.x1 - m.bounds.x0);
+              m.ty = m.bounds.y0 + Math.random() * (m.bounds.y1 - m.bounds.y0);
+              m.rest = 1.5 + Math.random() * 3.5;
+            } else {
+              const a = Math.random() * Math.PI * 2;
+              const r = Math.random() * m.radius;
+              m.tx = m.hx + Math.cos(a) * r;
+              m.ty = m.hy + Math.sin(a) * r;
+              m.rest = 1.5 + Math.random() * 3.5;
+            }
+          }
+          const dx = m.tx - m.x;
+          const dy = m.ty - m.y;
+          const d = Math.hypot(dx, dy);
+          if (d > 1.5) {
+            const sp = (m.escaped ? 44 : 26) * dt;
+            let nx = m.x + (dx / d) * sp;
+            let ny = m.y + (dy / d) * sp;
+            if (!m.escaped && m.bounds) {
+              nx = Math.max(m.bounds.x0, Math.min(m.bounds.x1, nx));
+              ny = Math.max(m.bounds.y0, Math.min(m.bounds.y1, ny));
+            }
+            if (!isBlocked(nx, ny)) { m.x = nx; m.y = ny; m.flip = dx < 0; }
+            else m.rest = 0;
+            m.bob += dt * 8;
+          }
+          if (m.escaped && !m.raided && Math.hypot(m.x - GARDEN.x, m.y - GARDEN.y) < TS) {
+            m.raided = true;
+            propsRef.current.onEvent({ type: "raid", animalId: m.id });
+          }
         }
       }
 
@@ -237,6 +366,22 @@ export function WorldCanvas({ season, phase, paused, onInteract }: Props) {
         if (d < bestD) { bestD = d; nearest = { kind: "npc", npcId: npc.id }; }
       }
 
+      // popisek akce nejbližšího cíle (kontextová nápověda)
+      let actionLabel: string | null = null;
+      if (nearest && !P.paused) {
+        if (nearest.kind === "npc") actionLabel = "Promluvit — " + (PERSON_BY_ID[nearest.npcId]?.name ?? "");
+        else if (nearest.kind === "animal") {
+          const id = nearest.animalId;
+          const m = mobs.current.find((mm) => mm.id === id);
+          actionLabel = m?.escaped ? "Zahnat zpátky do výběhu" : "Pohladit / info";
+        } else {
+          const k = nearest.it.kind;
+          actionLabel = BUILDING_VERB[k] ?? nearest.it.label;
+          if (k === "pastvina") actionLabel = P.season === "jaro" || P.season === "leto" ? "Vyhnat na pastvu" : "Rozdělat seno";
+          else if (k === "chalupa" && P.phase === "vecer") actionLabel = "Zavřít a jít spát";
+        }
+      }
+
       // --- RENDER ---
       ctx.clearRect(0, 0, viewW, viewH);
       drawGround(ctx, camX, camY, viewW, viewH, P.season);
@@ -270,9 +415,14 @@ export function WorldCanvas({ season, phase, paused, onInteract }: Props) {
       items.sort((a, b) => a.y - b.y);
       for (const it of items) it.draw();
 
+      drawWaterShimmer(ctx, camX, camY, viewW, viewH, now);
       // tint dle fáze/období
       drawTint(ctx, viewW, viewH, P.phase, P.season);
-
+      // sezónní částice + vinětace
+      drawParticles(P.season, viewW, viewH, dt, now);
+      drawVignette(ctx, viewW, viewH);
+      // kontextová akční nápověda
+      if (actionLabel) drawActionChip(ctx, viewW, viewH, actionLabel);
       // mini-mapa
       drawMinimap(ctx, viewW, p.x, p.y, nearest);
 
@@ -285,6 +435,7 @@ export function WorldCanvas({ season, phase, paused, onInteract }: Props) {
       ro.disconnect();
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
+      canvas.removeEventListener("pointerdown", onCanvasPointer);
     };
   }, []);
 
@@ -332,7 +483,13 @@ function drawMob(
     ctx.fill();
   }
   if (near) ctx.restore();
-  if (near) {
+  if (m.escaped) {
+    const b = Math.sin(time * 0.013) * 4;
+    ctx.font = `22px ${EMOJI_FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("❗", sx, sy - size - 2 + b);
+  } else if (near) {
     const b = Math.sin(time * 0.006) * 3;
     ctx.font = `20px ${EMOJI_FONT}`;
     ctx.textAlign = "center";
@@ -430,6 +587,34 @@ function drawTint(
   if (!color) return;
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, w, h);
+}
+
+function drawActionChip(ctx: CanvasRenderingContext2D, vw: number, vh: number, label: string) {
+  const kw = 22;
+  const padX = 12;
+  const gap = 8;
+  ctx.font = '700 14px "Plus Jakarta Sans", sans-serif';
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  const tw = ctx.measureText(label).width;
+  const cw = padX + kw + gap + tw + padX;
+  const x = vw / 2 - cw / 2;
+  const y = vh - 96;
+  ctx.fillStyle = "rgba(26,31,28,0.82)";
+  roundRect(ctx, x, y - 17, cw, 34, 17);
+  ctx.fill();
+  ctx.fillStyle = "#f0e892";
+  roundRect(ctx, x + padX, y - 9, kw, 18, 5);
+  ctx.fill();
+  ctx.fillStyle = "#1f3d2a";
+  ctx.textAlign = "center";
+  ctx.font = '800 11px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText("A", x + padX + kw / 2, y + 1);
+  ctx.fillStyle = "#f7f2e7";
+  ctx.textAlign = "left";
+  ctx.font = '700 14px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText(label, x + padX + kw + gap, y);
+  ctx.textAlign = "center";
 }
 
 function drawMinimap(

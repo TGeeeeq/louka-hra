@@ -140,8 +140,15 @@ class SoundEngine {
       if (!this.muted && this.musicOn && this.ctx) {
         const mel = this.THEMES[s];
         const f = mel[this.musicStep % mel.length];
-        if (f > 0) this.tone(f, 0.9, "sine", 0.045);
-        if (this.musicStep % 8 === 0) this.tone(this.BASS[s], 1.6, "sine", 0.04);
+        if (f > 0) {
+          this.tone(f, 1.0, "sine", 0.038);
+          this.tone(f * 1.004, 1.0, "sine", 0.03); // jemný chorus = teplo
+          this.tone(f * 2, 0.9, "sine", 0.012); // svrchní třpyt
+        }
+        if (this.musicStep % 8 === 0) {
+          this.tone(this.BASS[s], 1.9, "sine", 0.036);
+          this.tone(this.BASS[s] * 1.5, 1.9, "sine", 0.018); // kvinta pro plnost
+        }
         this.musicStep++;
       }
       this.musicTimer = window.setTimeout(tick, this.TEMPO[s]);

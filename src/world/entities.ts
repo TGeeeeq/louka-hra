@@ -1,6 +1,7 @@
 import { MAP, TILE, TS, isSolidTile, setTile } from "./tiles";
 import { ANIMALS_BY_GROUP } from "../game/content/animals";
 import { NPCS } from "../game/content/people";
+import type { FeedGroup } from "../game/types";
 
 const SPAWN_TX = 22;
 const SPAWN_TY = 20;
@@ -25,7 +26,8 @@ export type InteractKind =
   | "cedule"
   | "byliny"
   | "brana"
-  | "truhla";
+  | "truhla"
+  | "zahrada";
 
 export interface Interactable {
   id: string;
@@ -62,6 +64,8 @@ export const INTERACTABLES: Interactable[] = [
   // hlavolam: lesní brána na cestě k hájku + truhla se zásobami v hájku
   B("brana", "brana", "Lesní brána", 44, 41, 1, 1, false),
   B("truhla", "truhla", "Truhla se zásobami", 60, 41, 1, 1, false),
+  // permakulturní zahrádka (pozor na uprchlíky z výběhů!)
+  B("zahrada", "zahrada", "Zahrádka", 33, 12, 2, 2, false),
 ];
 
 export const INTERACTABLE_BY_ID: Record<string, Interactable> = Object.fromEntries(
@@ -96,6 +100,7 @@ export function openGate() {
 
 // Výběhy (ohrady) zvířat — jen vizuální ploty, hráč jimi projde.
 export interface Paddock {
+  group: FeedGroup;
   label: string;
   tx: number;
   ty: number;
@@ -103,10 +108,13 @@ export interface Paddock {
   h: number;
 }
 export const PADDOCKS: Paddock[] = [
-  { label: "Drůbeží výběh", tx: 10, ty: 10, w: 8, h: 6 },
-  { label: "Prasečí výběh", tx: 8, ty: 15, w: 8, h: 6 },
-  { label: "Pastvina", tx: 14, ty: 20, w: 13, h: 8 },
+  { group: "drubez", label: "Drůbeží výběh", tx: 10, ty: 10, w: 8, h: 6 },
+  { group: "prasata", label: "Prasečí výběh", tx: 8, ty: 15, w: 8, h: 6 },
+  { group: "stado", label: "Pastvina", tx: 14, ty: 20, w: 13, h: 8 },
 ];
+
+// Zahrádka — sem míří uprchlá zvířata.
+export const GARDEN = { x: (33 + 1) * TS, y: (12 + 1) * TS };
 
 // Solidní dlaždice staveb (pro kolize).
 const solidBuildingTiles = new Set<string>();
@@ -126,49 +134,56 @@ export function isBlocked(px: number, py: number): boolean {
 }
 
 // --- Rozmístění zvířat po zónách ----------------------------------------
+export interface Bounds { x0: number; y0: number; x1: number; y1: number }
 export interface AnimalSpawn {
   animalId: string;
+  group: FeedGroup;
   hx: number;
   hy: number;
   radius: number;
+  bounds?: Bounds; // ohrada (px) — mimo ni se zvíře nedostane (kromě útěku)
 }
 
 interface ZoneDef {
   group: keyof typeof ANIMALS_BY_GROUP;
-  cx: number; // tile
+  cx: number;
   cy: number;
-  spread: number; // tiles
+  spread: number;
 }
 
 const ZONES: ZoneDef[] = [
   { group: "drubez", cx: 14, cy: 12, spread: 3 },
   { group: "prasata", cx: 12, cy: 18, spread: 2 },
-  { group: "stado", cx: 20, cy: 22, spread: 4 },
-  { group: "mazlici", cx: 28, cy: 22, spread: 4 },
+  { group: "stado", cx: 20, cy: 24, spread: 4 },
+  { group: "mazlici", cx: 30, cy: 14, spread: 4 },
 ];
 
 function buildSpawns(): AnimalSpawn[] {
   const out: AnimalSpawn[] = [];
   for (const z of ZONES) {
     const list = ANIMALS_BY_GROUP[z.group];
+    const pad = PADDOCKS.find((p) => p.group === z.group);
+    const bounds: Bounds | undefined = pad
+      ? { x0: (pad.tx + 0.6) * TS, y0: (pad.ty + 0.6) * TS, x1: (pad.tx + pad.w - 0.6) * TS, y1: (pad.ty + pad.h - 0.6) * TS }
+      : undefined;
+    const cols = Math.ceil(Math.sqrt(list.length));
+    const rows = Math.ceil(list.length / cols);
     list.forEach((a, i) => {
-      // rozmístění do mřížky kolem středu zóny
-      const cols = Math.ceil(Math.sqrt(list.length));
       const gx = i % cols;
       const gy = Math.floor(i / cols);
-      let tx = z.cx + (gx - cols / 2) * 1.1;
-      let ty = z.cy + (gy - cols / 2) * 1.1;
-      // odstrč z pevných dlaždic
-      if (isSolidTile(Math.floor(tx), Math.floor(ty))) {
-        tx = z.cx;
-        ty = z.cy;
+      let hx: number;
+      let hy: number;
+      if (bounds) {
+        hx = bounds.x0 + ((gx + 0.5) / cols) * (bounds.x1 - bounds.x0);
+        hy = bounds.y0 + ((gy + 0.5) / rows) * (bounds.y1 - bounds.y0);
+      } else {
+        let tx = z.cx + (gx - cols / 2) * 1.2;
+        let ty = z.cy + (gy - cols / 2) * 1.2;
+        if (isSolidTile(Math.floor(tx), Math.floor(ty))) { tx = z.cx; ty = z.cy; }
+        hx = (tx + 0.5) * TS;
+        hy = (ty + 0.5) * TS;
       }
-      out.push({
-        animalId: a.id,
-        hx: (tx + 0.5) * TS,
-        hy: (ty + 0.5) * TS,
-        radius: z.spread * TS * 0.5,
-      });
+      out.push({ animalId: a.id, group: z.group, hx, hy, radius: z.spread * TS * 0.5, bounds });
     });
   }
   return out;

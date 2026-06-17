@@ -219,6 +219,35 @@ export function drawPaddocks(ctx: CanvasRenderingContext2D, camX: number, camY: 
   }
 }
 
+// Třpyt na vodě (animovaný přes statickou cache terénu).
+export function drawWaterShimmer(ctx: CanvasRenderingContext2D, camX: number, camY: number, vw: number, vh: number, time: number) {
+  const x0 = Math.max(0, Math.floor(camX / TS));
+  const y0 = Math.max(0, Math.floor(camY / TS));
+  const x1 = Math.min(MAP.w - 1, Math.ceil((camX + vw) / TS));
+  const y1 = Math.min(MAP.h - 1, Math.ceil((camY + vh) / TS));
+  ctx.strokeStyle = "rgba(255,255,255,0.4)";
+  ctx.lineWidth = 1.5;
+  for (let ty = y0; ty <= y1; ty++)
+    for (let tx = x0; tx <= x1; tx++) {
+      if (MAP.get(tx, ty) !== TILE.WATER) continue;
+      const sx = tx * TS - camX;
+      const sy = ty * TS - camY;
+      const off = Math.sin(time * 0.002 + tx * 0.7 + ty) * 4;
+      ctx.beginPath();
+      ctx.arc(sx + TS / 2 + off, sy + TS / 2, 6, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+    }
+}
+
+// Jemná vinětace pro hloubku.
+export function drawVignette(ctx: CanvasRenderingContext2D, vw: number, vh: number) {
+  const g = ctx.createRadialGradient(vw / 2, vh / 2, Math.min(vw, vh) * 0.36, vw / 2, vh / 2, Math.max(vw, vh) * 0.74);
+  g.addColorStop(0, "rgba(0,0,0,0)");
+  g.addColorStop(1, "rgba(18,28,16,0.3)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, vw, vh);
+}
+
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 
 // paleta staveb
@@ -363,6 +392,19 @@ function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: num
         ctx.strokeStyle = BC.leaf; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bx, baseY); ctx.lineTo(bx, baseY - 12 - (i % 2) * 4); ctx.stroke();
         ctx.fillStyle = ["#f2a0c0", "#f0e070", "#fff", "#d68cf0", "#f2a0c0"][i]; ctx.beginPath(); ctx.arc(bx, baseY - 13 - (i % 2) * 4, 3, 0, 7); ctx.fill();
       }
+      break;
+    }
+    case "zahrada": {
+      ctx.fillStyle = "#7d5230"; roundRect(ctx, x + 5, y + h * 0.28, w - 10, h * 0.66, 4); ctx.fill();
+      for (let r = 0; r < 3; r++) {
+        const ry = y + h * 0.4 + r * (h * 0.5 / 3);
+        for (let c = 0; c < 3; c++) {
+          const px = x + 12 + c * ((w - 24) / 2);
+          ctx.fillStyle = BC.leaf; ctx.beginPath(); ctx.arc(px, ry, 3.4, 0, 7); ctx.fill();
+          ctx.fillStyle = ["#e0703c", "#f0b84a", "#c83c3c"][(r + c) % 3]; ctx.beginPath(); ctx.arc(px, ry - 1, 1.7, 0, 7); ctx.fill();
+        }
+      }
+      ctx.strokeStyle = "#9a6f3a"; ctx.lineWidth = 2; roundRect(ctx, x + 3, y + h * 0.26, w - 6, h * 0.7, 4); ctx.stroke();
       break;
     }
   }
