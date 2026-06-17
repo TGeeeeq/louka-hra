@@ -63,6 +63,7 @@ function useGameSounds() {
     if (state.questCompleted.length > p.quests) sound.questDone();
     else if (state.money > p.money) sound.coin();
     if (state.season !== p.season) sound.setSeason(state.season);
+    sound.setMood(state.phase);
     if (state.flash && state.flash.id !== p.flashId && (state.flash.tone === "bad" || state.flash.tone === "warn"))
       sound.error();
     prev.current = {

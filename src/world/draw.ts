@@ -259,12 +259,20 @@ const BC = {
 };
 
 function gable(ctx: CanvasRenderingContext2D, x: number, yB: number, w: number, hgt: number, col: string, dark: string) {
-  ctx.fillStyle = dark;
-  ctx.beginPath();
-  ctx.moveTo(x - 4, yB); ctx.lineTo(x + w / 2, yB - hgt); ctx.lineTo(x + w + 4, yB); ctx.closePath(); ctx.fill();
+  const ax = x + w / 2;
+  const ay = yB - hgt;
+  // levá (osvětlená) plocha střechy
   ctx.fillStyle = col;
   ctx.beginPath();
-  ctx.moveTo(x, yB - 2); ctx.lineTo(x + w / 2, yB - hgt + 3); ctx.lineTo(x + w, yB - 2); ctx.closePath(); ctx.fill();
+  ctx.moveTo(x - 4, yB); ctx.lineTo(ax, ay); ctx.lineTo(ax, yB); ctx.closePath(); ctx.fill();
+  // pravá (zastíněná) plocha — dává sklonu 3D dojem
+  ctx.fillStyle = dark;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay); ctx.lineTo(x + w + 4, yB); ctx.lineTo(ax, yB); ctx.closePath(); ctx.fill();
+  // hřeben
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax, yB - 2); ctx.stroke();
 }
 function arch(ctx: CanvasRenderingContext2D, cx: number, baseY: number, ww: number, hh: number, color: string) {
   ctx.fillStyle = color;
@@ -280,7 +288,17 @@ function arch(ctx: CanvasRenderingContext2D, cx: number, baseY: number, ww: numb
 function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: number, y: number, w: number, h: number, time: number) {
   const cx = x + w / 2;
   const baseY = y + h;
-  const wall = (top: number, col = BC.wood) => { ctx.fillStyle = col; roundRect(ctx, x + 3, top, w - 6, baseY - top, 4); ctx.fill(); };
+  const wall = (top: number, col = BC.wood) => {
+    const hgt = baseY - top;
+    ctx.fillStyle = col;
+    roundRect(ctx, x + 3, top, w - 6, hgt, 4); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,0.17)"; // pravá stěna ve stínu = objem
+    roundRect(ctx, x + w - 13, top + 2, 10, hgt - 2, 4); ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.14)"; // levá světlá hrana
+    ctx.fillRect(x + 5, top + 2, 4, hgt - 4);
+    ctx.fillStyle = "rgba(0,0,0,0.18)"; // usazení dole
+    ctx.fillRect(x + 4, baseY - 3, w - 8, 3);
+  };
 
   switch (kind) {
     case "chalupa": {
@@ -425,9 +443,9 @@ export function drawBuilding(
   const cx = x + w / 2;
   const baseY = y + h;
 
-  ctx.fillStyle = "rgba(0,0,0,0.16)";
+  ctx.fillStyle = "rgba(0,0,0,0.13)";
   ctx.beginPath();
-  ctx.ellipse(cx, baseY - 1, w * 0.42, h * 0.16, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx + 6, baseY + 1, w * 0.5, h * 0.2, 0, 0, Math.PI * 2);
   ctx.fill();
   if (near) {
     ctx.fillStyle = "rgba(240,232,146,0.35)";
