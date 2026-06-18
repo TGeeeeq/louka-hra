@@ -239,9 +239,9 @@ function drawProp(c: CanvasRenderingContext2D, t: number, sx: number, sy: number
         c.beginPath();
         c.arc(cx - cr * 0.42, topY - cr * 0.34, cr * 0.5, 0, 7);
         c.fill();
-        c.fillStyle = "rgba(255,255,255,0.16)";
+        c.fillStyle = "rgba(255,255,255,0.24)"; // silnější objemový highlight vlevo-nahoře
         c.beginPath();
-        c.arc(cx - cr * 0.5, topY - cr * 0.45, cr * 0.26, 0, 7);
+        c.arc(cx - cr * 0.5, topY - cr * 0.45, cr * 0.3, 0, 7);
         c.fill();
         if (season === "zima") {
           c.fillStyle = "rgba(255,255,255,0.62)";
@@ -424,15 +424,63 @@ function gable(ctx: CanvasRenderingContext2D, x: number, yB: number, w: number, 
   ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax, yB - 2); ctx.stroke();
 }
+// Klenuté dveře se zapuštěným objemem: tmavá zárubeň/špaleta kolem + samotné
+// křídlo s gradientem (světlejší okraj → tmavší střed = dojem zahloubení).
 function arch(ctx: CanvasRenderingContext2D, cx: number, baseY: number, ww: number, hh: number, color: string) {
-  ctx.fillStyle = color;
+  const top = baseY - hh + ww;
+  const path = (w2: number, h2: number) => {
+    ctx.beginPath();
+    ctx.moveTo(cx - w2, baseY);
+    ctx.lineTo(cx - w2, baseY - h2 + w2);
+    ctx.arc(cx, baseY - h2 + w2, w2, Math.PI, 0);
+    ctx.lineTo(cx + w2, baseY);
+    ctx.closePath();
+  };
+  // tmavá zárubeň/špaleta (o trochu širší, dojem zapuštění do zdi)
+  ctx.fillStyle = shiftHex(BC.woodD, -34);
+  path(ww + 2, hh + 2); ctx.fill();
+  // křídlo dveří s radiálním gradientem (okraj světlejší, střed tmavší)
+  const g = ctx.createRadialGradient(cx - ww * 0.3, top - ww * 0.3, 1, cx, top, hh);
+  g.addColorStop(0, shiftHex(color, 22));
+  g.addColorStop(0.6, color);
+  g.addColorStop(1, shiftHex(color, -22));
+  ctx.fillStyle = g;
+  path(ww, hh); ctx.fill();
+  // světlá hrana zárubně vlevo-nahoře (sluneční náběžná hrana)
+  ctx.strokeStyle = "rgba(255,255,255,0.16)"; ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(cx - ww, baseY);
-  ctx.lineTo(cx - ww, baseY - hh + ww);
-  ctx.arc(cx, baseY - hh + ww, ww, Math.PI, 0);
-  ctx.lineTo(cx + ww, baseY);
-  ctx.closePath();
-  ctx.fill();
+  ctx.lineTo(cx - ww, top);
+  ctx.arc(cx, top, ww, Math.PI, Math.PI * 1.5);
+  ctx.stroke();
+}
+
+// Zapuštěné okno: tmavá špaleta kolem (rámeček) + sklo s gradientem (odlesk
+// vlevo-nahoře světlý → dole tmavší) + křížek rámu se stínem.
+function windowInset(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  // špaleta / rámeček kolem (okno je zapuštěné do zdi)
+  ctx.fillStyle = shiftHex(BC.winF, -22);
+  roundRect(ctx, x - 1.5, y - 1.5, w + 3, h + 3, 3); ctx.fill();
+  // sklo s diagonálním odleskem (L-H světlé → P-D tmavé)
+  const g = ctx.createLinearGradient(x, y, x + w, y + h);
+  g.addColorStop(0, shiftHex(BC.win, 18));
+  g.addColorStop(0.5, BC.win);
+  g.addColorStop(1, shiftHex(BC.win, -30));
+  ctx.fillStyle = g;
+  roundRect(ctx, x, y, w, h, 2); ctx.fill();
+  // ostrý odlesk v levém-horním rohu skla
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.beginPath();
+  ctx.moveTo(x + 2, y + 2); ctx.lineTo(x + w * 0.42, y + 2); ctx.lineTo(x + 2, y + h * 0.42);
+  ctx.closePath(); ctx.fill();
+  // křížek rámu se stínem (vpravo-dole) a světlem (vlevo-nahoře)
+  const mx = x + w / 2, my = y + h / 2;
+  ctx.strokeStyle = "rgba(0,0,0,0.28)"; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(mx + 0.6, y); ctx.lineTo(mx + 0.6, y + h); ctx.moveTo(x, my + 0.6); ctx.lineTo(x + w, my + 0.6); ctx.stroke();
+  ctx.strokeStyle = BC.winF; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(mx, y); ctx.lineTo(mx, y + h); ctx.moveTo(x, my); ctx.lineTo(x + w, my); ctx.stroke();
+  // tenký vnější rám
+  ctx.strokeStyle = BC.winF; ctx.lineWidth = 1.4; ctx.strokeRect(x, y, w, h);
 }
 
 function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: number, y: number, w: number, h: number, time: number) {
@@ -441,16 +489,21 @@ function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: num
   const D = Math.max(12, w * 0.26); // hloubka 3D boku (dozadu-vpravo)
   const dy = D * 0.55;
 
-  // 3D kvádr: pravý bok (tmavý parallelogram) + čelo s gradientem + světlé hrany
+  // 3D kvádr: pravý bok (tmavý parallelogram s vertikálním gradientem) + čelo
+  // s gradientem + světlé hrany. Bok dostane gradient (nahoře světlejší, dole
+  // tmavší) pro válcový/hmotný pocit; u země kontaktní AO.
   const box = (top: number, face: string, side: string) => {
     const hgt = baseY - top;
-    ctx.fillStyle = side;
+    // pravý bok — vertikální gradient místo ploché výplně (objem do hloubky)
+    const sg = ctx.createLinearGradient(0, top - dy, 0, baseY);
+    sg.addColorStop(0, shiftHex(side, 16)); sg.addColorStop(1, shiftHex(side, -18));
+    ctx.fillStyle = sg;
     ctx.beginPath();
     ctx.moveTo(x + w - 3, top); ctx.lineTo(x + w - 3 + D, top - dy);
     ctx.lineTo(x + w - 3 + D, baseY - dy); ctx.lineTo(x + w - 3, baseY);
     ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "rgba(0,0,0,0.16)"; // bok ke spodu tmavší
-    ctx.fillRect(x + w - 3, baseY - hgt * 0.32, D, hgt * 0.32);
+    ctx.fillStyle = "rgba(0,0,0,0.2)"; // kontaktní AO u země na boku
+    ctx.fillRect(x + w - 3, baseY - hgt * 0.28, D, hgt * 0.28);
     const g = ctx.createLinearGradient(0, top, 0, baseY);
     g.addColorStop(0, shiftHex(face, 22)); g.addColorStop(0.55, face); g.addColorStop(1, shiftHex(face, -14));
     ctx.fillStyle = g;
@@ -474,9 +527,17 @@ function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: num
     ctx.fillStyle = fg;
     ctx.beginPath();
     ctx.moveTo(x - 3, topY); ctx.lineTo(ax, ay); ctx.lineTo(x + w + 3, topY); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.3)"; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + D, ay - dy); ctx.stroke(); // hřeben
-    ctx.fillStyle = "rgba(0,0,0,0.16)"; ctx.fillRect(x - 3, topY, w + 6, 2.5); // okap
+    // hřebenová hrana mezi čelní a boční plochou — jemný stín (zlom světla)
+    ctx.strokeStyle = "rgba(0,0,0,0.18)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(x + w + 3, topY); ctx.stroke();
+    // silný světlý highlight na hřebenu (sluneční hrana z L-H)
+    ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, ay + 0.5); ctx.lineTo(ax + D, ay - dy + 0.5); ctx.stroke(); // hřeben do hloubky
+    ctx.strokeStyle = "rgba(255,255,255,0.32)"; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(x - 3, topY); ctx.lineTo(ax, ay); ctx.stroke(); // světlá náběžná hrana štítu
+    // tmavší stín pod okapem (kontakt střechy a zdi)
+    ctx.fillStyle = "rgba(0,0,0,0.26)"; ctx.fillRect(x - 3, topY, w + 6, 2.5); // okap
+    ctx.fillStyle = "rgba(0,0,0,0.12)"; ctx.fillRect(x - 3, topY + 2.5, w + 6, 2); // měkký dosvit pod okapem
   };
 
   switch (kind) {
@@ -489,8 +550,7 @@ function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: num
       roof(top, BC.roof, BC.roofD, h * 0.62);
       arch(ctx, cx, baseY, 9, h * 0.42, BC.door);
       ctx.fillStyle = BC.lock; ctx.beginPath(); ctx.arc(cx + 5, baseY - h * 0.2, 1.4, 0, 7); ctx.fill(); // klika
-      ctx.fillStyle = BC.win; roundRect(ctx, x + 9, top + 8, 14, 14, 3); ctx.fill();
-      ctx.strokeStyle = BC.winF; ctx.lineWidth = 1.5; ctx.strokeRect(x + 9, top + 8, 14, 14); ctx.beginPath(); ctx.moveTo(x + 16, top + 8); ctx.lineTo(x + 16, top + 22); ctx.moveTo(x + 9, top + 15); ctx.lineTo(x + 23, top + 15); ctx.stroke();
+      windowInset(ctx, x + 9, top + 8, 14, 14);
       break;
     }
     case "kurnik": {
@@ -500,8 +560,7 @@ function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: num
       arch(ctx, cx - 2, baseY, 8, h * 0.36, BC.door); // vlez
       ctx.fillStyle = BC.woodD; ctx.fillRect(cx - 12, baseY - 2, 20, 4); // rampa
       ctx.strokeStyle = shiftHex(BC.woodD, -16); ctx.lineWidth = 1; for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(cx - 12 + i * 5, baseY - 2); ctx.lineTo(cx - 12 + i * 5, baseY + 2); ctx.stroke(); }
-      ctx.fillStyle = BC.win; roundRect(ctx, x + w - 22, top + 8, 12, 10, 2); ctx.fill();
-      ctx.strokeStyle = BC.winF; ctx.lineWidth = 1.2; ctx.strokeRect(x + w - 22, top + 8, 12, 10);
+      windowInset(ctx, x + w - 22, top + 8, 12, 10);
       ctx.fillStyle = "#e0703c"; ctx.beginPath(); ctx.moveTo(cx + 9, top - 1); ctx.lineTo(cx + 13, top + 3); ctx.lineTo(cx + 9, top + 5); ctx.closePath(); ctx.fill(); // korouhvička
       break;
     }
@@ -559,10 +618,51 @@ function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: num
       break;
     }
     case "stanek": {
-      ctx.fillStyle = BC.wood; ctx.fillRect(x + 6, y + h * 0.5, w - 12, baseY - (y + h * 0.5)); // pult
-      ctx.strokeStyle = BC.trunk; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + 8, y + h * 0.5); ctx.lineTo(x + 8, y + 4); ctx.moveTo(x + w - 8, y + h * 0.5); ctx.lineTo(x + w - 8, y + 4); ctx.stroke();
-      for (let i = 0; i < 5; i++) { ctx.fillStyle = i % 2 ? BC.roof : BC.cream; ctx.beginPath(); ctx.moveTo(x + 2 + i * (w - 4) / 5, y + 6); ctx.lineTo(x + 2 + (i + 1) * (w - 4) / 5, y + 6); ctx.lineTo(x + 2 + (i + 0.5) * (w - 4) / 5, y + 16); ctx.fill(); } // markýza
-      ctx.fillStyle = "#d98c4a"; ctx.beginPath(); ctx.arc(x + 16, y + h * 0.5 - 3, 3, 0, 7); ctx.arc(x + 26, y + h * 0.5 - 3, 3, 0, 7); ctx.fill(); // zboží
+      const cTop = y + h * 0.54; // horní hrana pultu
+      // --- 3D pult: pravý bok do hloubky + čelo s gradientem + horní deska ---
+      ctx.fillStyle = shiftHex(BC.woodD, -8);
+      ctx.beginPath();
+      ctx.moveTo(x + w - 4, cTop); ctx.lineTo(x + w - 4 + D, cTop - dy);
+      ctx.lineTo(x + w - 4 + D, baseY - dy); ctx.lineTo(x + w - 4, baseY);
+      ctx.closePath(); ctx.fill();
+      const cg = ctx.createLinearGradient(0, cTop, 0, baseY);
+      cg.addColorStop(0, shiftHex(BC.wood, 20)); cg.addColorStop(1, shiftHex(BC.wood, -16));
+      ctx.fillStyle = cg;
+      roundRect(ctx, x + 4, cTop, w - 8, baseY - cTop, 3); ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.12)"; ctx.lineWidth = 1; // prkenné spáry
+      for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(x + 4 + i * (w - 8) / 4, cTop); ctx.lineTo(x + 4 + i * (w - 8) / 4, baseY); ctx.stroke(); }
+      ctx.fillStyle = shiftHex(BC.wood, 28); // horní deska pultu do hloubky (světlá = horní plocha)
+      ctx.beginPath();
+      ctx.moveTo(x + 4, cTop); ctx.lineTo(x + 4 + D, cTop - dy);
+      ctx.lineTo(x + w - 4 + D, cTop - dy); ctx.lineTo(x + w - 4, cTop);
+      ctx.closePath(); ctx.fill();
+      // zboží na pultě (sklenice mastí + zelenina)
+      ctx.fillStyle = "#d98c4a"; ctx.beginPath(); ctx.arc(x + 14, cTop - 2, 3, 0, 7); ctx.arc(x + 23, cTop - 3, 3, 0, 7); ctx.fill();
+      ctx.fillStyle = BC.leaf; ctx.beginPath(); ctx.arc(x + w - 16, cTop - 2, 3.2, 0, 7); ctx.fill();
+      // --- 3D sloupky nesoucí markýzu ---
+      const postTop = y + 12;
+      for (const px of [x + 9, x + w - 9]) {
+        ctx.fillStyle = shiftHex(BC.trunk, -12); ctx.fillRect(px - 0.5, postTop, 3, cTop - postTop); // stínová strana
+        ctx.fillStyle = BC.trunk; ctx.fillRect(px - 2, postTop, 3.5, cTop - postTop);
+        ctx.fillStyle = shiftHex(BC.trunk, 20); ctx.fillRect(px - 2, postTop, 1.2, cTop - postTop); // světlá hrana (L)
+      }
+      // --- markýza: nakloněná pruhovaná plocha (zadek výš = 3D) + přední fascia ---
+      const fY = y + 16; // přední okap (níž, blíž)
+      const bY = y + 3;  // zadní hřeben (výš, dál)
+      const segs = 5;
+      const segW = (w - 4) / segs;
+      for (let i = 0; i < segs; i++) {
+        const x0 = x + 2 + i * segW;
+        ctx.fillStyle = i % 2 ? BC.roof : BC.cream;
+        ctx.beginPath(); ctx.moveTo(x0, bY); ctx.lineTo(x0 + segW, bY); ctx.lineTo(x0 + segW, fY); ctx.lineTo(x0, fY); ctx.closePath(); ctx.fill();
+      }
+      const ag = ctx.createLinearGradient(0, bY, 0, fY); // naklonění: zadek tmavší, předek světlý
+      ag.addColorStop(0, "rgba(0,0,0,0.2)"); ag.addColorStop(1, "rgba(255,255,255,0.14)");
+      ctx.fillStyle = ag; ctx.fillRect(x + 2, bY, w - 4, fY - bY);
+      ctx.fillStyle = shiftHex(BC.roof, -14); // přední fascia (tloušťka markýzy) — vroubkování dolů
+      for (let i = 0; i < segs; i++) { const x0 = x + 2 + i * segW; ctx.beginPath(); ctx.moveTo(x0, fY); ctx.lineTo(x0 + segW, fY); ctx.lineTo(x0 + segW / 2, fY + 6); ctx.closePath(); ctx.fill(); }
+      ctx.strokeStyle = "rgba(255,255,255,0.4)"; ctx.lineWidth = 1.2; // světlá hřebenová hrana vzadu
+      ctx.beginPath(); ctx.moveTo(x + 2, bY); ctx.lineTo(x + w - 2, bY); ctx.stroke();
       break;
     }
     case "cedule": {
@@ -623,13 +723,16 @@ export function drawBuilding(
   const cx = x + w / 2;
   const baseY = y + h;
 
-  // měkký vržený stín dolů-vpravo (konzistentní směr světla)
-  const sg = ctx.createRadialGradient(cx + 5, baseY + 2, 2, cx + 5, baseY + 2, w * 0.62);
-  sg.addColorStop(0, "rgba(0,0,0,0.24)");
+  // měkký vržený stín, protáhlý dolů-vpravo (světlo z L-H rohu)
+  const shx = cx + 8;
+  const shy = baseY + 3;
+  const sg = ctx.createRadialGradient(shx, shy, 2, shx, shy, w * 0.72);
+  sg.addColorStop(0, "rgba(0,0,0,0.28)");
+  sg.addColorStop(0.7, "rgba(0,0,0,0.1)");
   sg.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = sg;
   ctx.beginPath();
-  ctx.ellipse(cx + 5, baseY + 2, w * 0.62, h * 0.26, 0, 0, Math.PI * 2);
+  ctx.ellipse(shx, shy, w * 0.72, h * 0.28, 0, 0, Math.PI * 2);
   ctx.fill();
   if (near) {
     ctx.fillStyle = "rgba(240,232,146,0.35)";

@@ -477,8 +477,10 @@ function core(state: GameState, action: Action): GameState {
       const s = cloneState(state);
       take(s, [{ item: action.itemId, qty: 1 }]);
       const restore = action.itemId === "polevka" ? 42 : 24;
+      const enGain = action.itemId === "polevka" ? 20 : 10; // jídlo dodá i sílu
       s.hunger = clamp(s.hunger + restore, 0, 100);
-      addLog(s, `Najedl ses (${item.name}). Sytost +${restore}.`, "good");
+      s.energy = clamp(s.energy + enGain, 0, s.maxEnergy);
+      addLog(s, `Najedl ses (${item.name}). Sytost +${restore}, energie +${enGain}.`, "good");
       return s;
     }
 
@@ -490,9 +492,11 @@ function core(state: GameState, action: Action): GameState {
       const s = cloneState(state);
       take(s, [{ item: id, qty: 1 }]);
       const restore = id === "caj" ? 30 : 22;
+      const enGain = id === "caj" ? 8 : 3; // teplý čaj povzbudí víc než studená voda
       s.thirst = clamp(s.thirst + restore, 0, 100);
+      s.energy = clamp(s.energy + enGain, 0, s.maxEnergy);
       if (id === "caj") s.hunger = clamp(s.hunger + 4, 0, 100);
-      addLog(s, `Napil ses (${ITEM_BY_ID[id].name}). Žízeň −${restore}.`, "good");
+      addLog(s, `Napil ses (${ITEM_BY_ID[id].name}). Žízeň +${restore}, energie +${enGain}.`, "good");
       return s;
     }
 

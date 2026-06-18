@@ -5,11 +5,13 @@ import { PersonSprite } from "../sprites/PersonSprite";
 export function NpcPanel({
   person,
   taught,
+  mood,
   onPlay,
   onClose,
 }: {
   person: PersonDef;
   taught: boolean;
+  mood?: string;
   onPlay: () => void;
   onClose: () => void;
 }) {
@@ -27,7 +29,7 @@ export function NpcPanel({
           {person.domain && <span className="npc-domain">{person.domain}</span>}
         </div>
       </div>
-      <p className="npc-line">„{person.line}“</p>
+      <p className="npc-line">„{mood ?? person.line}“</p>
       {tip && (
         <div className="npc-tip">
           <b>💡 Rada:</b> {tip}

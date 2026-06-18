@@ -1,16 +1,18 @@
 import { useEffect, useRef } from "react";
-import type { FeedGroup, Phase, Season } from "../../game/types";
+import type { FeedGroup, Phase, Season, Weather } from "../../game/types";
 import { MAP_H, MAP_W, TS } from "../../world/tiles";
 import {
   ANIMAL_SPAWNS,
   GARDEN,
   INTERACTABLES,
-  NPC_SPAWNS,
   PLAYER_START,
   isBlocked,
   type Bounds,
   type Interactable,
 } from "../../world/entities";
+import { findPath, nearestWalkable, type Pt } from "../../world/pathfind";
+import { NPC_LIFE } from "../../game/content/npcLife";
+import { reactionFor, idleLine } from "../../game/content/npcReactions";
 import { PERSON_BY_ID } from "../../game/content/people";
 import { drawBuilding, drawGround, drawPaddocks, drawSunlight, drawVignette, drawWaterShimmer, getMinimapBase, roundRect } from "../../world/draw";
 import { animalImg, personImg, preloadSprites, ready } from "../../world/spriteCache";
@@ -31,6 +33,9 @@ interface Props {
   season: Season;
   phase: Phase;
   paused: boolean;
+  welfare: Record<FeedGroup, number>;
+  weather: Weather;
+  money: number;
   onInteract: (t: InteractTarget) => void;
   onEvent: (e: WorldEvent) => void;
 }
@@ -51,6 +56,31 @@ interface Mob {
   bounds?: Bounds;
   escaped: boolean;
   raided: boolean;
+}
+
+// Živé NPC — chodí po rozvrhu mezi stanovišti a u nich „pracují".
+interface NpcAgent {
+  id: string;
+  x: number;
+  y: number;
+  dir: Facing;
+  flip: boolean;
+  anim: number;
+  moving: boolean;
+  path: Pt[];
+  work: string; // emoji činnosti při práci na stanovišti
+  workBob: number;
+  bubble: { text: string; until: number } | null; // promluva nad hlavou
+  nextThink: number; // kdy příště vyhodnotit reakci (ms, performance.now)
+  helping: string | null; // id zvířete, které právě honí zpět do výběhu
+  repath: number; // s do dalšího přepočtu cesty k honěnému zvířeti
+}
+
+/** Snapne stanoviště dané fáze na nejbližší průchozí dlaždici. */
+function standOf(id: string, phase: Phase) {
+  const s = NPC_LIFE[id].schedule[phase];
+  const w = nearestWalkable(s.tx, s.ty);
+  return { tx: w.tx, ty: w.ty, work: s.work };
 }
 
 const SPEED = 165; // px/s
@@ -74,16 +104,18 @@ const BUILDING_VERB: Record<string, string> = {
   zahrada: "Zahrádka",
 };
 
-export function WorldCanvas({ season, phase, paused, onInteract, onEvent }: Props) {
+export function WorldCanvas({ season, phase, paused, welfare, weather, money, onInteract, onEvent }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // měnící se props čteme přes ref, ať smyčku nemusíme restartovat
-  const propsRef = useRef({ season, phase, paused, onInteract, onEvent });
-  propsRef.current = { season, phase, paused, onInteract, onEvent };
+  const propsRef = useRef({ season, phase, paused, welfare, weather, money, onInteract, onEvent });
+  propsRef.current = { season, phase, paused, welfare, weather, money, onInteract, onEvent };
 
   const player = useRef({ x: PLAYER_START.x, y: PLAYER_START.y, dir: "down", moving: false, anim: 0, flip: false });
   const mobs = useRef<Mob[]>([]);
+  const npcs = useRef<NpcAgent[]>([]);
+  const npcPhase = useRef<Phase>(phase);
   const cam = useRef({ x: 0, y: 0 });
   const stepAcc = useRef(0);
   const escapeAcc = useRef(0);
@@ -109,6 +141,30 @@ export function WorldCanvas({ season, phase, paused, onInteract, onEvent }: Prop
       escaped: false,
       raided: false,
     }));
+  }
+
+  // init NPC jednou — postavíme je rovnou na stanoviště aktuální fáze
+  if (npcs.current.length === 0) {
+    npcs.current = Object.keys(NPC_LIFE).map((id) => {
+      const s = standOf(id, phase);
+      return {
+        id,
+        x: (s.tx + 0.5) * TS,
+        y: (s.ty + 0.5) * TS,
+        dir: "down" as Facing,
+        flip: false,
+        anim: 0,
+        moving: false,
+        path: [] as Pt[],
+        work: s.work,
+        workBob: Math.random() * 6,
+        bubble: null,
+        nextThink: 2000 + Math.random() * 6000,
+        helping: null,
+        repath: 0,
+      };
+    });
+    npcPhase.current = phase;
   }
 
   useEffect(() => {
@@ -294,6 +350,20 @@ export function WorldCanvas({ season, phase, paused, onInteract, onEvent }: Prop
             m.ty = GARDEN.y;
             m.rest = 3;
             propsRef.current.onEvent({ type: "escape", animalId: m.id });
+            // nejbližší volné NPC se vydá zvíře zahnat zpět do výběhu
+            let helper: NpcAgent | null = null;
+            let hd = Infinity;
+            for (const a of npcs.current) {
+              if (a.helping) continue;
+              const d = Math.hypot(a.x - m.x, a.y - m.y);
+              if (d < hd) { hd = d; helper = a; }
+            }
+            if (helper) {
+              helper.helping = m.id;
+              helper.path = [];
+              helper.repath = 0;
+              helper.bubble = { text: "Já ho zaženu! 🏃", until: now + 3000 };
+            }
           }
         }
       }
@@ -346,6 +416,78 @@ export function WorldCanvas({ season, phase, paused, onInteract, onEvent }: Prop
         }
       }
 
+      // --- NPC: žijí podle rozvrhu, pomáhají s útěky a reagují na svět ---
+      if (!P.paused) {
+        // při změně fáze přejdou na nové stanoviště (kromě těch, co honí zvíře)
+        if (P.phase !== npcPhase.current) {
+          for (const a of npcs.current) {
+            if (a.helping) continue;
+            const s = standOf(a.id, P.phase);
+            a.path = findPath(Math.floor(a.x / TS), Math.floor(a.y / TS), s.tx, s.ty);
+            a.work = s.work;
+          }
+          npcPhase.current = P.phase;
+        }
+        const routeToStation = (a: NpcAgent) => {
+          const s = standOf(a.id, P.phase);
+          a.path = findPath(Math.floor(a.x / TS), Math.floor(a.y / TS), s.tx, s.ty);
+          a.work = s.work;
+        };
+        for (const a of npcs.current) {
+          const life = NPC_LIFE[a.id];
+
+          // honění uprchlíka zpět do výběhu
+          if (a.helping) {
+            const m = mobs.current.find((mm) => mm.id === a.helping);
+            if (!m || !m.escaped) {
+              a.helping = null; // chyceno (hráčem i NPC) → zpět na stanoviště
+              routeToStation(a);
+            } else if (Math.hypot(a.x - m.x, a.y - m.y) < TS * 0.9) {
+              m.escaped = false; m.raided = false; m.tx = m.hx; m.ty = m.hy; m.rest = 0;
+              propsRef.current.onEvent({ type: "caught", animalId: m.id });
+              a.helping = null;
+              a.bubble = { text: "Mám tě! 🐾", until: now + 2500 };
+              routeToStation(a);
+            } else {
+              a.repath -= dt;
+              if (a.repath <= 0 || a.path.length === 0) {
+                a.path = findPath(Math.floor(a.x / TS), Math.floor(a.y / TS), Math.floor(m.x / TS), Math.floor(m.y / TS));
+                a.repath = 0.6;
+              }
+            }
+          }
+
+          // pohyb po cestě / práce na stanovišti
+          if (a.path.length) {
+            const w = a.path[0];
+            const dx = w.x - a.x;
+            const dy = w.y - a.y;
+            const d = Math.hypot(dx, dy) || 1;
+            const sp = life.speed * dt;
+            if (d <= sp) { a.x = w.x; a.y = w.y; a.path.shift(); }
+            else { a.x += (dx / d) * sp; a.y += (dy / d) * sp; }
+            a.moving = true;
+            if (Math.abs(dx) > Math.abs(dy)) { a.dir = "side"; a.flip = dx < 0; }
+            else { a.dir = dy > 0 ? "down" : "up"; }
+            a.anim += dt * 8;
+          } else {
+            a.moving = false;
+            a.dir = "down";
+            a.workBob += dt * 4;
+          }
+
+          // „mozek": občas promluví podle stavu světa (jen v klidu, ne při honění)
+          if (!a.moving && !a.helping && now > a.nextThink) {
+            const snap = { welfare: P.welfare, weather: P.weather, season: P.season, phase: P.phase, money: P.money };
+            const r = reactionFor(a.id, snap);
+            if (r) a.bubble = { text: r.ambient, until: now + 4500 };
+            else if (Math.random() < 0.4) a.bubble = { text: idleLine(a.id, Math.random()), until: now + 3500 };
+            a.nextThink = now + 7000 + Math.random() * 7000;
+          }
+          if (a.bubble && now > a.bubble.until) a.bubble = null;
+        }
+      }
+
       // --- kamera ---
       const viewW = cssW;
       const viewH = cssH;
@@ -373,9 +515,9 @@ export function WorldCanvas({ season, phase, paused, onInteract, onEvent }: Prop
         const d = Math.hypot(m.x - p.x, m.y - p.y);
         if (d < bestD) { bestD = d; nearest = { kind: "animal", animalId: m.id }; }
       }
-      for (const npc of NPC_SPAWNS) {
-        const d = Math.hypot(npc.x - p.x, npc.y - p.y);
-        if (d < bestD) { bestD = d; nearest = { kind: "npc", npcId: npc.id }; }
+      for (const a of npcs.current) {
+        const d = Math.hypot(a.x - p.x, a.y - p.y);
+        if (d < bestD) { bestD = d; nearest = { kind: "npc", npcId: a.id }; }
       }
 
       // popisek akce nejbližšího cíle (kontextová nápověda)
@@ -415,9 +557,9 @@ export function WorldCanvas({ season, phase, paused, onInteract, onEvent }: Prop
           draw: () => drawMob(ctx, m, camX, camY, near, now),
         });
       }
-      for (const npc of NPC_SPAWNS) {
-        const near = nearest?.kind === "npc" && nearest.npcId === npc.id;
-        items.push({ y: npc.y, draw: () => drawNpc(ctx, npc, camX, camY, near, now) });
+      for (const a of npcs.current) {
+        const near = nearest?.kind === "npc" && nearest.npcId === a.id;
+        items.push({ y: a.y, draw: () => drawNpc(ctx, a, camX, camY, near, now) });
       }
       items.push({
         y: player.current.y,
@@ -461,6 +603,42 @@ export function WorldCanvas({ season, phase, paused, onInteract, onEvent }: Prop
 }
 
 // --- kreslicí pomocníci -----------------------------------------------------
+
+// Měkký stín se vyrenderuje JEDNOU do offscreen blobu (radiální gradient) a pak
+// se jen levně vykresluje přes drawImage. Dřív se gradient tvořil pro každý
+// sprite každý frame (~desítky alokací/frame) → GC jank → občasné cuknutí i
+// přeskočení zvuku. Tohle to odstraní.
+let shadowBlob: HTMLCanvasElement | null = null;
+function getShadowBlob(): HTMLCanvasElement {
+  if (shadowBlob) return shadowBlob;
+  const S = 64;
+  const cv = document.createElement("canvas");
+  cv.width = S; cv.height = S;
+  const c = cv.getContext("2d")!;
+  const g = c.createRadialGradient(S / 2, S / 2, 1, S / 2, S / 2, S / 2);
+  g.addColorStop(0, "rgba(0,0,0,0.5)");
+  g.addColorStop(0.7, "rgba(0,0,0,0.22)");
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  c.fillStyle = g;
+  c.fillRect(0, 0, S, S);
+  shadowBlob = cv;
+  return cv;
+}
+
+// Směrový měkký stín pod spritem: blob posunutý dolů-vpravo (světlo z L-H rohu),
+// plochá ellipse (ry ≈ rx*0.32). `lift` 0..1 = odlepení od země (vyšší bob →
+// menší a světlejší stín).
+function softShadow(ctx: CanvasRenderingContext2D, sx: number, sy: number, rx: number, lift: number) {
+  const k = 1 - lift * 0.28;
+  const r = rx * k;
+  const cx = sx + 4;
+  const cy = sy + 2;
+  ctx.save();
+  ctx.globalAlpha = 0.62 * (1 - lift * 0.4);
+  ctx.drawImage(getShadowBlob(), cx - r, cy - r * 0.32, r * 2, r * 0.64);
+  ctx.restore();
+}
+
 function drawMob(
   ctx: CanvasRenderingContext2D,
   m: Mob,
@@ -474,11 +652,9 @@ function drawMob(
   const sy = m.y - camY;
   const a = ANIMAL_BY_ID[m.id];
   const size = TS * 0.95 * (a ? animalScale(a) : 1);
-  const bob = Math.sin(m.bob) * 1.5;
-  ctx.fillStyle = "rgba(0,0,0,0.16)";
-  ctx.beginPath();
-  ctx.ellipse(sx, sy, size * 0.3, size * 0.12, 0, 0, Math.PI * 2);
-  ctx.fill();
+  const bobN = Math.sin(m.bob); // -1..1
+  const bob = bobN * 1.5;
+  softShadow(ctx, sx, sy, size * 0.34, Math.max(0, bobN));
   if (near) {
     ctx.save();
     ctx.shadowColor = "rgba(240,232,146,0.95)";
@@ -513,21 +689,21 @@ function drawMob(
 
 function drawNpc(
   ctx: CanvasRenderingContext2D,
-  npc: { id: string; x: number; y: number },
+  a: NpcAgent,
   camX: number,
   camY: number,
   near: boolean,
   time: number,
 ) {
-  const img = personImg(npc.id, "down", 0);
-  const sx = npc.x - camX;
-  const sy = npc.y - camY;
+  const frame: 0 | 1 = a.moving ? ((Math.floor(a.anim) % 2) as 0 | 1) : 0;
+  const img = personImg(a.id, a.dir, frame);
+  const sx = a.x - camX;
+  const sy = a.y - camY;
   const size = TS * 1.7;
-  const bob = Math.sin(time * 0.003 + npc.x * 0.1) * 1.6;
-  ctx.fillStyle = "rgba(0,0,0,0.18)";
-  ctx.beginPath();
-  ctx.ellipse(sx, sy, size * 0.24, size * 0.09, 0, 0, Math.PI * 2);
-  ctx.fill();
+  const flip = a.dir === "side" && a.flip;
+  const bobN = a.moving ? Math.abs(Math.sin(time * 0.012)) : Math.abs(Math.sin(a.workBob)); // 0..1
+  const bob = a.moving ? bobN * 3 : Math.sin(a.workBob) * 1.6;
+  softShadow(ctx, sx, sy, size * 0.26, bobN);
   if (near) {
     ctx.save();
     ctx.shadowColor = "rgba(240,232,146,0.95)";
@@ -535,13 +711,14 @@ function drawNpc(
   }
   if (ready(img)) {
     ctx.save();
-    ctx.translate(sx, sy - size * 0.52 + bob);
+    ctx.translate(sx, sy - size * 0.52 - bob);
+    if (flip) ctx.scale(-1, 1);
     ctx.drawImage(img, -size / 2, -size / 2, size, size);
     ctx.restore();
   }
   if (near) ctx.restore();
   // jmenovka
-  const name = PERSON_BY_ID[npc.id]?.name ?? "";
+  const name = PERSON_BY_ID[a.id]?.name ?? "";
   ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
   ctx.textAlign = "center";
   const tw = ctx.measureText(name).width;
@@ -552,11 +729,27 @@ function drawNpc(
   ctx.fillStyle = "#fff";
   ctx.textBaseline = "middle";
   ctx.fillText(name, sx, ny - 3);
-  if (near) {
+  // promluva nad hlavou (reakce na svět / small-talk), když nejsi přímo u něj
+  if (a.bubble && !near) {
+    ctx.font = '600 11px "Plus Jakarta Sans", sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const bw = ctx.measureText(a.bubble.text).width + 16;
+    const by = ny - 24;
+    ctx.fillStyle = "rgba(247,242,231,0.96)";
+    roundRect(ctx, sx - bw / 2, by - 11, bw, 20, 9);
+    ctx.fill();
+    ctx.fillStyle = "#2a2420";
+    ctx.fillText(a.bubble.text, sx, by);
+  }
+  // ikonka: 💬 když jsi blízko (lze promluvit), jinak emoji činnosti při práci
+  const icon = near ? "💬" : !a.bubble && !a.moving && a.work ? a.work : null;
+  if (icon) {
     const b = Math.sin(time * 0.006) * 3;
     ctx.font = `20px ${EMOJI_FONT}`;
+    ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
-    ctx.fillText("💬", sx, ny - 18 + b);
+    ctx.fillText(icon, sx, ny - 18 + b);
   }
 }
 
@@ -573,11 +766,9 @@ function drawPlayer(
   const sx = p.x - camX;
   const sy = p.y - camY;
   const size = TS * 1.7;
-  const bob = p.moving ? Math.abs(Math.sin(performance.now() * 0.013)) * 3 : Math.sin(performance.now() * 0.002) * 1;
-  ctx.fillStyle = "rgba(0,0,0,0.2)";
-  ctx.beginPath();
-  ctx.ellipse(sx, sy, size * 0.24, size * 0.09, 0, 0, Math.PI * 2);
-  ctx.fill();
+  const bobN = p.moving ? Math.abs(Math.sin(performance.now() * 0.013)) : 0; // 0..1 (jen při chůzi)
+  const bob = p.moving ? bobN * 3 : Math.sin(performance.now() * 0.002) * 1;
+  softShadow(ctx, sx, sy, size * 0.26, bobN);
   if (ready(img)) {
     ctx.save();
     ctx.translate(sx, sy - size * 0.52 - bob);

@@ -133,6 +133,12 @@ export function isBlocked(px: number, py: number): boolean {
   return solidBuildingTiles.has(`${tx},${ty}`);
 }
 
+/** Kolize na úrovni dlaždice — terén i stavby. Pro pathfinding NPC. */
+export function isTileBlocked(tx: number, ty: number): boolean {
+  if (isSolidTile(tx, ty)) return true;
+  return solidBuildingTiles.has(`${tx},${ty}`);
+}
+
 // --- Rozmístění zvířat po zónách ----------------------------------------
 export interface Bounds { x0: number; y0: number; x1: number; y1: number }
 export interface AnimalSpawn {
@@ -190,17 +196,6 @@ function buildSpawns(): AnimalSpawn[] {
 }
 
 export const ANIMAL_SPAWNS = buildSpawns();
-
-export interface NpcSpawn {
-  id: string;
-  x: number;
-  y: number;
-}
-export const NPC_SPAWNS: NpcSpawn[] = NPCS.map((id) => ({
-  id,
-  x: (NPC_POS[id][0] + 0.5) * TS,
-  y: (NPC_POS[id][1] + 0.5) * TS,
-}));
 
 // Startovní pozice hráče — uprostřed mýtiny na cestě (zaručeně průchozí).
 export const PLAYER_START = { x: (SPAWN_TX + 0.5) * TS, y: (SPAWN_TY + 0.5) * TS };

@@ -14,6 +14,7 @@ import { Intro } from "./ui/components/Intro";
 import { GameOver } from "./ui/components/GameOver";
 import { ANIMAL_BY_ID } from "./game/content/animals";
 import { PERSON_BY_ID } from "./game/content/people";
+import { reactionFor } from "./game/content/npcReactions";
 import { NpcPanel } from "./ui/world/NpcPanel";
 import { HerbQuiz } from "./ui/minigames/HerbQuiz";
 import { ChopWood } from "./ui/minigames/ChopWood";
@@ -22,6 +23,7 @@ import { ForestGate } from "./ui/minigames/ForestGate";
 import { openGate } from "./world/entities";
 import { invalidateGround } from "./world/draw";
 import { sound } from "./audio/sound";
+import type { NpcId } from "./audio/sound";
 
 type Overlay = "shop" | "craft" | "denik" | null;
 type Minigame = "herb" | "chop" | "tech";
@@ -153,20 +155,20 @@ export default function App() {
   const onWorldEvent = (e: WorldEvent) => {
     const name = ANIMAL_BY_ID[e.animalId]?.name ?? "Zvíře";
     if (e.type === "escape") {
-      sound.error();
+      sound.animalEscape(ANIMAL_BY_ID[e.animalId]?.feedGroup ?? "stado");
       dispatch({ type: "PUSH_DIALOG", speaker: "Pozor!", lines: [`${name} se prodral(a) plotem a pádí k zahrádce! Dožeň ho a zmáčkni akci, ať ho zaženeš zpátky.`] });
     } else if (e.type === "raid") {
       dispatch({ type: "REWARD", money: -15, items: [{ item: "zelenina", qty: -2 }, { item: "brambory", qty: -1 }] });
       dispatch({ type: "PUSH_DIALOG", speaker: name, lines: [`Mňam mňam! ${name} se cpe v zahrádce — ubyla zelenina i pár korun. Honem ho zažeň zpátky!`] });
     } else {
-      sound.success();
+      sound.animalCaught();
       dispatch({ type: "PUSH_DIALOG", speaker: name, lines: [`Uf! ${name} je zpátky ve výběhu. Plot zase drží. 🐑`] });
     }
   };
 
   const onInteract = (t: InteractTarget) => {
     if (t.kind === "npc") {
-      sound.select();
+      sound.npcSpeak(t.npcId as NpcId, "neutral");
       setNpc(t.npcId);
       return;
     }
@@ -231,7 +233,7 @@ export default function App() {
 
   return (
     <div className="game-world">
-      <WorldCanvas season={state.season} phase={state.phase} paused={paused} onInteract={onInteract} onEvent={onWorldEvent} />
+      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} onInteract={onInteract} onEvent={onWorldEvent} />
       <Hud onOpen={(p) => setOverlay(p)} />
       <Controls />
       <DialogBox />
@@ -249,6 +251,7 @@ export default function App() {
           <NpcPanel
             person={PERSON_BY_ID[npc]}
             taught={!!state.flags[MG_REWARD[MG_FOR_NPC[npc]].flag]}
+            mood={reactionFor(npc, { welfare: state.welfare, weather: state.weather, season: state.season, phase: state.phase, money: state.money })?.comment}
             onPlay={() => { setMinigame(MG_FOR_NPC[npc]); setNpc(null); }}
             onClose={() => setNpc(null)}
           />
