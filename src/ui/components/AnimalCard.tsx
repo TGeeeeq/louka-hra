@@ -1,6 +1,7 @@
 import type { AnimalDef, Species } from "../../game/types";
 import { AnimalSprite } from "../sprites/AnimalSprite";
 import { GROUP_LABEL } from "../labels";
+import { PLAY_KIND, playKindFor } from "../../game/content/play";
 
 const SPECIES_LABEL: Record<Species, string> = {
   osel: "osel",
@@ -17,7 +18,8 @@ const SPECIES_LABEL: Record<Species, string> = {
   kralik: "králík",
 };
 
-export function AnimalCard({ animal, onClose }: { animal: AnimalDef; onClose: () => void }) {
+export function AnimalCard({ animal, onClose, onPlay }: { animal: AnimalDef; onClose: () => void; onPlay?: () => void }) {
+  const playKind = playKindFor(animal);
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal animal-modal" onClick={(e) => e.stopPropagation()}>
@@ -38,6 +40,11 @@ export function AnimalCard({ animal, onClose }: { animal: AnimalDef; onClose: ()
           <span className="fact-badge">🎓 Víš, že…</span>
           <p>{animal.fact}</p>
         </div>
+        {playKind && onPlay && (
+          <div className="animal-actions">
+            <button className="big-btn" onClick={onPlay}>{PLAY_KIND[playKind].cta}</button>
+          </div>
+        )}
       </div>
     </div>
   );

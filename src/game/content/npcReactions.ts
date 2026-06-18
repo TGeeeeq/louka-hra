@@ -79,3 +79,17 @@ export function idleLine(id: string, r: number): string {
   const pool = IDLE[id] ?? ["…"];
   return pool[Math.floor(r * pool.length) % pool.length];
 }
+
+// Když zvíře uteče: NPC buď pomůže (a rozeběhne se), nebo jen vtipně pokrčí
+// rameny a ty si musíš doběhnout sám.
+export const ESCAPE_HELP: Record<string, string[]> = {
+  tomas: ["Nech to na mně, otočím ho zpátky!", "Já ho doženu — ty řeš zbytek!"],
+  maruska: ["Už za ním utíkám!", "Mám ho, jen klid!"],
+  tony: ["Naháněcí režim aktivován! 🤖", "Já ho zaženu, ty si oddychni."],
+};
+
+export const ESCAPE_SHRUG: Record<string, string[]> = {
+  tomas: ["Mám ruce od dřeva — doběhni si ho sám!", "To nestíhám, dělej, je to na tobě!"],
+  maruska: ["Já v gumákách nedoběhnu — honem, musíš tam ty!", "Teď fakt nemůžu, leť za ním!"],
+  tony: ["Měl bych na to vyrobit dron… ale teď utíkej ty!", "Já bych ho stejně nedohnal — běž!"],
+};

@@ -12,7 +12,8 @@ import {
 } from "../../world/entities";
 import { findPath, nearestWalkable, type Pt } from "../../world/pathfind";
 import { NPC_LIFE } from "../../game/content/npcLife";
-import { reactionFor, idleLine } from "../../game/content/npcReactions";
+import { reactionFor, idleLine, ESCAPE_HELP, ESCAPE_SHRUG } from "../../game/content/npcReactions";
+import { pick } from "../../game/engine/util";
 import { PERSON_BY_ID } from "../../game/content/people";
 import { drawBuilding, drawGround, drawPaddocks, drawSunlight, drawVignette, drawWaterShimmer, getMinimapBase, roundRect } from "../../world/draw";
 import { animalImg, personImg, preloadSprites, ready } from "../../world/spriteCache";
@@ -27,7 +28,10 @@ export type InteractTarget =
   | { kind: "animal"; animalId: string }
   | { kind: "npc"; npcId: string };
 
-export type WorldEvent = { type: "escape" | "raid" | "caught"; animalId: string };
+export type WorldEvent =
+  | { type: "escape"; animalId: string; npcId: string | null; helped: boolean; line: string }
+  | { type: "raid"; animalId: string }
+  | { type: "caught"; animalId: string };
 
 interface Props {
   season: Season;
@@ -349,21 +353,28 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, on
             m.tx = GARDEN.x;
             m.ty = GARDEN.y;
             m.rest = 3;
-            propsRef.current.onEvent({ type: "escape", animalId: m.id });
-            // nejbližší volné NPC se vydá zvíře zahnat zpět do výběhu
-            let helper: NpcAgent | null = null;
+            // najdi nejbližší volné NPC — ale pomůže jen tak v půlce případů
+            let nearestNpc: NpcAgent | null = null;
             let hd = Infinity;
             for (const a of npcs.current) {
               if (a.helping) continue;
               const d = Math.hypot(a.x - m.x, a.y - m.y);
-              if (d < hd) { hd = d; helper = a; }
+              if (d < hd) { hd = d; nearestNpc = a; }
             }
-            if (helper) {
-              helper.helping = m.id;
-              helper.path = [];
-              helper.repath = 0;
-              helper.bubble = { text: "Já ho zaženu! 🏃", until: now + 3000 };
+            const helped = !!nearestNpc && Math.random() < 0.5;
+            const npcId = nearestNpc?.id ?? null;
+            let line = "";
+            if (nearestNpc && helped) {
+              nearestNpc.helping = m.id;
+              nearestNpc.path = [];
+              nearestNpc.repath = 0;
+              line = pick(ESCAPE_HELP[nearestNpc.id] ?? ["Já ho zaženu! 🏃"]);
+              nearestNpc.bubble = { text: line, until: now + 3000 };
+            } else if (nearestNpc) {
+              line = pick(ESCAPE_SHRUG[nearestNpc.id] ?? ["To nestíhám, musíš tam ty!"]);
+              nearestNpc.bubble = { text: line, until: now + 3500 };
             }
+            propsRef.current.onEvent({ type: "escape", animalId: m.id, npcId, helped, line });
           }
         }
       }

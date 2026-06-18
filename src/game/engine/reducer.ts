@@ -15,6 +15,7 @@ import {
   VET_BILL,
   WELFARE_CLEAN_GAIN,
   WELFARE_FEED_GAIN,
+  WELFARE_PLAY_GAIN,
   WELFARE_NIGHT_OPEN_PENALTY,
   WELFARE_SICK_THRESHOLD,
   WELFARE_SKIP_FEED_PENALTY,
@@ -24,6 +25,8 @@ import {
 import { ITEM_BY_ID } from "../content/items";
 import { RECIPE_BY_ID } from "../content/recipes";
 import { BUILDING_BY_ID } from "../content/buildings";
+import { ANIMAL_BY_ID } from "../content/animals";
+import { PLAY_KIND, playKindFor } from "../content/play";
 import {
   CLEAN_FACTS,
   FACT_BY_ID,
@@ -58,7 +61,8 @@ export type Action =
   | { type: "WATER" }
   | { type: "COLLECT_EGGS" }
   | { type: "SHEAR" }
-  | { type: "CLEAN"; area: "kurnik" | "kuchyne" }
+  | { type: "CLEAN"; group: FeedGroup }
+  | { type: "PLAY"; animalId: string }
   | { type: "CHOP_WOOD" }
   | { type: "LIGHT_FIRE" }
   | { type: "FORAGE" }
@@ -85,6 +89,13 @@ const FEED_LABEL: Record<FeedGroup, string> = {
   prasata: "prasata",
   stado: "stádo",
   mazlici: "psy, kočky a králíky",
+};
+
+const CLEAN_PLACE: Record<FeedGroup, string> = {
+  drubez: "drůbeže",
+  prasata: "prasat",
+  stado: "stáda",
+  mazlici: "psů a koček",
 };
 
 /** Co a kolik daná skupina sežere ráno (škáluje se ročním obdobím). */
@@ -353,34 +364,45 @@ function core(state: GameState, action: Action): GameState {
     }
 
     case "CLEAN": {
-      const area = action.area;
-      if (state.tasksDone[`clean_${area}`])
-        return warnReturn(state, "Tady už je uklizeno.");
+      const group = action.group;
+      if (state.tasksDone[`clean_${group}`])
+        return warnReturn(state, "Tady už je čisto a sucho.");
       const s = cloneState(state);
-      const cost = area === "kurnik" ? 7 : 5;
+      const cost = group === "drubez" ? 7 : 5;
       if (notEnoughEnergy(s, cost)) return s;
       s.energy -= cost;
-      s.tasksDone[`clean_${area}`] = true;
-      if (area === "kurnik") {
-        s.welfare.drubez = clamp(s.welfare.drubez + WELFARE_CLEAN_GAIN, 0, 100);
-        s.welfare.prasata = clamp(s.welfare.prasata + 6, 0, 100);
-        addLog(s, "Vyhrabal jsi podestýlku — v kurníku a chlívku je čisto.", "good");
-        flash(
-          s,
-          "Čisto a sucho. Zdravější zvířata, méně nemocí.",
-          "good",
-          learnFact(s, FACT_BY_ID["f_zizala"]),
-        );
-      } else {
-        s.welfare.mazlici = clamp(s.welfare.mazlici + 5, 0, 100);
-        addLog(s, "Uklidil jsi kuchyni a boudu — pořádek dělá přátele.", "good");
-        flash(
-          s,
-          "V kuchyni je uklizeno, vaří se líp.",
-          "good",
-          learnFact(s, FACT_BY_ID[pick(CLEAN_FACTS)]),
-        );
-      }
+      s.tasksDone[`clean_${group}`] = true;
+      s.welfare[group] = clamp(s.welfare[group] + WELFARE_CLEAN_GAIN, 0, 100);
+      addLog(s, `Vyhrabal jsi podestýlku — u ${CLEAN_PLACE[group]} je čisto a sucho.`, "good");
+      flash(
+        s,
+        "Čisto a sucho. Zdravější zvířata, míň nemocí. 🧹",
+        "good",
+        learnFact(s, FACT_BY_ID[pick(CLEAN_FACTS)]),
+      );
+      return s;
+    }
+
+    case "PLAY": {
+      const a = ANIMAL_BY_ID[action.animalId];
+      if (!a) return state;
+      const kind = playKindFor(a);
+      if (!kind) return state;
+      const s = cloneState(state);
+      const cost = 4;
+      if (notEnoughEnergy(s, cost)) return s;
+      s.energy -= cost;
+      const def = PLAY_KIND[kind];
+      const firstToday = !s.tasksDone[`play_${a.id}`];
+      s.tasksDone[`play_${a.id}`] = true;
+      if (firstToday) s.welfare[a.feedGroup] = clamp(s.welfare[a.feedGroup] + WELFARE_PLAY_GAIN, 0, 100);
+      addLog(s, `Pohrál sis s ${a.name} (${def.verb}).`, "good");
+      flash(
+        s,
+        firstToday ? def.win(a) : `${a.name} si s tebou zase rád(a) pohrál(a). 😊`,
+        "good",
+        firstToday ? learnFact(s, FACT_BY_ID[def.factId]) : undefined,
+      );
       return s;
     }
 

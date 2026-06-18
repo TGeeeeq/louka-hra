@@ -26,6 +26,12 @@ export const FACTS: Fact[] = [
   { id: "f_seno", category: "obdobi", title: "Seno = zakonzervované léto", text: "Posekaná a usušená letní tráva uchová živiny na celou zimu. Vlhké seno plesniví, proto se musí dobře usušit a uskladnit v suchu." },
   { id: "f_jaro_mlat", category: "obdobi", title: "Jaro a mláďata", text: "Na jaře se rodí mláďata — přibývá krků k nakrmení. Proto se na statku na jaře plánuje zásoba krmiva dopředu." },
 
+  // --- Zvířata (péče, hra, chování) ----------------------------------------
+  { id: "f_okusovani", category: "zvirata", title: "Osli a okusování", text: "Osli zkoumají svět pusou a rádi hravě okusují rukávy i prsty — není to zlost, ale zvědavost. Mají skvělou paměť a pamatují si tě klidně 30 let." },
+  { id: "f_trkani", category: "zvirata", title: "Trkání je hra", text: "Berani a mufloni do sebe ťukají hlavami, aby si změřili síly a určili pořadí ve stádu. Není to boj — rohy jim navíc rostou celý život a podle nich se pozná věk." },
+  { id: "f_mazleni", category: "zvirata", title: "Kočičí předení", text: "Kočka přede nejen ze spokojenosti. Jemné vibrace kolem 25 Hz ji uklidňují a podle studií pomáhají hojit i kosti a svaly — vlastní lékárnička v kožichu." },
+  { id: "f_podestylka", category: "zvirata", title: "Suchá podestýlka = zdraví", text: "Vlhká podestýlka začne čpět čpavkem a dráždí dýchací cesty. Pravidelné vyhrabání a čerstvá sláma drží zvířata zdravá — a starý hnůj putuje na kompost." },
+
   // --- Smysl azylu ---------------------------------------------------------
   { id: "f_azyl", category: "azyl", title: "Co je azyl pro zvířata", text: "Azyl není zoo ani farma. Zachráněná zvířata tu dožívají v klidu — nikdo je nevyužívá ani neporáží. Cílem je důstojný život až do konce." },
   { id: "f_adopce", category: "azyl", title: "Virtuální adopce", text: "Adoptovat zvíře „na dálku“ znamená přispívat na jeho krmení a péči. Zvíře zůstává na Louce, ty dostáváš zprávy, jak se mu daří." },
@@ -41,4 +47,4 @@ export const FACT_BY_ID: Record<string, Fact> = Object.fromEntries(
 export const FORAGE_FACTS = ["f_rebricek", "f_mesicek", "f_trezalka", "f_kopriva", "f_hermanek", "f_podbel"];
 export const NIGHT_FACTS = ["f_liska", "f_netopyr"];
 export const WINTER_FACTS = ["f_zima_jidlo", "f_seno", "f_pelichani"];
-export const CLEAN_FACTS = ["f_zizala", "f_permakultura", "f_mech"];
+export const CLEAN_FACTS = ["f_podestylka", "f_zizala", "f_permakultura", "f_mech"];

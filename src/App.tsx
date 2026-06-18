@@ -20,6 +20,8 @@ import { HerbQuiz } from "./ui/minigames/HerbQuiz";
 import { ChopWood } from "./ui/minigames/ChopWood";
 import { TechFix } from "./ui/minigames/TechFix";
 import { ForestGate } from "./ui/minigames/ForestGate";
+import { CleanUp } from "./ui/minigames/CleanUp";
+import { PlayBar } from "./ui/minigames/PlayBar";
 import { openGate } from "./world/entities";
 import { invalidateGround } from "./world/draw";
 import { sound } from "./audio/sound";
@@ -99,6 +101,8 @@ export default function App() {
   const [npc, setNpc] = useState<string | null>(null);
   const [minigame, setMinigame] = useState<Minigame | null>(null);
   const [puzzle, setPuzzle] = useState(false);
+  const [clean, setClean] = useState<FeedGroup | null>(null);
+  const [play, setPlay] = useState<AnimalDef | null>(null);
   const welcomeOnce = useRef(false);
   useGameSounds();
 
@@ -118,7 +122,27 @@ export default function App() {
 
   if (!state.started) return <Intro />;
 
-  const paused = !!state.dialog || overlay !== null || !!sel || !!npc || !!minigame || puzzle || !!state.gameOver;
+  const paused = !!state.dialog || overlay !== null || !!sel || !!npc || !!minigame || puzzle || !!clean || !!play || !!state.gameOver;
+
+  const openClean = (group: FeedGroup) => {
+    if (state.energy < 6) { dispatch({ type: "PUSH_DIALOG", speaker: "Tip", lines: ["Na úklid teď nemáš sílu. Nejdřív se najez a napij."] }); return; }
+    sound.select();
+    setClean(group);
+  };
+  const winClean = () => {
+    if (clean) dispatch({ type: "CLEAN", group: clean });
+    setClean(null);
+  };
+
+  const openPlay = (a: AnimalDef) => {
+    if (state.energy < 4) { dispatch({ type: "PUSH_DIALOG", speaker: "Tip", lines: ["Na hraní teď nemáš sílu. Nejdřív se najez a napij."] }); return; }
+    setSel(null);
+    setPlay(a);
+  };
+  const winPlay = () => {
+    if (play) dispatch({ type: "PLAY", animalId: play.id });
+    setPlay(null);
+  };
 
   const winMinigame = (mg: Minigame) => {
     const r = MG_REWARD[mg];
@@ -139,9 +163,17 @@ export default function App() {
   };
 
   const feedStation = (group: FeedGroup) => {
-    if (state.phase === "rano") dispatch({ type: "FEED", group });
-    else if (state.phase === "vecer") dispatch({ type: "EVENING_FEED" });
-    else dispatch({ type: "PUSH_DIALOG", speaker: "Tip", lines: ["Hlavní krmení je ráno, večer dokrmíš. Přes den raď spíš úklid, dřevo a byliny."] });
+    if (state.phase === "rano") {
+      if (!state.tasksDone[`feed_${group}`]) dispatch({ type: "FEED", group });
+      else if (!state.tasksDone[`clean_${group}`]) openClean(group);
+      else dispatch({ type: "PUSH_DIALOG", speaker: "Tip", lines: ["Nakrmeno i uklizeno. Přes den se hodí dřevo a byliny."] });
+    } else if (state.phase === "vecer") {
+      dispatch({ type: "EVENING_FEED" });
+    } else if (!state.tasksDone[`clean_${group}`]) {
+      openClean(group); // poledne — čas vyhrabat podestýlku
+    } else {
+      dispatch({ type: "PUSH_DIALOG", speaker: "Tip", lines: ["Tady je čisto. Přes den se hodí dřevo a byliny."] });
+    }
   };
 
   const handleKurnik = () => {
@@ -149,14 +181,21 @@ export default function App() {
     else if (state.phase === "rano" && !state.tasksDone.feed_drubez) dispatch({ type: "FEED", group: "drubez" });
     else if (state.birdsReleased && !state.tasksDone.eggs) dispatch({ type: "COLLECT_EGGS" });
     else if (state.phase === "vecer") dispatch({ type: "EVENING_FEED" });
-    else dispatch({ type: "PUSH_DIALOG", speaker: "Kurník", lines: ["Drůbež spokojeně hrabe. Hotovo. 🐔"] });
+    else if (!state.tasksDone.clean_drubez) openClean("drubez");
+    else dispatch({ type: "PUSH_DIALOG", speaker: "Kurník", lines: ["Drůbež spokojeně hrabe a je čisto. Hotovo. 🐔"] });
   };
 
   const onWorldEvent = (e: WorldEvent) => {
     const name = ANIMAL_BY_ID[e.animalId]?.name ?? "Zvíře";
     if (e.type === "escape") {
       sound.animalEscape(ANIMAL_BY_ID[e.animalId]?.feedGroup ?? "stado");
-      dispatch({ type: "PUSH_DIALOG", speaker: "Pozor!", lines: [`${name} se prodral(a) plotem a pádí k zahrádce! Dožeň ho a zmáčkni akci, ať ho zaženeš zpátky.`] });
+      const lines = [`${name} se prodral(a) plotem a pádí k zahrádce!`];
+      if (e.npcId) {
+        const npcName = PERSON_BY_ID[e.npcId]?.name ?? "Kolega";
+        lines.push(`${npcName}: ${e.line}`);
+      }
+      if (!e.helped) lines.push("Tak honem — dožeň ho a zmáčkni akci, ať ho zaženeš zpátky! 🏃");
+      dispatch({ type: "PUSH_DIALOG", speaker: "Pozor!", lines });
     } else if (e.type === "raid") {
       dispatch({ type: "REWARD", money: -15, items: [{ item: "zelenina", qty: -2 }, { item: "brambory", qty: -1 }] });
       dispatch({ type: "PUSH_DIALOG", speaker: name, lines: [`Mňam mňam! ${name} se cpe v zahrádce — ubyla zelenina i pár korun. Honem ho zažeň zpátky!`] });
@@ -269,8 +308,14 @@ export default function App() {
           <ForestGate onWin={solveGate} onClose={() => setPuzzle(false)} />
         </Overlay>
       )}
+      {clean && (
+        <Overlay title="🧹 Úklid u zvířat" onClose={() => setClean(null)}>
+          <CleanUp group={clean} onWin={winClean} onClose={() => setClean(null)} />
+        </Overlay>
+      )}
 
-      {sel && <AnimalCard animal={sel} onClose={() => setSel(null)} />}
+      {play && <PlayBar animal={play} onDone={winPlay} onClose={() => setPlay(null)} />}
+      {sel && <AnimalCard animal={sel} onClose={() => setSel(null)} onPlay={() => sel && openPlay(sel)} />}
       <FlashToast />
       <GameOver />
     </div>

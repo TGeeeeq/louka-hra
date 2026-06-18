@@ -18,6 +18,7 @@ export const SLEEP_THIRST_DRAIN = 24;
 // Spokojenost zvířat
 export const WELFARE_FEED_GAIN = 26; // nakrmení zvedne spokojenost skupiny
 export const WELFARE_CLEAN_GAIN = 14;
+export const WELFARE_PLAY_GAIN = 8; // pohrání/mazlení (jednou denně na zvíře)
 export const WELFARE_SKIP_FEED_PENALTY = 30; // když skupinu za den nenakrmíš
 export const WELFARE_NIGHT_OPEN_PENALTY = 18; // nezavřená zvířata v noci
 export const WELFARE_SICK_THRESHOLD = 25; // pod touto hranicí hrozí nemoc
