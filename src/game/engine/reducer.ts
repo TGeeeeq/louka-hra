@@ -36,6 +36,7 @@ import {
 } from "../content/facts";
 import { initialState } from "./state";
 import { MAIN_QUESTS } from "../content/quests";
+import { TUTORIAL_STEPS, tutorialActive } from "../content/tutorial";
 import {
   addLog,
   chance,
@@ -72,6 +73,7 @@ export type Action =
   | { type: "BUY"; itemId: string; qty: number }
   | { type: "SELL"; itemId: string; qty: number }
   | { type: "BUILD"; buildingId: string }
+  | { type: "BUILD_STRUCTURE"; id: string }
   | { type: "EVENING_FEED" }
   | { type: "CLOSE_ANIMALS" }
   | { type: "ADVANCE_PHASE" }
@@ -162,10 +164,12 @@ export function reducer(state: GameState, action: Action): GameState {
     action.type === "PUSH_DIALOG" ||
     action.type === "START" ||
     action.type === "RESET" ||
-    action.type === "LOAD"
+    action.type === "LOAD" ||
+    action.type === "BUILD_STRUCTURE"
   )
     return next;
-  advanceQuests(next);
+  // Survival questy běží až po dokončení úvodního tutoriálu.
+  if (!tutorialActive(next)) advanceQuests(next);
   return next;
 }
 
@@ -191,11 +195,15 @@ function core(state: GameState, action: Action): GameState {
       const s = cloneState(state);
       s.started = true;
       addLog(s, `Vítej na Louce. Den ${s.day} — ${seasonName(s.season)}.`, "good");
+      if (tutorialActive(s)) pushDialog(s, "Tomáš", TUTORIAL_STEPS[s.tutorialStep].intro);
       return s;
     }
 
-    case "RESET":
-      return { ...initialState(), started: true };
+    case "RESET": {
+      const s = { ...initialState(), started: true };
+      pushDialog(s, "Tomáš", TUTORIAL_STEPS[0].intro);
+      return s;
+    }
 
     case "LOAD":
       return action.state;
@@ -567,6 +575,34 @@ function core(state: GameState, action: Action): GameState {
       s.buildings.push(action.buildingId);
       addLog(s, `Pořídil jsi: ${b.name} ${b.emoji} (−${b.cost} Kč).`, "good");
       flash(s, `${b.name} hotovo! ${b.benefit}`, "good");
+      return s;
+    }
+
+    case "BUILD_STRUCTURE": {
+      if (!tutorialActive(state)) return state;
+      const step = TUTORIAL_STEPS[state.tutorialStep];
+      if (action.id !== step.buildingId) return state;
+      if (state.built.includes(action.id)) return state;
+      const s = cloneState(state);
+      s.built.push(action.id);
+      s.tutorialStep += 1;
+      addLog(s, `Postavil jsi: ${step.buildLabel}. 🔨`, "good");
+      if (s.tutorialStep < TUTORIAL_STEPS.length) {
+        // Pochvala + uvedení další stavby.
+        const nextStep = TUTORIAL_STEPS[s.tutorialStep];
+        pushDialog(s, "Tomáš", [...step.done, ...nextStep.intro]);
+      } else {
+        // Poslední stavba — Louka je hotová, začíná survival.
+        pushDialog(s, "Tomáš", step.done);
+        s.day = 1;
+        s.dayInSeason = 1;
+        s.phase = "rano";
+        s.maxEnergy = SEASON_ENERGY[s.season];
+        s.energy = SEASON_ENERGY[s.season];
+        s.questLine = 0;
+        s.flags.tutorial_done = true;
+        flash(s, "Louka je postavená! Teď začíná to hlavní — přežít. 🌱", "good");
+      }
       return s;
     }
 

@@ -7,15 +7,17 @@ import {
   INTERACTABLES,
   PLAYER_START,
   isBlocked,
+  setConstructed,
   type Bounds,
   type Interactable,
 } from "../../world/entities";
+import { TUTORIAL_BUILDING_IDS } from "../../game/content/tutorial";
 import { findPath, nearestWalkable, type Pt } from "../../world/pathfind";
 import { NPC_LIFE } from "../../game/content/npcLife";
 import { reactionFor, idleLine, ESCAPE_HELP, ESCAPE_SHRUG } from "../../game/content/npcReactions";
 import { pick } from "../../game/engine/util";
 import { PERSON_BY_ID } from "../../game/content/people";
-import { drawBuilding, drawGround, drawPaddocks, drawSunlight, drawVignette, drawWaterShimmer, getMinimapBase, roundRect } from "../../world/draw";
+import { drawBlueprint, drawBuilding, drawGround, drawPaddocks, drawSunlight, drawVignette, drawWaterShimmer, getMinimapBase, roundRect } from "../../world/draw";
 import { animalImg, personImg, preloadSprites, ready } from "../../world/spriteCache";
 import { ANIMALS, ANIMAL_BY_ID, animalScale } from "../../game/content/animals";
 import type { Facing } from "../sprites/PersonSprite";
@@ -40,6 +42,14 @@ interface Props {
   welfare: Record<FeedGroup, number>;
   weather: Weather;
   money: number;
+  /** Postavené stavby (tutoriál). Nepostavené se nekreslí / nejsou solidní. */
+  built: string[];
+  /** Nepostavené stavby, které má hráč právě postavit (svítící „plány"). */
+  tutorialTargets: string[];
+  /** Skupiny zvířat, jejichž výběh už stojí (nastěhovaly se). */
+  settledGroups: FeedGroup[];
+  /** Běží ještě úvodní tutoriál? (útěky vypnuty, čekající zvířata) */
+  tutorial: boolean;
   onInteract: (t: InteractTarget) => void;
   onEvent: (e: WorldEvent) => void;
 }
@@ -60,6 +70,7 @@ interface Mob {
   bounds?: Bounds;
   escaped: boolean;
   raided: boolean;
+  waiting: boolean; // tutoriál: postává u vjezdu, dokud nemá postavený výběh
 }
 
 // Živé NPC — chodí po rozvrhu mezi stanovišti a u nich „pracují".
@@ -89,6 +100,9 @@ function standOf(id: string, phase: Phase) {
 
 const SPEED = 165; // px/s
 const INTERACT_RANGE = TS * 1.5;
+// Čekací zóna zvířat u vjezdu (tutoriál) — než dostaví svůj výběh.
+const WAIT_CENTER = { x: 24.5 * TS, y: 22.5 * TS };
+const WAIT_RADIUS = TS * 1.9;
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 
 const BUILDING_VERB: Record<string, string> = {
@@ -108,13 +122,16 @@ const BUILDING_VERB: Record<string, string> = {
   zahrada: "Zahrádka",
 };
 
-export function WorldCanvas({ season, phase, paused, welfare, weather, money, onInteract, onEvent }: Props) {
+export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, onInteract, onEvent }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // měnící se props čteme přes ref, ať smyčku nemusíme restartovat
-  const propsRef = useRef({ season, phase, paused, welfare, weather, money, onInteract, onEvent });
-  propsRef.current = { season, phase, paused, welfare, weather, money, onInteract, onEvent };
+  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, onInteract, onEvent });
+  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, onInteract, onEvent };
+
+  // Kolize staveb podle toho, co už stojí (blueprint je průchozí).
+  useEffect(() => { setConstructed(built); }, [built]);
 
   const player = useRef({ x: PLAYER_START.x, y: PLAYER_START.y, dir: "down", moving: false, anim: 0, flip: false });
   const mobs = useRef<Mob[]>([]);
@@ -126,25 +143,31 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, on
   const lastPhase = useRef<Phase>(phase);
   const topInset = useRef(56); // výška horní HUD lišty — pod ni sázíme mini-mapu
 
-  // init mobů jednou
+  // init mobů jednou — zvířata bez postaveného výběhu čekají u vjezdu
   if (mobs.current.length === 0) {
-    mobs.current = ANIMAL_SPAWNS.map((s) => ({
-      id: s.animalId,
-      group: s.group,
-      x: s.hx,
-      y: s.hy,
-      hx: s.hx,
-      hy: s.hy,
-      radius: s.radius,
-      tx: s.hx,
-      ty: s.hy,
-      rest: Math.random() * 2,
-      flip: false,
-      bob: Math.random() * 6,
-      bounds: s.bounds,
-      escaped: false,
-      raided: false,
-    }));
+    mobs.current = ANIMAL_SPAWNS.map((s) => {
+      const waiting = !settledGroups.includes(s.group);
+      const x = waiting ? WAIT_CENTER.x + (Math.random() - 0.5) * WAIT_RADIUS * 2 : s.hx;
+      const y = waiting ? WAIT_CENTER.y + (Math.random() - 0.5) * WAIT_RADIUS * 2 : s.hy;
+      return {
+        id: s.animalId,
+        group: s.group,
+        x,
+        y,
+        hx: s.hx,
+        hy: s.hy,
+        radius: s.radius,
+        tx: x,
+        ty: y,
+        rest: Math.random() * 2,
+        flip: false,
+        bob: Math.random() * 6,
+        bounds: s.bounds,
+        escaped: false,
+        raided: false,
+        waiting,
+      };
+    });
   }
 
   // init NPC jednou — postavíme je rovnou na stanoviště aktuální fáze
@@ -342,7 +365,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, on
 
       // --- událost útěku: občas jedno zvíře vyrazí z výběhu do zahrádky ---
       escapeAcc.current += dt;
-      if (!P.paused && escapeAcc.current > 14) {
+      if (!P.paused && !P.tutorial && escapeAcc.current > 14) {
         escapeAcc.current = 0;
         if (!mobs.current.some((m) => m.escaped) && Math.random() < 0.18) {
           const cands = mobs.current.filter((m) => m.bounds);
@@ -387,9 +410,22 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, on
       // --- mobové (pasou se ve výběhu; uprchlík míří do zahrádky) ---
       if (!P.paused) {
         for (const m of mobs.current) {
+          // nastěhování: jakmile jeho výběh stojí, přestane čekat a míří domů
+          if (m.waiting && P.settledGroups.includes(m.group)) {
+            m.waiting = false;
+            m.tx = m.hx;
+            m.ty = m.hy;
+            m.rest = 0;
+          }
           m.rest -= dt;
           if (m.rest <= 0) {
-            if (m.escaped) {
+            if (m.waiting) {
+              const a = Math.random() * Math.PI * 2;
+              const r = Math.random() * WAIT_RADIUS;
+              m.tx = WAIT_CENTER.x + Math.cos(a) * r;
+              m.ty = WAIT_CENTER.y + Math.sin(a) * r;
+              m.rest = 1.2 + Math.random() * 3;
+            } else if (m.escaped) {
               m.tx = GARDEN.x;
               m.ty = GARDEN.y;
               m.rest = 2;
@@ -412,7 +448,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, on
             const sp = (m.escaped ? 44 : 26) * dt;
             let nx = m.x + (dx / d) * sp;
             let ny = m.y + (dy / d) * sp;
-            if (!m.escaped && m.bounds) {
+            if (!m.escaped && !m.waiting && m.bounds) {
               nx = Math.max(m.bounds.x0, Math.min(m.bounds.x1, nx));
               ny = Math.max(m.bounds.y0, Math.min(m.bounds.y1, ny));
             }
@@ -513,22 +549,46 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, on
       const camX = cam.current.x;
       const camY = cam.current.y;
 
+      // stav stavby: postavená (nebo negatovaná) / svítící plán / skrytá
+      const buildStateOf = (it: Interactable) => {
+        const gated = TUTORIAL_BUILDING_IDS.includes(it.id);
+        const isBuilt = !gated || P.built.includes(it.id);
+        return { isBuilt, isTarget: !isBuilt && P.tutorialTargets.includes(it.id) };
+      };
+
       // --- nejbližší cíl interakce ---
       nearest = null;
       let bestD = INTERACT_RANGE;
       for (const it of INTERACTABLES) {
+        const bs = buildStateOf(it);
+        if (!bs.isBuilt && !bs.isTarget) continue; // skrytý plán se nedá zaměřit
         const ix = (it.tx + it.fw / 2) * TS;
         const iy = (it.ty + it.fh) * TS;
         const d = Math.hypot(ix - p.x, iy - p.y);
         if (d < bestD) { bestD = d; nearest = { kind: "building", it }; }
       }
       for (const m of mobs.current) {
+        if (m.waiting) continue; // čekající zvířata jen dekorace, nezaměřovat
         const d = Math.hypot(m.x - p.x, m.y - p.y);
         if (d < bestD) { bestD = d; nearest = { kind: "animal", animalId: m.id }; }
       }
       for (const a of npcs.current) {
         const d = Math.hypot(a.x - p.x, a.y - p.y);
         if (d < bestD) { bestD = d; nearest = { kind: "npc", npcId: a.id }; }
+      }
+      // V tutoriálu má aktuální „plán" přednost před NPC/zvířaty (NPC často stojí
+      // u staveb) — aby šlo vždy postavit, když jsi u plánu.
+      if (P.tutorial) {
+        let td = INTERACT_RANGE;
+        let ti: Interactable | null = null;
+        for (const it of INTERACTABLES) {
+          if (!P.tutorialTargets.includes(it.id)) continue;
+          const ix = (it.tx + it.fw / 2) * TS;
+          const iy = (it.ty + it.fh) * TS;
+          const d = Math.hypot(ix - p.x, iy - p.y);
+          if (d < td) { td = d; ti = it; }
+        }
+        if (ti) nearest = { kind: "building", it: ti };
       }
 
       // popisek akce nejbližšího cíle (kontextová nápověda)
@@ -540,26 +600,34 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, on
           const m = mobs.current.find((mm) => mm.id === id);
           actionLabel = m?.escaped ? "Zahnat zpátky do výběhu" : "Pohladit / info";
         } else {
-          const k = nearest.it.kind;
-          actionLabel = BUILDING_VERB[k] ?? nearest.it.label;
-          if (k === "pastvina") actionLabel = P.season === "jaro" || P.season === "leto" ? "Vyhnat na pastvu" : "Rozdělat seno";
-          else if (k === "chalupa" && P.phase === "vecer") actionLabel = "Zavřít a jít spát";
+          const bs = buildStateOf(nearest.it);
+          if (!bs.isBuilt) {
+            actionLabel = "Postavit — " + nearest.it.label;
+          } else {
+            const k = nearest.it.kind;
+            actionLabel = BUILDING_VERB[k] ?? nearest.it.label;
+            if (k === "pastvina") actionLabel = P.season === "jaro" || P.season === "leto" ? "Vyhnat na pastvu" : "Rozdělat seno";
+            else if (k === "chalupa" && P.phase === "vecer") actionLabel = "Zavřít a jít spát";
+          }
         }
       }
 
       // --- RENDER ---
       ctx.clearRect(0, 0, viewW, viewH);
       drawGround(ctx, camX, camY, viewW, viewH, P.season);
-      drawPaddocks(ctx, camX, camY);
+      drawPaddocks(ctx, camX, camY, P.settledGroups);
 
       // seznam objektů seřazený dle baseY
       type Item = { y: number; draw: () => void };
       const items: Item[] = [];
 
       for (const it of INTERACTABLES) {
+        const bs = buildStateOf(it);
+        if (!bs.isBuilt && !bs.isTarget) continue; // skrytý plán se nekreslí (zelená louka)
         const baseY = (it.ty + it.fh) * TS;
         const near = nearest?.kind === "building" && nearest.it.id === it.id;
-        items.push({ y: baseY, draw: () => drawBuilding(ctx, it, camX, camY, near, now) });
+        if (bs.isBuilt) items.push({ y: baseY, draw: () => drawBuilding(ctx, it, camX, camY, near, now) });
+        else items.push({ y: baseY, draw: () => drawBlueprint(ctx, it, camX, camY, near, now) });
       }
       for (const m of mobs.current) {
         const near = nearest?.kind === "animal" && nearest.animalId === m.id;
@@ -590,7 +658,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, on
       // kontextová akční nápověda
       if (actionLabel) drawActionChip(ctx, viewW, viewH, actionLabel);
       // mini-mapa (pod horní HUD lištou — na mobilu na výšku ji nepřekryje)
-      drawMinimap(ctx, viewW, topInset.current, p.x, p.y, nearest);
+      drawMinimap(ctx, viewW, topInset.current, p.x, p.y, nearest, P.built, P.tutorialTargets);
 
       raf = requestAnimationFrame(loop);
     };
@@ -840,6 +908,8 @@ function drawMinimap(
   px: number,
   py: number,
   nearest: InteractTarget | null,
+  built: string[],
+  tutorialTargets: string[],
 ) {
   const base = getMinimapBase();
   const mw = Math.min(160, Math.max(viewW * 0.3, 116));
@@ -864,13 +934,17 @@ function drawMinimap(
   const tx = mw / base.width;
   const ty = mh / base.height;
   for (const it of INTERACTABLES) {
+    const gated = TUTORIAL_BUILDING_IDS.includes(it.id);
+    const isTarget = !built.includes(it.id) && tutorialTargets.includes(it.id);
+    if (gated && !built.includes(it.id) && !isTarget) continue; // skrytý plán
     const cx = x + (it.tx + it.fw / 2) * tx;
     const cy = y + (it.ty + it.fh / 2) * ty;
     const isNear = nearest?.kind === "building" && nearest.it.id === it.id;
-    ctx.fillStyle =
-      it.kind === "chalupa" ? "#f0e892" : it.kind === "stanek" ? "#e8a04a" : it.kind === "byliny" ? "#8fe08a" : "#f7f2e7";
+    ctx.fillStyle = isTarget
+      ? "#ffcf4a"
+      : it.kind === "chalupa" ? "#f0e892" : it.kind === "stanek" ? "#e8a04a" : it.kind === "byliny" ? "#8fe08a" : "#f7f2e7";
     ctx.beginPath();
-    ctx.arc(cx, cy, isNear ? 3.4 : 2, 0, Math.PI * 2);
+    ctx.arc(cx, cy, isTarget || isNear ? 3.4 : 2, 0, Math.PI * 2);
     ctx.fill();
   }
   const pxm = x + (px / TS) * tx;

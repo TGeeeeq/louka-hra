@@ -22,7 +22,9 @@ import { TechFix } from "./ui/minigames/TechFix";
 import { ForestGate } from "./ui/minigames/ForestGate";
 import { CleanUp } from "./ui/minigames/CleanUp";
 import { PlayBar } from "./ui/minigames/PlayBar";
-import { openGate } from "./world/entities";
+import { BuildIt } from "./ui/minigames/BuildIt";
+import { openGate, type Interactable } from "./world/entities";
+import { currentStep, settledGroups, tutorialActive, tutorialTargets } from "./game/content/tutorial";
 import { invalidateGround } from "./world/draw";
 import { sound } from "./audio/sound";
 import type { NpcId } from "./audio/sound";
@@ -39,12 +41,6 @@ const MG_REWARD: Record<Minigame, { flag: string; first: RewardPayload; again: R
   chop: { flag: "taught_tomas", first: { items: [{ item: "drevo", qty: 8 }] }, again: { items: [{ item: "drevo", qty: 2 }] }, speaker: "Tomáš", msg: "Máš v sobě sílu! Dřevo na zimu se vždycky hodí." },
   tech: { flag: "taught_tony", first: { money: 120 }, again: { money: 20 }, speaker: "Tony", msg: "Zapojeno! Pár korun na další vychytávky — zasloužíš si." },
 };
-const WELCOME = [
-  "Tomáš: Vítej na Louce! My tři postáváme kousek od cedule — každý ti pomůže s něčím jiným.",
-  "Maruška: Já mám na starosti vše okolo — byliny, zásoby i peníze. Tomáš práci a rady, Tony techniku.",
-  "Tony: Za každou minihru kápne odměna. Klikni na nás u cedule — sto zvířat se samo nenakrmí!",
-];
-
 const CEDULE_HELP = [
   "Vítej na Louce! 🌿 Chodíš šipkami / WASD (na mobilu křížem vlevo dole).",
   "Dojdi ke zvířeti nebo stavení a zmáčkni MEZERNÍK (nebo tlačítko A) — uděláš, co je třeba.",
@@ -103,7 +99,7 @@ export default function App() {
   const [puzzle, setPuzzle] = useState(false);
   const [clean, setClean] = useState<FeedGroup | null>(null);
   const [play, setPlay] = useState<AnimalDef | null>(null);
-  const welcomeOnce = useRef(false);
+  const [build, setBuild] = useState<Interactable | null>(null);
   useGameSounds();
 
   useEffect(() => {
@@ -111,18 +107,13 @@ export default function App() {
       sound.ensure();
       sound.startAmbient(state.season);
       sound.startMusic();
-      if (!state.flags.welcomed && !welcomeOnce.current) {
-        welcomeOnce.current = true;
-        dispatch({ type: "PUSH_DIALOG", speaker: "Louka", lines: WELCOME });
-        dispatch({ type: "SET_FLAG", key: "welcomed" });
-      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.started]);
 
   if (!state.started) return <Intro />;
 
-  const paused = !!state.dialog || overlay !== null || !!sel || !!npc || !!minigame || puzzle || !!clean || !!play || !!state.gameOver;
+  const paused = !!state.dialog || overlay !== null || !!sel || !!npc || !!minigame || puzzle || !!clean || !!play || !!build || !!state.gameOver;
 
   const openClean = (group: FeedGroup) => {
     if (state.energy < 6) { dispatch({ type: "PUSH_DIALOG", speaker: "Tip", lines: ["Na úklid teď nemáš sílu. Nejdřív se najez a napij."] }); return; }
@@ -142,6 +133,11 @@ export default function App() {
   const winPlay = () => {
     if (play) dispatch({ type: "PLAY", animalId: play.id });
     setPlay(null);
+  };
+
+  const winBuild = () => {
+    if (build) dispatch({ type: "BUILD_STRUCTURE", id: build.id });
+    setBuild(null);
   };
 
   const winMinigame = (mg: Minigame) => {
@@ -228,6 +224,15 @@ export default function App() {
       return;
     }
     const it = t.it;
+    // Tutoriál: svítící „plán" aktuálního kroku → spustit stavební minihru.
+    if (tutorialActive(state)) {
+      const step = currentStep(state);
+      if (step && it.id === step.buildingId && !state.built.includes(it.id)) {
+        sound.select();
+        setBuild(it);
+        return;
+      }
+    }
     switch (it.kind) {
       case "kurnik": handleKurnik(); break;
       case "chlivek": feedStation("prasata"); break;
@@ -272,7 +277,7 @@ export default function App() {
 
   return (
     <div className="game-world">
-      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} onInteract={onInteract} onEvent={onWorldEvent} />
+      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} onInteract={onInteract} onEvent={onWorldEvent} />
       <Hud onOpen={(p) => setOverlay(p)} />
       <Controls />
       <DialogBox />
@@ -311,6 +316,12 @@ export default function App() {
       {clean && (
         <Overlay title="🧹 Úklid u zvířat" onClose={() => setClean(null)}>
           <CleanUp group={clean} onWin={winClean} onClose={() => setClean(null)} />
+        </Overlay>
+      )}
+
+      {build && (
+        <Overlay title="🔨 Stavba" onClose={() => setBuild(null)}>
+          <BuildIt label={build.label} onWin={winBuild} onClose={() => setBuild(null)} />
         </Overlay>
       )}
 

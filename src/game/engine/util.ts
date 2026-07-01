@@ -25,6 +25,7 @@ export function cloneState(s: GameState): GameState {
     ...s,
     inventory: { ...s.inventory },
     buildings: [...s.buildings],
+    built: [...s.built],
     welfare: { ...s.welfare },
     population: { ...s.population },
     tasksDone: { ...s.tasksDone },

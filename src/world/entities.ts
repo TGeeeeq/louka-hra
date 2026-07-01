@@ -116,13 +116,20 @@ export const PADDOCKS: Paddock[] = [
 // Zahrádka — sem míří uprchlá zvířata.
 export const GARDEN = { x: (33 + 1) * TS, y: (12 + 1) * TS };
 
-// Solidní dlaždice staveb (pro kolize).
+// Solidní dlaždice staveb (pro kolize). Přepočítává se podle toho, co už hráč
+// postavil (tutoriál) — nepostavený „plán" je průchozí, hotová stavba blokuje.
 const solidBuildingTiles = new Set<string>();
-for (const it of INTERACTABLES) {
-  if (!it.solid) continue;
-  for (let dx = 0; dx < it.fw; dx++)
-    for (let dy = 0; dy < it.fh; dy++)
-      solidBuildingTiles.add(`${it.tx + dx},${it.ty + dy}`);
+
+/** Nastaví, které stavby už stojí, a přepočítá jejich solidní dlaždice. */
+export function setConstructed(builtIds: string[]) {
+  solidBuildingTiles.clear();
+  const set = new Set(builtIds);
+  for (const it of INTERACTABLES) {
+    if (!it.solid || !set.has(it.id)) continue;
+    for (let dx = 0; dx < it.fw; dx++)
+      for (let dy = 0; dy < it.fh; dy++)
+        solidBuildingTiles.add(`${it.tx + dx},${it.ty + dy}`);
+  }
 }
 
 /** Kolize ve world (px) souřadnicích — terén i stavby. */

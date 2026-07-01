@@ -155,6 +155,10 @@ export interface GameState {
 
   inventory: Record<string, number>;
   buildings: string[];
+  /** Postavené stavby úvodního tutoriálu (chalupa, kuchyň, výběhy…). */
+  built: string[];
+  /** Index v TUTORIAL_STEPS; >= délka ⇒ tutoriál dokončen, běží survival. */
+  tutorialStep: number;
   welfare: Record<FeedGroup, number>; // 0..100 spokojenost/zdraví skupiny
   population: Record<FeedGroup, number>; // počet kusů (challenge: 100+)
 

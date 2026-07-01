@@ -10,6 +10,7 @@ import {
 } from "../labels";
 import { weatherName } from "../../game/engine/reducer";
 import { MAIN_QUESTS } from "../../game/content/quests";
+import { CHAPTER_COUNT, currentStep, tutorialActive } from "../../game/content/tutorial";
 import { ITEM_BY_ID } from "../../game/content/items";
 import { invCount } from "../../game/engine/util";
 
@@ -34,6 +35,8 @@ export function Hud({
   const [music, setMusic] = useState(sound.musicOn);
 
   const quest = MAIN_QUESTS[state.questLine];
+  const tut = tutorialActive(state);
+  const step = currentStep(state);
 
   const phaseBtn =
     state.phase === "vecer"
@@ -67,14 +70,19 @@ export function Hud({
         </div>
       </div>
 
-      {quest && (
+      {tut && step ? (
+        <div className="hud-quest">
+          <span className="quest-label">🔨 Kapitola {step.chapterIndex}/{CHAPTER_COUNT} — {step.chapter}</span>
+          <b>Postav: {step.buildLabel}</b>
+          <small>Dojdi ke svítícímu plánu 🔨 a zmáčkni mezerník / tlačítko A.</small>
+        </div>
+      ) : quest ? (
         <div className="hud-quest">
           <span className="quest-label">📋 Úkol {state.questLine + 1}/{MAIN_QUESTS.length}</span>
           <b>{quest.title}</b>
           <small>{quest.hint}</small>
         </div>
-      )}
-      {!quest && (
+      ) : (
         <div className="hud-quest done">
           <b>🎉 Všechny úkoly hotové!</b>
           <small>Teď je Louka jen tvoje — hospodař, jak umíš.</small>
@@ -82,7 +90,7 @@ export function Hud({
       )}
       </div>
 
-      <button className={`phase-fab ${phaseBtn.cls}`} onClick={phaseBtn.act}>{phaseBtn.label}</button>
+      {!tut && <button className={`phase-fab ${phaseBtn.cls}`} onClick={phaseBtn.act}>{phaseBtn.label}</button>}
 
       {bag && (
         <div className="bag-pop" onClick={() => setBag(false)}>

@@ -24,9 +24,10 @@ export function Intro() {
         <h1 className="intro-title">Louka</h1>
         <p className="intro-sub">survival azylu <b>Nech mě růst</b></p>
         <p className="intro-text">
-          Dlouhá louka uprostřed lesů. Přes <b>sto zachráněných zvířat</b>, jeden den, jedny ruce.
-          Vypusť drůbež, nakrm prasata i stádo, navař, nasbírej byliny, vyrob mast, prodej, ukliď,
-          naštípej dřevo — a hlavně všechny <b>zavři před nocí</b>. Zvládneš se postarat a přežít i zimu?
+          Přijdeš na <b>zelenou louku</b> uprostřed lesů — a Tomáš tě provede od prvního kůlu.
+          Postav si přístřešek, kuchyň, dílnu, chlívky i ohrady. Zvířátka už čekají na svůj domeček!
+          A až bude Louka stát, začne to hlavní: přes <b>sto zachráněných zvířat</b> nakrmit,
+          ohlídat před liškou a <b>přežít i zimu</b>. Zvládneš to?
         </p>
 
         <div className="intro-people">

@@ -327,7 +327,14 @@ export function drawGround(
 }
 
 // Ploty výběhů (3D kůly + ráhna). Kreslí se po terénu, zvířata jsou pak nad nimi.
-export function drawPaddocks(ctx: CanvasRenderingContext2D, camX: number, camY: number) {
+// `settled` (nepovinné) omezí kreslení jen na výběhy, jejichž stavba už stojí
+// (během tutoriálu se plot objeví teprve s dostavěným výběhem).
+export function drawPaddocks(
+  ctx: CanvasRenderingContext2D,
+  camX: number,
+  camY: number,
+  settled?: readonly string[],
+) {
   const rail = (x1: number, y1: number, x2: number, y2: number) => {
     ctx.strokeStyle = "rgba(0,0,0,0.14)"; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x1, y1 + 2.5); ctx.lineTo(x2, y2 + 2.5); ctx.stroke();
     ctx.strokeStyle = "#9a6f3a"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
@@ -341,6 +348,7 @@ export function drawPaddocks(ctx: CanvasRenderingContext2D, camX: number, camY: 
     ctx.fillStyle = "#b58a52"; ctx.beginPath(); ctx.ellipse(px, py - 13, 3.6, 1.8, 0, 0, 7); ctx.fill();
   };
   for (const p of PADDOCKS) {
+    if (settled && !settled.includes(p.group)) continue;
     const x = p.tx * TS - camX;
     const y = p.ty * TS - camY;
     const w = p.w * TS;
@@ -762,6 +770,60 @@ export function drawBuilding(
     ctx.textBaseline = "alphabetic";
     ctx.fillText("⬇️", cx, y - 8 + bob);
   }
+}
+
+/** „Plán" nepostavené stavby v tutoriálu: přerušovaný půdorys + silueta + 🔨. */
+export function drawBlueprint(
+  ctx: CanvasRenderingContext2D,
+  it: Interactable,
+  camX: number,
+  camY: number,
+  near: boolean,
+  time: number,
+) {
+  const x = it.tx * TS - camX;
+  const y = it.ty * TS - camY;
+  const w = it.fw * TS;
+  const h = it.fh * TS;
+  const cx = x + w / 2;
+  const baseY = y + h;
+  const pulse = 0.5 + 0.5 * Math.sin(time * 0.004);
+
+  // půdorys — jemná výplň + přerušovaný obrys, pulzuje
+  ctx.save();
+  ctx.fillStyle = `rgba(240,232,146,${0.1 + pulse * 0.1})`;
+  roundRect(ctx, x + 2, y + h * 0.34, w - 4, h * 0.62, 6);
+  ctx.fill();
+  ctx.setLineDash([7, 5]);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = near ? "rgba(240,232,146,0.95)" : `rgba(240,232,146,${0.5 + pulse * 0.3})`;
+  roundRect(ctx, x + 2, y + h * 0.34, w - 4, h * 0.62, 6);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // poloprůhledná silueta budoucí stavby
+  ctx.globalAlpha = 0.22 + pulse * 0.08;
+  drawStructure(ctx, it.kind, x, y, w, h, time);
+  ctx.restore();
+
+  // popiska „Postav: …"
+  const label = `Postav: ${it.label}`;
+  ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
+  ctx.textAlign = "center";
+  const tw = ctx.measureText(label).width;
+  const ty = baseY + 13;
+  ctx.fillStyle = "rgba(184,92,60,0.92)";
+  roundRect(ctx, cx - tw / 2 - 7, ty - 11, tw + 14, 16, 8);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, cx, ty - 2);
+
+  // 🔨 marker nad plánem
+  const bob = Math.sin(time * 0.006) * 4;
+  ctx.font = `26px ${EMOJI_FONT}`;
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText("🔨", cx, y - 6 + bob);
 }
 
 export function roundRect(

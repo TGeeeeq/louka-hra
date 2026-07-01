@@ -45,6 +45,8 @@ export function initialState(): GameState {
       polevka: 0,
     },
     buildings: [],
+    built: [],
+    tutorialStep: 0,
     welfare: { drubez: 72, prasata: 72, stado: 72, mazlici: 72 },
     population: { ...STARTING_POPULATION },
 
