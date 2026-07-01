@@ -31,7 +31,12 @@ export type Species =
   | "kachna"
   | "slepice"
   | "holub"
-  | "kralik";
+  | "kralik"
+  // Divocí sousedé — nekrmí se pravidelně, žijí v lese kolem Louky.
+  | "liska"
+  | "kane"
+  | "jezek"
+  | "srnka";
 
 /** Skupina krmení — jak a čím se zvíře krmí. */
 export type FeedGroup =

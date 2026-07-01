@@ -18,6 +18,10 @@ const SPECIES_LABEL: Record<Species, string> = {
   slepice: "slepice",
   holub: "holub",
   kralik: "králík",
+  liska: "liška — divoká sousedka",
+  kane: "káně lesní — divoký soused",
+  jezek: "ježek — divoký soused",
+  srnka: "srnka — divoká sousedka",
 };
 
 export function AnimalCard({ animal, onClose, onPlay }: { animal: AnimalDef; onClose: () => void; onPlay?: () => void }) {
