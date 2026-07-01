@@ -41,6 +41,12 @@ export const FACTS: Fact[] = [
   { id: "f_adopce", category: "azyl", title: "Virtuální adopce", text: "Adoptovat zvíře „na dálku“ znamená přispívat na jeho krmení a péči. Zvíře zůstává na Louce, ty dostáváš zprávy, jak se mu daří." },
   { id: "f_permakultura", category: "azyl", title: "Permakultura", text: "Hospodaření, které napodobuje přírodu: nic nepřijde nazmar, odpad se kompostuje a záhony se navzájem podporují. Méně práce, víc úrody." },
   { id: "f_dary", category: "azyl", title: "Z čeho azyl žije", text: "Provoz drží dary, virtuální adopce a prodej vlastních výrobků — mastí, bylin a ruční tvorby. Krmivo pro stovku zvířat není levné." },
+
+  // --- Senné DLC -----------------------------------------------------------
+  { id: "f_otava", category: "obdobi", title: "Otava — druhá seč", text: "Tráva posekaná podruhé za léto se jmenuje otava. Je jemnější a zvířata ji milují — luční dezert.", dlc: "senne" },
+  { id: "f_mokre_seno", category: "obdobi", title: "Mokré seno umí hořet", text: "Vlhké seno ve stohu zapaří — bakterie ho zahřejí i přes 70 °C a stoh může sám vzplát. Proto se seno suší tak poctivě.", dlc: "senne" },
+  { id: "f_kopky", category: "obdobi", title: "Kopky nejsou dekorace", text: "Seno se na noc hrabe do kopek: menší povrch = míň rosy. Ráno se zase rozhodí. Dřina? Dřina. Ale funguje to staletí.", dlc: "senne" },
+  { id: "f_seno_sbirka", category: "azyl", title: "Sbírka na seno", text: "Skutečná Louka spotřebuje přes zimu desítky balíků sena. Azyl na ně pořádá sbírku — i malý příspěvek znamená plné jesle.", dlc: "senne" },
 ];
 
 export const FACT_BY_ID: Record<string, Fact> = Object.fromEntries(

@@ -8,7 +8,7 @@ import { sound } from "../../audio/sound";
 
 const PEEK = ["karel", "princezna", "avala", "pogo", "riky", "roman", "husy", "kralici"];
 
-export function Intro() {
+export function Intro({ onDlc }: { onDlc?: () => void }) {
   const { state, dispatch } = useGame();
   const hasSave = state.day > 1 || Object.keys(state.tasksDone).length > 0;
 
@@ -49,6 +49,9 @@ export function Intro() {
             <button className="ghost-btn" onClick={() => { sound.ensure(); dispatch({ type: "RESET" }); }}>
               Nová hra od začátku
             </button>
+          )}
+          {onDlc && (
+            <button className="ghost-btn" onClick={onDlc}>🌾 Rozšíření</button>
           )}
         </div>
         <p className="intro-credit">Postavičky a příběhy podle skutečných obyvatel Louky · nechmerust.org</p>

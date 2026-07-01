@@ -28,6 +28,10 @@ export const ITEMS: ItemDef[] = [
   { id: "vlna", name: "Vlna", emoji: "🧶", kind: "produkt", sellPrice: 70, desc: "Z ostříhaných ovcí. Na jaře jich je nejvíc." },
   { id: "mast", name: "Řebříčková mast", emoji: "🪻", kind: "produkt", sellPrice: 165, desc: "Bylinná mast z Louky — skutečný výrobek azylu. Nejlepší výdělek." },
   { id: "caj", name: "Bylinný čaj", emoji: "🍵", kind: "produkt", sellPrice: 55, desc: "Sušené byliny z Louky. Můžeš ho prodat, nebo si jím zahřát duši." },
+
+  // --- Senné DLC -----------------------------------------------------------
+  { id: "pokosena_trava", name: "Pokosená tráva", emoji: "🌱", kind: "surovina", desc: "Čerstvě pokosená tráva ze seniště. Rozhoď ji na sušení — a hlídej nebe.", dlc: "senne" },
+  { id: "mokre_seno", name: "Zavlhlé seno", emoji: "💧", kind: "surovina", desc: "Zmoklo. Musí se znovu rozhodit a usušit, jinak zplesniví.", dlc: "senne" },
 ];
 
 export const ITEM_BY_ID: Record<string, ItemDef> = Object.fromEntries(

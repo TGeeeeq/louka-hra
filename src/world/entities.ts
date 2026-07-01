@@ -31,7 +31,9 @@ export type InteractKind =
   // liščí příběh + divocí sousedé
   | "stopy"
   | "krmne_misto"
-  | "listi";
+  | "listi"
+  // Senné DLC
+  | "seniste";
 
 export interface Interactable {
   id: string;
@@ -75,6 +77,8 @@ export const INTERACTABLES: Interactable[] = [
   B("fox_stopy", "stopy", "Liščí stopy", 7, 22, 1, 1, false),
   B("fox_misto", "krmne_misto", "Krmné místo u lesa", 6, 24, 1, 1, false),
   B("jezek_listi", "listi", "Hromada listí", 36, 14, 1, 1, false),
+  // Senné DLC: seniště na jižní louce u rybníka (viditelné jen s DLC)
+  B("seniste", "seniste", "Seniště — louka na seno", 30, 38, 2, 1, false),
 ];
 
 export const INTERACTABLE_BY_ID: Record<string, Interactable> = Object.fromEntries(

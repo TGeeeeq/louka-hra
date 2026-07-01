@@ -116,6 +116,8 @@ export interface ItemDef {
   buyPrice?: number; // Kč; chybí = nelze koupit
   sellPrice?: number; // Kč; chybí = nelze prodat
   desc: string;
+  /** Patří k DLC — bez vlastnictví se neukazuje. */
+  dlc?: DlcId;
 }
 
 export interface Recipe {
@@ -129,6 +131,8 @@ export interface Recipe {
   requiresFire?: boolean;
   desc: string;
   fact?: string;
+  /** Patří k DLC — bez vlastnictví se neukazuje. */
+  dlc?: DlcId;
 }
 
 export interface BuildingDef {
@@ -138,6 +142,8 @@ export interface BuildingDef {
   cost: number;
   desc: string;
   benefit: string;
+  /** Patří k DLC — bez vlastnictví se neukazuje. */
+  dlc?: DlcId;
 }
 
 export type FactCategory =
@@ -152,6 +158,18 @@ export interface Fact {
   category: FactCategory;
   title: string;
   text: string;
+  /** Patří k DLC — bez vlastnictví se nepočítá do sbírky. */
+  dlc?: DlcId;
+}
+
+/** Senné DLC: rozdělané sušení sena na seništi. */
+export interface HayState {
+  /** Kolik pokosené trávy se právě suší. */
+  drying: number;
+  /** Kolik „dobrých dní" už seno schne (obracení = celý den, jinak půl). */
+  driedDays: number;
+  /** Dnes už obráceno? */
+  turnedToday: boolean;
 }
 
 export interface TaskDef {
@@ -178,6 +196,8 @@ export interface GameState {
   year: number;
   phase: Phase;
   weather: Weather;
+  /** Předpověď na zítřek — u sušení sena rozhoduje (Senné DLC), ale hodí se všem. */
+  weatherTomorrow: Weather;
 
   money: number;
   energy: number;
@@ -205,6 +225,8 @@ export interface GameState {
   wildSeen: Record<string, number>;
   /** Liščí příběh přátelství. */
   fox: FoxState;
+  /** Senné DLC: probíhající sušení sena (null = nic se nesuší). */
+  hay: HayState | null;
 
   totalEarned: number;
   daysSurvived: number;

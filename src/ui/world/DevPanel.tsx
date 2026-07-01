@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useGame } from "../store";
 import { SEASON_ICON, SEASON_LABEL } from "../labels";
 import { sound, type TensionLevel } from "../../audio/sound";
+import { DLC_CATALOG } from "../../game/content/dlc";
+import { grantDlc, revokeDlc } from "../../game/dlc/entitlements";
 
 /**
  * Skrytý developerský panel pro rychlé testování hry.
@@ -73,6 +75,25 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
             🦊 Posunout liščí příběh ({state.fox.stage}, důvěra {state.fox.trust})
           </button>
         </div>
+      </div>
+
+      <div className="dev-section">
+        <div className="dev-label">🌾 DLC (testovací odemykání)</div>
+        {DLC_CATALOG.map((d) => {
+          const owned = state.dlcOwned.includes(d.id);
+          return (
+            <label className="dev-toggle" key={d.id}>
+              <input
+                type="checkbox"
+                checked={owned}
+                onChange={() =>
+                  dispatch({ type: "SET_DLC", owned: owned ? revokeDlc(d.id) : grantDlc(d.id) })
+                }
+              />
+              <span><b>{d.emoji} {d.name}</b> — {d.tagline}</span>
+            </label>
+          );
+        })}
       </div>
 
       <div className="dev-section">

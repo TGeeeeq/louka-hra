@@ -1,4 +1,4 @@
-import type { FeedGroup, GameState, Season, Weather } from "../types";
+import type { DlcId, FeedGroup, GameState, Season, Weather } from "../types";
 import {
   DAYS_PER_SEASON,
   DONATION_RANGE,
@@ -90,6 +90,9 @@ export type Action =
   | { type: "FOX_PET" }
   | { type: "LEAF_PILE" }
   | { type: "WILD_SEEN"; which: "kane" | "jezek" | "srnka" }
+  // DLC
+  | { type: "SET_DLC"; owned: DlcId[] }
+  | { type: "HAY_WORK" } // Senné DLC — kosení / rozhoz / obracení podle situace
   // Developerský (testovací) mód
   | { type: "DEV_UNLOCK" }
   | { type: "DEV_TOGGLE"; key: "godMode" | "turbo" }
@@ -513,6 +516,7 @@ function core(state: GameState, action: Action): GameState {
     case "CRAFT": {
       const recipe = RECIPE_BY_ID[action.recipeId];
       if (!recipe) return state;
+      if (recipe.dlc && !state.dlcOwned.includes(recipe.dlc)) return state;
       if (recipe.requiresFire && !state.fireLit)
         return warnReturn(state, `Na "${recipe.name}" potřebuješ rozdělaný oheň.`);
       if (!hasItems(state.inventory, recipe.inputs))
@@ -572,6 +576,7 @@ function core(state: GameState, action: Action): GameState {
     case "BUY": {
       const item = ITEM_BY_ID[action.itemId];
       if (!item || item.buyPrice == null) return state;
+      if (item.dlc && !state.dlcOwned.includes(item.dlc)) return state;
       const qty = Math.max(1, action.qty);
       let unit = item.buyPrice;
       if (action.itemId === "seno" && has(state, "senik"))
@@ -605,6 +610,7 @@ function core(state: GameState, action: Action): GameState {
     case "BUILD": {
       const b = BUILDING_BY_ID[action.buildingId];
       if (!b) return state;
+      if (b.dlc && !state.dlcOwned.includes(b.dlc)) return state;
       if (has(state, action.buildingId))
         return warnReturn(state, "Tohle už máš.");
       if (state.money < b.cost)
@@ -731,6 +737,10 @@ function core(state: GameState, action: Action): GameState {
       } else {
         s.phase = "vecer";
         addLog(s, "Slunce zapadá. Čas na večerní krmení a zavření.", "info");
+        // Senné DLC: Tomáš večer hlásí předpověď, když je venku seno.
+        if (s.dlcOwned.includes("senne") && s.hay && s.hay.drying > 0 && s.weatherTomorrow === "destivo") {
+          pushDialog(s, "Tomáš", ["Cítím to v kolenou — zítra bude pršet! Seno na seništi zmokne. Jsi s tím smířený?"]);
+        }
         // První podzimní večer: v listí u zahrádky někdo funí…
         if (s.season === "podzim" && !s.flags.jezek_intro && !tutorialActive(s)) {
           s.flags.jezek_intro = true;
@@ -748,6 +758,83 @@ function core(state: GameState, action: Action): GameState {
 
     case "SLEEP":
       return resolveSleep(state);
+
+    // -----------------------------------------------------------------------
+    // DLC
+
+    case "SET_DLC": {
+      const same =
+        state.dlcOwned.length === action.owned.length &&
+        state.dlcOwned.every((d) => action.owned.includes(d));
+      if (same) return state;
+      const s = cloneState(state);
+      s.dlcOwned = [...action.owned];
+      return s;
+    }
+
+    // Senné DLC: jedna akce na seništi — reducer sám pozná, co je na řadě
+    // (obracení → rozhoz → kosení), ať je ovládání jedním tlačítkem.
+    case "HAY_WORK": {
+      if (!state.dlcOwned.includes("senne")) return state;
+      const s = cloneState(state);
+      const kosa = has(s, "kosa");
+
+      // 1) obracení rozloženého sena (poledne)
+      if (s.hay && !s.hay.turnedToday && s.phase === "poledne") {
+        if (notEnoughEnergy(s, 5)) return s;
+        s.energy -= 5;
+        s.hay.turnedToday = true;
+        addLog(s, "Obrátil jsi seno — schne z obou stran. 🌾", "good");
+        flash(s, "Seno obráceno. Obrácené seno schne za den, neobrácené za dva.", "good", learnFact(s, FACT_BY_ID["f_kopky"]));
+        return s;
+      }
+
+      // 2) rozhoz trávy (nebo zavlhlého sena) na sušení
+      const trava = invCount(s.inventory, "pokosena_trava");
+      const mokre = invCount(s.inventory, "mokre_seno");
+      if (trava + mokre >= 4) {
+        if (notEnoughEnergy(s, 6)) return s;
+        s.energy -= 6;
+        if (trava) take(s, [{ item: "pokosena_trava", qty: trava }]);
+        if (mokre) take(s, [{ item: "mokre_seno", qty: mokre }]);
+        const total = trava + mokre;
+        s.hay = { drying: (s.hay?.drying ?? 0) + total, driedDays: s.hay?.driedDays ?? 0, turnedToday: s.hay?.turnedToday ?? false };
+        addLog(s, `Rozhodil jsi ${total}× trávy na sušení. Teď je to závod s nebem.`, "good");
+        const rainTomorrow = s.weatherTomorrow === "destivo";
+        flash(
+          s,
+          rainTomorrow
+            ? "Rozhozeno! Ale Tomáš větří déšť… zítra to může zmoknout. 🌧️"
+            : "Rozhozeno! Sluníčko, dělej svou práci. ☀️",
+          rainTomorrow ? "warn" : "good",
+        );
+        return s;
+      }
+
+      // 3) kosení (ráno/poledne, ne v dešti)
+      if (s.phase === "vecer")
+        return warnReturn(state, "Za rosy nebo přes den — večer se nekosí, večer se vypráví.");
+      if (s.weather === "destivo")
+        return warnReturn(state, "V dešti kosit nemá smysl — mokrá tráva by rovnou plesnivěla.");
+      if (s.season !== "leto")
+        return warnReturn(state, "Tráva na seno se kosí v létě. Teď by toho moc nenarostlo.");
+      const cost = kosa ? 9 : 14;
+      if (notEnoughEnergy(s, cost)) return s;
+      s.energy -= cost;
+      const cut = randInt(3, 5) + (kosa ? 2 : 0);
+      give(s, "pokosena_trava", cut);
+      addLog(s, `Pokosil jsi kus seniště — ${cut}× tráva. 🌱`, "good");
+      if (!s.flags.seno_prvni_kosa) {
+        s.flags.seno_prvni_kosa = true;
+        pushDialog(s, "Tomáš", [
+          "Kosa se drží takhle. Ne, takhle. … Dobře, hlavně si nekosej tkaničky.",
+          "Aspoň 4 hrsti trávy rozhoď na sušení. A modli se, ať neprší — mokré seno je zlo.",
+        ]);
+      } else {
+        flash(s, `+${cut}× pokosená tráva. Nasbírej aspoň 4 a rozhoď je na sušení.`, "good");
+      }
+      return s;
+    }
 
     // -----------------------------------------------------------------------
     // Liščí příběh přátelství — trpělivost a respekt, žádné násilí.
@@ -1028,7 +1115,8 @@ function devAdvanceDays(state: GameState, days: number): GameState {
   s.animalsClosed = true;
   s.fireLit = false;
   s.tasksDone = {};
-  s.weather = randomWeather(s.season);
+  s.weather = s.weatherTomorrow ?? randomWeather(s.season);
+  s.weatherTomorrow = randomWeather(s.season);
   addLog(s, `⏩ [dev] Přeskok na den ${s.day} — ${seasonName(s.season)}.`, "info");
   flash(s, `⏩ Den ${s.day} — ${seasonName(s.season)}, ${weatherName(s.weather)}.`, "good");
   return s;
@@ -1098,6 +1186,29 @@ function resolveSleep(state: GameState): GameState {
   // 2b) Liščí příběh — miska, důvěra a posun přátelství.
   advanceFoxStory(s);
 
+  // 2c) Senné DLC: co udělá noc (a dnešní počasí) se sušícím se senem.
+  if (s.hay && s.hay.drying > 0) {
+    if (s.weather === "destivo") {
+      give(s, "mokre_seno", s.hay.drying);
+      addLog(s, `Déšť! Sušící se seno zmoklo (${s.hay.drying}×). Rozhoď ho znovu, jinak zplesniví.`, "bad");
+      learnFact(s, FACT_BY_ID["f_mokre_seno"]);
+      s.hay = null;
+    } else {
+      s.hay.driedDays += s.hay.turnedToday ? 1 : 0.5;
+      s.hay.turnedToday = false;
+      if (s.hay.driedDays >= 2) {
+        const bales = Math.max(1, Math.floor(s.hay.drying / 4));
+        give(s, "seno", bales);
+        s.flags.seno_ususeno = true;
+        addLog(s, `Seno je suché a voní létem — ${bales}× balík! 🌾`, "good");
+        learnFact(s, FACT_BY_ID["f_otava"]);
+        s.hay = null;
+      } else {
+        addLog(s, "Seno na seništi schne… ještě to chce den. Nezapomeň ho v poledne obracet.", "info");
+      }
+    }
+  }
+
   // 3) Zima: topení dřevem.
   if (s.season === "zima") {
     const need = has(s, "drevnik") ? WINTER_WOOD_PER_NIGHT - 1 : WINTER_WOOD_PER_NIGHT;
@@ -1165,7 +1276,9 @@ function resolveSleep(state: GameState): GameState {
   s.animalsClosed = true;
   s.fireLit = false;
   s.tasksDone = {};
-  s.weather = randomWeather(s.season);
+  // Počasí: dnešek přebírá včerejší předpověď, nová předpověď na zítřek.
+  s.weather = s.weatherTomorrow ?? randomWeather(s.season);
+  s.weatherTomorrow = randomWeather(s.season);
 
   // 9) Permakulturní zahrada — ranní úroda zdarma.
   if (has(s, "zahrada")) {

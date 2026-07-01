@@ -4,6 +4,7 @@ import { ANIMALS } from "../../game/content/animals";
 import { WILD_ANIMALS } from "../../game/content/wild";
 import { FACTS } from "../../game/content/facts";
 import { QUEST_LINES } from "../../game/content/quests";
+import { ownedOnly } from "../../game/dlc/gate";
 import { AnimalSprite } from "../sprites/AnimalSprite";
 import { useGame } from "../store";
 import { photoUrl } from "../photo";
@@ -23,6 +24,7 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
   const [tab, setTab] = useState<Tab>("zvirata");
 
   const known = new Set(state.knownFacts);
+  const ownedFacts = ownedOnly(state, FACTS);
   const cats: FactCategory[] = ["byliny", "priroda", "obdobi", "azyl"];
 
   return (
@@ -123,11 +125,11 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
       {tab === "vedomosti" && (
         <div className="facts">
           <p className="panel-lead">
-            Objeveno {FACTS.filter((f) => known.has(f.id)).length} z {FACTS.length} zajímavostí. Objevuj je
+            Objeveno {ownedFacts.filter((f) => known.has(f.id)).length} z {ownedFacts.length} zajímavostí. Objevuj je
             prací — sběrem bylin, úklidem, zavíráním na noc…
           </p>
           {cats.map((c) => {
-            const list = FACTS.filter((f) => f.category === c);
+            const list = ownedFacts.filter((f) => f.category === c);
             return (
               <div key={c} className="fact-cat">
                 <h4>{CAT_LABEL[c]}</h4>

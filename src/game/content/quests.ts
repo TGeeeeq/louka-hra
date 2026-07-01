@@ -193,6 +193,47 @@ const SRNKA_QUESTS: Quest[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Senné DLC — zajisti Louce seno na zimu, jako doopravdy. Kosení, závod
+// s deštěm, svoz do seníku. Skutečná Louka na seno pořádá sbírku.
+const SENNE_QUESTS: Quest[] = [
+  {
+    id: "q_seno_kosa",
+    title: "Kosa v ranní rose",
+    hint: "V létě dojdi na seniště u rybníka (jih) a pokos trávu. Nasbírej aspoň 8 hrstí.",
+    done: (s) => invCount(s.inventory, "pokosena_trava") + (s.hay?.drying ?? 0) >= 8,
+    speaker: "Tomáš",
+    onComplete: "Kosit umíš! Kupovat všechno seno je drahé — vlastní sklizeň azyl podrží. Teď to usušit.",
+  },
+  {
+    id: "q_seno_susime",
+    title: "Závod s nebem",
+    hint: "Rozhoď trávu na sušení, v poledne obracej — a hlídej Tomášovu předpověď. Až uschne, máš balíky.",
+    done: (s) => !!s.flags.seno_ususeno,
+    reward: { money: 60 },
+    speaker: "Tomáš",
+    onComplete: "Voní jak celé léto v náruči! Když zmokne, nezoufej — rozhodíš znovu. Seno odpouští, ale jen jednou.",
+  },
+  {
+    id: "q_seno_svoz",
+    title: "Svoz do seníku",
+    hint: "Postav seník (pokud nestojí) a nashromáždi 10 balíků sena.",
+    done: (s) => s.buildings.includes("senik") && invCount(s.inventory, "seno") >= 10,
+    reward: { money: 200 },
+    speaker: "Maruška",
+    onComplete: "Seník plný — sbírka na seno se povedla! ❤️ Suché a pod střechou vydrží celou zimu.",
+  },
+  {
+    id: "q_seno_zima",
+    title: "Zima může přijít",
+    hint: "Vydrž do zimy s aspoň 8 balíky sena v zásobě.",
+    done: (s) => s.season === "zima" && invCount(s.inventory, "seno") >= 8,
+    reward: { money: 150 },
+    speaker: "Maruška",
+    onComplete: "Mráz venku, jesle plné. Tohle je přesně to, co skutečná Louka řeší každý rok — díky, žes to zažil s námi. 🌾💚",
+  },
+];
+
 // Všechny linky hry. MAIN_QUESTS zůstávají beze změny pořadí (kompatibilita
 // starých uložení); nové questy patří vždy do nové linky, nikdy doprostřed.
 export const QUEST_LINES: QuestLine[] = [
@@ -201,6 +242,7 @@ export const QUEST_LINES: QuestLine[] = [
   { id: "kane", icon: "🪶", title: "Stín nad výběhem", unlocked: (s) => !!s.flags.kane_seen, quests: KANE_QUESTS },
   { id: "jezek", icon: "🦔", title: "Bodlinatý nájemník", unlocked: (s) => !!s.flags.jezek_intro, quests: JEZEK_QUESTS },
   { id: "srnka", icon: "🦌", title: "Tichý soused", unlocked: (s) => (s.wildSeen.srnka ?? 0) >= 1, quests: SRNKA_QUESTS },
+  { id: "senne", icon: "🌾", title: "Seno pro Louku", dlc: "senne", unlocked: (s) => s.season === "leto" || !!s.flags.seno_prvni_kosa || !!s.flags.seno_ususeno, quests: SENNE_QUESTS },
 ];
 
 export const QUEST_LINE_BY_ID: Record<string, QuestLine> = Object.fromEntries(

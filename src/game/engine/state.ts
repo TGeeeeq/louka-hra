@@ -15,6 +15,7 @@ export function initialState(): GameState {
     year: 1,
     phase: "rano",
     weather: "polojasno",
+    weatherTomorrow: "slunecno",
 
     money: START_MONEY,
     energy: SEASON_ENERGY.jaro,
@@ -59,6 +60,7 @@ export function initialState(): GameState {
     seenAnimals: [],
     wildSeen: {},
     fox: { stage: "les", trust: 0, sightings: 0, bowlCount: 0 },
+    hay: null,
 
     totalEarned: 0,
     daysSurvived: 0,

@@ -376,6 +376,23 @@ button:disabled { cursor: not-allowed; }
 .about ul { padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .about .credit { margin-top: 12px; font-size: 0.78rem; color: var(--muted); font-style: italic; }
 
+/* ===== DLC obchod ======================================================== */
+.dlc-store { max-height: 62vh; overflow-y: auto; }
+.dlc-card {
+  background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 14px; margin: 10px 0;
+}
+.dlc-card.owned { border-color: var(--good); background: #f2f7ee; }
+.dlc-head { display: flex; align-items: center; gap: 12px; }
+.dlc-head > div { flex: 1; }
+.dlc-head h3 { margin: 0; }
+.dlc-head em { font-size: 0.82rem; color: var(--muted); }
+.dlc-emoji { font-size: 2rem; }
+.dlc-buy { padding: 8px 18px; white-space: nowrap; }
+.dlc-desc { font-size: 0.85rem; margin: 10px 0 6px; }
+.dlc-features { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 0.8rem; }
+.dlc-note { font-weight: 600; color: var(--moss-deep); }
+
 /* ===== Log =============================================================== */
 .log {
   background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow-sm);

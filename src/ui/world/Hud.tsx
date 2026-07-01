@@ -28,7 +28,7 @@ export function Hud({
   onOpen,
   onDevUnlock,
 }: {
-  onOpen: (panel: "denik") => void;
+  onOpen: (panel: "denik" | "dlc") => void;
   onDevUnlock?: () => void;
 }) {
   const { state, dispatch } = useGame();
@@ -89,6 +89,7 @@ export function Hud({
           <span className="money">💰 {state.money}</span>
           <button className="icon-btn" title="Batoh / najíst se" onClick={() => setBag((b) => !b)}>🎒</button>
           <button className="icon-btn" title="Deník" onClick={() => onOpen("denik")}>📖</button>
+          <button className="icon-btn" title="Rozšíření (DLC)" onClick={() => onOpen("dlc")}>🌾</button>
           <button className="icon-btn" title="Zvuk" onClick={() => setMuted(sound.toggleMute())}>{muted ? "🔇" : "🔊"}</button>
           <button className="icon-btn" title="Hudba" onClick={() => setMusic(sound.toggleMusic())}>{music ? "🎵" : "🎵̶"}</button>
         </div>

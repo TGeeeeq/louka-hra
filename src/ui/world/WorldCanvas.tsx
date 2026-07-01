@@ -165,6 +165,7 @@ const BUILDING_VERB: Record<string, string> = {
   stopy: "Prozkoumat stopy",
   krmne_misto: "Nechat lišce misku",
   listi: "Hromada listí",
+  seniste: "Seniště (kosit / sušit / obracet)",
 };
 
 export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, onInteract, onEvent }: Props) {

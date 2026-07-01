@@ -83,6 +83,15 @@ export const BUILDINGS: BuildingDef[] = [
     desc: "Stín a úkryt pro drůbež. Káně pak může kroužit, jak chce — slepice se jen schovají a hrabou dál.",
     benefit: "Drůbež už káně nevyplaší",
   },
+  {
+    id: "kosa",
+    name: "Kosa",
+    emoji: "🌿",
+    cost: 220,
+    desc: "Poctivá nabroušená kosa. Tomáš tvrdí, že se drží „takhle. Ne, takhle.“",
+    benefit: "Kosení −5 energie a +2 trávy",
+    dlc: "senne",
+  },
 ];
 
 export const BUILDING_BY_ID: Record<string, BuildingDef> = Object.fromEntries(

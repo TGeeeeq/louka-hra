@@ -734,6 +734,22 @@ function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: num
       }
       break;
     }
+    case "seniste": {
+      // řádky posečené trávy + kopka sena
+      ctx.strokeStyle = "#b8a35c"; ctx.lineWidth = 2;
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(x + 4, y + 8 + i * 7);
+        ctx.quadraticCurveTo(cx, y + 5 + i * 7, x + w - 4, y + 8 + i * 7);
+        ctx.stroke();
+      }
+      ctx.fillStyle = BC.straw; ctx.beginPath(); ctx.ellipse(x + w - 14, baseY - 9, 11, 9, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = BC.strawD; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(x + w - 14, baseY - 9, 5, 9, 0, 0, 7); ctx.stroke();
+      ctx.strokeStyle = BC.trunk; ctx.lineWidth = 2.4; // opřené hrábě
+      ctx.beginPath(); ctx.moveTo(x + 8, baseY); ctx.lineTo(x + 14, y + 6); ctx.stroke();
+      break;
+    }
     case "zahrada": {
       ctx.fillStyle = "#7d5230"; roundRect(ctx, x + 5, y + h * 0.28, w - 10, h * 0.66, 4); ctx.fill();
       for (let r = 0; r < 3; r++) {

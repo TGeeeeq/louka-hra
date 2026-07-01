@@ -9,6 +9,7 @@ import { DevPanel } from "./ui/world/DevPanel";
 import { Shop } from "./ui/components/Shop";
 import { Craft } from "./ui/components/Craft";
 import { Journal } from "./ui/components/Journal";
+import { DlcStore } from "./ui/components/DlcStore";
 import { AnimalCard } from "./ui/components/AnimalCard";
 import { FlashToast } from "./ui/components/FlashToast";
 import { Intro } from "./ui/components/Intro";
@@ -30,7 +31,7 @@ import { invalidateGround } from "./world/draw";
 import { sound } from "./audio/sound";
 import type { NpcId } from "./audio/sound";
 
-type Overlay = "shop" | "craft" | "denik" | null;
+type Overlay = "shop" | "craft" | "denik" | "dlc" | null;
 type Minigame = "herb" | "chop" | "tech";
 
 type RewardPayload = { money?: number; energy?: number; items?: { item: string; qty: number }[] };
@@ -163,7 +164,17 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.started]);
 
-  if (!state.started) return <Intro />;
+  if (!state.started)
+    return (
+      <>
+        <Intro onDlc={() => setOverlay("dlc")} />
+        {overlay === "dlc" && (
+          <Overlay title="🌾 Rozšíření" onClose={() => setOverlay(null)}>
+            <DlcStore />
+          </Overlay>
+        )}
+      </>
+    );
 
   const paused = !!state.dialog || overlay !== null || !!sel || !!npc || !!minigame || puzzle || !!clean || !!play || !!build || !!state.gameOver;
 
@@ -335,6 +346,7 @@ export default function App() {
         if (!state.flags.jezek_domek) dispatch({ type: "LEAF_PILE" });
         else dispatch({ type: "PUSH_DIALOG", speaker: "Ježčí vila", lines: ["Uvnitř někdo spokojeně funí. Nerušit — nájemník spí. 🦔"] });
         break;
+      case "seniste": dispatch({ type: "HAY_WORK" }); break;
       case "zahrada":
         dispatch({ type: "PUSH_DIALOG", speaker: "Zahrádka", lines: ["Permakulturní záhonky — zelí, mrkev, brambory. Ale pozor: uprchlíci z výběhů si tu rádi pochutnají!"] });
         break;
@@ -361,6 +373,7 @@ export default function App() {
     ...(foxStage === "les" || foxStage === "krmeni" || foxStage === "duvera" || foxStage === "kamarad" ? ["fox_stopy"] : []),
     ...(foxStage === "les" || foxStage === "stopy" || foxStage === "pozorovani" ? ["fox_misto"] : []),
     ...(!state.flags.jezek_intro ? ["jezek_listi"] : []),
+    ...(!state.dlcOwned.includes("senne") ? ["seniste"] : []),
   ];
   const wildActive = {
     kaneCircle: !!state.tasksDone.kane_circle,
@@ -381,6 +394,11 @@ export default function App() {
       {overlay === "denik" && (
         <Overlay title="📖 Deník" onClose={() => setOverlay(null)}>
           <Journal onSelect={(a) => setSel(a)} />
+        </Overlay>
+      )}
+      {overlay === "dlc" && (
+        <Overlay title="🌾 Rozšíření" onClose={() => setOverlay(null)}>
+          <DlcStore />
         </Overlay>
       )}
 
