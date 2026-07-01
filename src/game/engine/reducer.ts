@@ -82,7 +82,14 @@ export type Action =
   | { type: "DISMISS_DIALOG" }
   | { type: "SET_FLAG"; key: string }
   | { type: "REWARD"; money?: number; energy?: number; items?: { item: string; qty: number }[]; flag?: string }
-  | { type: "DISMISS_FLASH" };
+  | { type: "DISMISS_FLASH" }
+  // Developerský (testovací) mód
+  | { type: "DEV_UNLOCK" }
+  | { type: "DEV_TOGGLE"; key: "godMode" | "turbo" }
+  | { type: "DEV_SKIP_PHASE" }
+  | { type: "DEV_SKIP_DAY" }
+  | { type: "DEV_SKIP_SEASON" }
+  | { type: "DEV_RESTOCK" };
 
 const has = (s: GameState, id: string) => s.buildings.includes(id);
 
@@ -158,6 +165,14 @@ function randomWeather(season: Season): Weather {
 export function reducer(state: GameState, action: Action): GameState {
   const next = core(state, action);
   if (next === state) return next;
+  // Godmód: hráč je nesmrtelný — přežití má vždy plnou nádrž a nikdy neumře.
+  // Aplikuje se centrálně, ať nemusíme hlídat každou akci zvlášť.
+  if (next.dev.godMode) {
+    next.energy = next.maxEnergy;
+    next.hunger = 100;
+    next.thirst = 100;
+    next.gameOver = null;
+  }
   if (
     action.type === "DISMISS_FLASH" ||
     action.type === "DISMISS_DIALOG" ||
@@ -165,7 +180,10 @@ export function reducer(state: GameState, action: Action): GameState {
     action.type === "START" ||
     action.type === "RESET" ||
     action.type === "LOAD" ||
-    action.type === "BUILD_STRUCTURE"
+    action.type === "BUILD_STRUCTURE" ||
+    action.type === "DEV_UNLOCK" ||
+    action.type === "DEV_TOGGLE" ||
+    action.type === "DEV_RESTOCK"
   )
     return next;
   // Survival questy běží až po dokončení úvodního tutoriálu.
@@ -688,9 +706,133 @@ function core(state: GameState, action: Action): GameState {
     case "SLEEP":
       return resolveSleep(state);
 
+    // -----------------------------------------------------------------------
+    // Developerský (testovací) mód — skrytý, aktivuje se z UI.
+
+    case "DEV_UNLOCK": {
+      if (state.dev.enabled) return state;
+      const s = cloneState(state);
+      s.dev = { ...s.dev, enabled: true };
+      addLog(s, "🛠️ Developerský mód odemčen.", "info");
+      flash(s, "🛠️ Developerský mód odemčen. Panel máš vpravo dole.", "good");
+      return s;
+    }
+
+    case "DEV_TOGGLE": {
+      if (!state.dev.enabled) return state;
+      const s = cloneState(state);
+      const on = !s.dev[action.key];
+      s.dev = { ...s.dev, [action.key]: on };
+      if (action.key === "godMode" && on) {
+        s.energy = s.maxEnergy;
+        s.hunger = 100;
+        s.thirst = 100;
+        s.gameOver = null;
+      }
+      const label = action.key === "godMode" ? "Godmód (nesmrtelnost)" : "Turbo pohyb";
+      flash(s, `🛠️ ${label}: ${on ? "ZAP" : "VYP"}.`, "info");
+      return s;
+    }
+
+    case "DEV_SKIP_PHASE": {
+      if (!state.dev.enabled) return state;
+      if (state.phase === "vecer") return devAdvanceDays(state, 1);
+      const s = cloneState(state);
+      s.phase = state.phase === "rano" ? "poledne" : "vecer";
+      addLog(s, `⏩ [dev] Přeskok na fázi: ${phaseName(s.phase)}.`, "info");
+      flash(s, `⏩ Fáze: ${phaseName(s.phase)}.`, "info");
+      return s;
+    }
+
+    case "DEV_SKIP_DAY": {
+      if (!state.dev.enabled) return state;
+      return devAdvanceDays(state, 1);
+    }
+
+    case "DEV_SKIP_SEASON": {
+      if (!state.dev.enabled) return state;
+      // Kolik dní zbývá do prvního dne dalšího období.
+      const toNext = DAYS_PER_SEASON - state.dayInSeason + 1;
+      return devAdvanceDays(state, toNext);
+    }
+
+    case "DEV_RESTOCK": {
+      if (!state.dev.enabled) return state;
+      const s = cloneState(state);
+      s.money += 5000;
+      s.totalEarned += 5000;
+      s.energy = s.maxEnergy;
+      s.hunger = 100;
+      s.thirst = 100;
+      for (const [id, qty] of Object.entries(DEV_RESTOCK_KIT)) {
+        s.inventory[id] = Math.max(s.inventory[id] ?? 0, qty);
+      }
+      addLog(s, "🛠️ [dev] Doplněny zásoby, peníze a energie.", "info");
+      flash(s, "🛠️ Zásoby, +5000 Kč a plná energie doplněny.", "good");
+      return s;
+    }
+
     default:
       return state;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Developerský mód — pomocné
+
+/** Testovací sada zásob pro rychlé vyzkoušení všech interakcí. */
+const DEV_RESTOCK_KIT: Record<string, number> = {
+  krmna_smes: 20,
+  seno: 20,
+  granule: 20,
+  vareno: 20,
+  zelenina: 20,
+  brambory: 20,
+  obili: 20,
+  kukurice: 20,
+  drevo: 30,
+  voda: 30,
+  chleba: 10,
+  tuk: 10,
+  sklenice: 10,
+  byliny: 20,
+};
+
+function phaseName(p: GameState["phase"]): string {
+  return { rano: "ráno", poledne: "poledne", vecer: "večer" }[p];
+}
+
+/**
+ * Rychlý posun o `days` dní bez survival dopadů (bez lišky, veterináře, mrazu).
+ * Slouží k proletění hry a všech ročních období při testování.
+ */
+function devAdvanceDays(state: GameState, days: number): GameState {
+  const s = cloneState(state);
+  const n = Math.max(1, days);
+  for (let i = 0; i < n; i++) {
+    s.day += 1;
+    s.daysSurvived += 1;
+    s.dayInSeason += 1;
+    if (s.dayInSeason > DAYS_PER_SEASON) {
+      s.dayInSeason = 1;
+      const idx = SEASON_ORDER.indexOf(s.season);
+      const next = SEASON_ORDER[(idx + 1) % SEASON_ORDER.length];
+      s.season = next;
+      if (next === "jaro") s.year += 1;
+    }
+  }
+  // Reset dne jako po spánku, ale bez postihů.
+  s.phase = "rano";
+  s.maxEnergy = SEASON_ENERGY[s.season];
+  s.energy = SEASON_ENERGY[s.season];
+  s.birdsReleased = false;
+  s.animalsClosed = true;
+  s.fireLit = false;
+  s.tasksDone = {};
+  s.weather = randomWeather(s.season);
+  addLog(s, `⏩ [dev] Přeskok na den ${s.day} — ${seasonName(s.season)}.`, "info");
+  flash(s, `⏩ Den ${s.day} — ${seasonName(s.season)}, ${weatherName(s.weather)}.`, "good");
+  return s;
 }
 
 // ---------------------------------------------------------------------------

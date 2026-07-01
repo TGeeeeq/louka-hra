@@ -51,6 +51,8 @@ interface Props {
   settledGroups: FeedGroup[];
   /** Běží ještě úvodní tutoriál? (útěky vypnuty, čekající zvířata) */
   tutorial: boolean;
+  /** Developerské turbo — rychlejší pohyb po mapě. */
+  turbo?: boolean;
   onInteract: (t: InteractTarget) => void;
   onEvent: (e: WorldEvent) => void;
 }
@@ -123,13 +125,13 @@ const BUILDING_VERB: Record<string, string> = {
   zahrada: "Zahrádka",
 };
 
-export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, onInteract, onEvent }: Props) {
+export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, onInteract, onEvent }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // měnící se props čteme přes ref, ať smyčku nemusíme restartovat
-  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, onInteract, onEvent });
-  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, onInteract, onEvent };
+  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, onInteract, onEvent });
+  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, onInteract, onEvent };
 
   // Kolize staveb podle toho, co už stojí (blueprint je průchozí). Když hráč
   // dostavěl stavbu „zevnitř" plánu nebo těsně u jejího boku, vysuneme ho ven
@@ -354,7 +356,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
         const len = Math.hypot(vx, vy) || 1;
         vx /= len;
         vy /= len;
-        const mv = SPEED * dt;
+        const mv = SPEED * (P.turbo ? 2.7 : 1) * dt;
         if (vx !== 0) { const nx = p.x + vx * mv; if (canMoveTo(nx, p.y)) p.x = nx; }
         if (vy !== 0) { const ny = p.y + vy * mv; if (canMoveTo(p.x, ny)) p.y = ny; }
         p.moving = vx !== 0 || vy !== 0;

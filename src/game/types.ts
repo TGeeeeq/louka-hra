@@ -185,4 +185,17 @@ export interface GameState {
 
   /** Krátkodobé hlášky pro UI (toasty), spotřebuje se v UI vrstvě. */
   flash: { id: number; text: string; tone: LogEntry["tone"]; fact?: Fact } | null;
+
+  /** Skrytý developerský (testovací) mód — viz reducer akce DEV_*. */
+  dev: DevState;
+}
+
+/** Developerský mód pro rychlé testování všech interakcí a období. */
+export interface DevState {
+  /** Panel je odemčený (aktivovaný skrytou sekvencí). */
+  enabled: boolean;
+  /** Nesmrtelnost — energie, sytost i žízeň zůstávají plné, žádný bankrot. */
+  godMode: boolean;
+  /** Turbo pohyb — postava chodí po mapě výrazně rychleji. */
+  turbo: boolean;
 }

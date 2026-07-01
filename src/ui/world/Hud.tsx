@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useGame } from "../store";
 import { sound } from "../../audio/sound";
 import {
@@ -26,13 +26,27 @@ function MiniBar({ icon, value, max, tone }: { icon: string; value: number; max:
 
 export function Hud({
   onOpen,
+  onDevUnlock,
 }: {
   onOpen: (panel: "denik") => void;
+  onDevUnlock?: () => void;
 }) {
   const { state, dispatch } = useGame();
   const [bag, setBag] = useState(false);
   const [muted, setMuted] = useState(sound.muted);
   const [music, setMusic] = useState(sound.musicOn);
+
+  // Skryté odemčení dev módu: 5× ťuknout na odznak „Den X" do 2 sekund.
+  const tap = useRef({ count: 0, last: 0 });
+  const onDayBadge = () => {
+    const now = performance.now();
+    tap.current.count = now - tap.current.last < 2000 ? tap.current.count + 1 : 1;
+    tap.current.last = now;
+    if (tap.current.count >= 5) {
+      tap.current.count = 0;
+      onDevUnlock?.();
+    }
+  };
 
   const quest = MAIN_QUESTS[state.questLine];
   const tut = tutorialActive(state);
@@ -50,7 +64,7 @@ export function Hud({
       <div className="hud-stack">
       <div className="hud-top">
         <div className="hud-when">
-          <span className="day-badge">Den {state.day}</span>
+          <span className="day-badge" onClick={onDayBadge}>Den {state.day}</span>
           <span className="season-pill" data-season={state.season}>{SEASON_ICON[state.season]} {SEASON_LABEL[state.season]}</span>
           <span className="hud-weather">{PHASE_ICON[state.phase]} {PHASE_LABEL[state.phase]} · {WEATHER_ICON[state.weather]} {weatherName(state.weather)}</span>
         </div>

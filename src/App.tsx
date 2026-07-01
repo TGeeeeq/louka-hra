@@ -5,6 +5,7 @@ import { WorldCanvas, type InteractTarget, type WorldEvent } from "./ui/world/Wo
 import { Hud } from "./ui/world/Hud";
 import { DialogBox } from "./ui/world/DialogBox";
 import { Controls } from "./ui/world/Controls";
+import { DevPanel } from "./ui/world/DevPanel";
 import { Shop } from "./ui/components/Shop";
 import { Craft } from "./ui/components/Craft";
 import { Journal } from "./ui/components/Journal";
@@ -100,7 +101,29 @@ export default function App() {
   const [clean, setClean] = useState<FeedGroup | null>(null);
   const [play, setPlay] = useState<AnimalDef | null>(null);
   const [build, setBuild] = useState<Interactable | null>(null);
+  const [devOpen, setDevOpen] = useState(false);
   useGameSounds();
+
+  // Skryté odemčení dev módu: napsat na klávesnici „louka".
+  const devSeq = useRef("");
+  const unlockDev = () => {
+    if (!state.dev.enabled) dispatch({ type: "DEV_UNLOCK" });
+    setDevOpen(true);
+  };
+  useEffect(() => {
+    if (!state.started) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.length !== 1) return;
+      devSeq.current = (devSeq.current + e.key.toLowerCase()).slice(-5);
+      if (devSeq.current === "louka") {
+        devSeq.current = "";
+        unlockDev();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.started, state.dev.enabled]);
 
   useEffect(() => {
     if (state.started) {
@@ -277,8 +300,8 @@ export default function App() {
 
   return (
     <div className="game-world">
-      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} onInteract={onInteract} onEvent={onWorldEvent} />
-      <Hud onOpen={(p) => setOverlay(p)} />
+      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo} onInteract={onInteract} onEvent={onWorldEvent} />
+      <Hud onOpen={(p) => setOverlay(p)} onDevUnlock={unlockDev} />
       <Controls />
       <DialogBox />
 
@@ -329,6 +352,13 @@ export default function App() {
       {sel && <AnimalCard animal={sel} onClose={() => setSel(null)} onPlay={() => sel && openPlay(sel)} />}
       <FlashToast />
       <GameOver />
+
+      {state.dev.enabled && !devOpen && (
+        <button className="dev-fab" title="Developerský mód" onClick={() => setDevOpen(true)}>
+          🛠️
+        </button>
+      )}
+      {devOpen && <DevPanel onClose={() => setDevOpen(false)} />}
     </div>
   );
 }

@@ -70,5 +70,7 @@ export function initialState(): GameState {
     log: [],
     logSeq: 0,
     flash: null,
+
+    dev: { enabled: false, godMode: false, turbo: false },
   };
 }
