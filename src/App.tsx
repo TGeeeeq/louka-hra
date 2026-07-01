@@ -57,14 +57,38 @@ function useGameSounds() {
     quests: state.questCompleted.length,
     flashId: 0,
     season: state.season as string,
+    energy: state.energy,
+    foxTrust: state.fox.trust,
+    foxStage: state.fox.stage as string,
+    foxAlertDay: 0,
+    foxPet: false,
   });
   useEffect(() => {
     const p = prev.current;
     if (state.day > p.day) sound.newDay();
     if (state.questCompleted.length > p.quests) sound.questDone();
     else if (state.money > p.money) sound.coin();
-    if (state.season !== p.season) sound.setSeason(state.season);
-    sound.setMood(state.phase);
+    // sezónní přechod = stinger + crossfade témat (hudba nezmlkne)
+    if (state.season !== p.season) sound.seasonChange(state.season);
+    // hudební kontext: fáze dne, den v sezóně (blížící se zima tmavne), počasí (vítr)
+    sound.updateMusicContext({
+      season: state.season,
+      phase: state.phase,
+      dayInSeason: state.dayInSeason,
+      weather: state.weather,
+    });
+    // docházejí síly → tichý varovný motiv (uvnitř 30s cooldown)
+    if (state.energy < 15 && p.energy >= 15) sound.lowEnergy();
+    // liščí důvěra roste → hřejivý motiv; mazlení → ukolébavka
+    if (state.fox.trust > p.foxTrust)
+      sound.foxTrustMotif(state.fox.trust >= 90 ? 3 : state.fox.trust >= 60 ? 2 : 1);
+    if (state.fox.stage === "kamarad" && p.foxStage !== "kamarad") sound.foxTrustMotif(3);
+    if (!!state.tasksDone.fox_pet && !p.foxPet) sound.foxLullaby();
+    // večer s otevřenými výběhy: liška obchází — jemné napětí (1× za den)
+    if (state.phase === "vecer" && !state.tasksDone.closed && p.foxAlertDay !== state.day && !state.dialog) {
+      p.foxAlertDay = state.day;
+      sound.foxAlert();
+    }
     if (state.flash && state.flash.id !== p.flashId && (state.flash.tone === "bad" || state.flash.tone === "warn"))
       sound.error();
     prev.current = {
@@ -73,6 +97,11 @@ function useGameSounds() {
       quests: state.questCompleted.length,
       flashId: state.flash ? state.flash.id : p.flashId,
       season: state.season,
+      energy: state.energy,
+      foxTrust: state.fox.trust,
+      foxStage: state.fox.stage,
+      foxAlertDay: p.foxAlertDay,
+      foxPet: !!state.tasksDone.fox_pet,
     };
   }, [state]);
 }
@@ -224,10 +253,14 @@ export default function App() {
       if (!e.helped) lines.push("Tak honem — dožeň ho a zmáčkni akci, ať ho zaženeš zpátky! 🏃");
       dispatch({ type: "PUSH_DIALOG", speaker: "Pozor!", lines });
     } else if (e.type === "raid") {
+      // zvíře se dorvalo do zahrádky — hudba přejde do plného poplachu
+      sound.setTension(2);
       dispatch({ type: "REWARD", money: -15, items: [{ item: "zelenina", qty: -2 }, { item: "brambory", qty: -1 }] });
       dispatch({ type: "PUSH_DIALOG", speaker: name, lines: [`Mňam mňam! ${name} se cpe v zahrádce — ubyla zelenina i pár korun. Honem ho zažeň zpátky!`] });
     } else {
-      sound.animalCaught();
+      // chycen: při plném poplachu zahraje úlevová fanfára, jinak jen „mám tě"
+      if (sound.getTension() >= 2) sound.dangerRelief();
+      else sound.animalCaught();
       dispatch({ type: "PUSH_DIALOG", speaker: name, lines: [`Uf! ${name} je zpátky ve výběhu. Plot zase drží. 🐑`] });
     }
   };

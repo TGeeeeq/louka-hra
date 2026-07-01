@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useGame } from "../store";
 import { SEASON_ICON, SEASON_LABEL } from "../labels";
+import { sound, type TensionLevel } from "../../audio/sound";
 
 /**
  * Skrytý developerský panel pro rychlé testování hry.
@@ -9,6 +11,11 @@ import { SEASON_ICON, SEASON_LABEL } from "../labels";
 export function DevPanel({ onClose }: { onClose: () => void }) {
   const { state, dispatch } = useGame();
   const dev = state.dev;
+  const [tension, setTension] = useState<TensionLevel>(sound.getTension());
+  const forceTension = (t: TensionLevel) => {
+    sound.setTension(t);
+    setTension(t);
+  };
 
   return (
     <div className="dev-panel" onClick={(e) => e.stopPropagation()}>
@@ -65,6 +72,24 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
           <button onClick={() => dispatch({ type: "DEV_FOX" })}>
             🦊 Posunout liščí příběh ({state.fox.stage}, důvěra {state.fox.trust})
           </button>
+        </div>
+      </div>
+
+      <div className="dev-section">
+        <div className="dev-label">🔊 Audio — napětí a motivy (poslechové QA)</div>
+        <div className="dev-btn-row">
+          {([0, 1, 2, 3] as const).map((t) => (
+            <button key={t} className={tension === t ? "on" : ""} onClick={() => forceTension(t)}>
+              {["😌 klid", "⚠️ útěk", "🚨 poplach", "😮‍💨 úleva"][t]}
+            </button>
+          ))}
+        </div>
+        <div className="dev-btn-row">
+          <button onClick={() => sound.foxAlert()}>🦊 alert</button>
+          <button onClick={() => sound.foxTrustMotif(3)}>🦊 důvěra</button>
+          <button onClick={() => sound.foxLullaby()}>🦊 mazlení</button>
+          <button onClick={() => sound.lowEnergy()}>🥱 únava</button>
+          <button onClick={() => sound.questDone()}>🎉 quest</button>
         </div>
       </div>
 
