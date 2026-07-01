@@ -57,6 +57,8 @@ export function initialState(): GameState {
     tasksDone: {},
     knownFacts: [],
     seenAnimals: [],
+    wildSeen: {},
+    fox: { stage: "les", trust: 0, sightings: 0, bowlCount: 0 },
 
     totalEarned: 0,
     daysSurvived: 0,

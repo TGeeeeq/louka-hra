@@ -45,7 +45,7 @@ const MG_REWARD: Record<Minigame, { flag: string; first: RewardPayload; again: R
 const CEDULE_HELP = [
   "Vítej na Louce! 🌿 Chodíš šipkami / WASD (na mobilu křížem vlevo dole).",
   "Dojdi ke zvířeti nebo stavení a zmáčkni MEZERNÍK (nebo tlačítko A) — uděláš, co je třeba.",
-  "Ráno vypusť a nakrm, přes den vyráběj a sbírej byliny, večer zavři před liškou a jdi spát.",
+  "Ráno vypusť a nakrm, přes den vyráběj a sbírej byliny, večer zvířata zavři na klidnou noc a jdi spát.",
   "Sleduj úkoly nahoře. A ber to s klidem — zvířata na tebe počkají. (Většinou.)",
 ];
 
@@ -205,6 +205,14 @@ export default function App() {
   };
 
   const onWorldEvent = (e: WorldEvent) => {
+    if (e.type === "wildSpooked") {
+      if (e.which === "liska") dispatch({ type: "FOX_SEEN", spooked: true });
+      return;
+    }
+    if (e.type === "wildSeen") {
+      dispatch({ type: "WILD_SEEN", which: e.which as "kane" | "jezek" | "srnka" });
+      return;
+    }
     const name = ANIMAL_BY_ID[e.animalId]?.name ?? "Zvíře";
     if (e.type === "escape") {
       sound.animalEscape(ANIMAL_BY_ID[e.animalId]?.feedGroup ?? "stado");
@@ -228,6 +236,16 @@ export default function App() {
     if (t.kind === "npc") {
       sound.npcSpeak(t.npcId as NpcId, "neutral");
       setNpc(t.npcId);
+      return;
+    }
+    if (t.kind === "wild") {
+      if (t.id === "liska") {
+        sound.foxAlert();
+        if (state.fox.stage === "kamarad") dispatch({ type: "FOX_PET" });
+        else dispatch({ type: "FOX_SEEN", spooked: false });
+      } else {
+        dispatch({ type: "WILD_SEEN", which: t.id as "kane" | "jezek" | "srnka" });
+      }
       return;
     }
     if (t.kind === "animal") {
@@ -278,6 +296,12 @@ export default function App() {
         break;
       case "cedule": dispatch({ type: "PUSH_DIALOG", speaker: "Cedule", lines: CEDULE_HELP }); break;
       case "byliny": dispatch({ type: "FORAGE" }); break;
+      case "stopy": dispatch({ type: "FOX_TRACKS" }); break;
+      case "krmne_misto": dispatch({ type: "FOX_BOWL" }); break;
+      case "listi":
+        if (!state.flags.jezek_domek) dispatch({ type: "LEAF_PILE" });
+        else dispatch({ type: "PUSH_DIALOG", speaker: "Ježčí vila", lines: ["Uvnitř někdo spokojeně funí. Nerušit — nájemník spí. 🦔"] });
+        break;
       case "zahrada":
         dispatch({ type: "PUSH_DIALOG", speaker: "Zahrádka", lines: ["Permakulturní záhonky — zelí, mrkev, brambory. Ale pozor: uprchlíci z výběhů si tu rádi pochutnají!"] });
         break;
@@ -298,9 +322,23 @@ export default function App() {
     }
   };
 
+  // Viditelnost příběhových objektů (liščí stopy/miska, ježčí listí).
+  const foxStage = state.fox.stage;
+  const hiddenIds = [
+    ...(foxStage === "les" || foxStage === "krmeni" || foxStage === "duvera" || foxStage === "kamarad" ? ["fox_stopy"] : []),
+    ...(foxStage === "les" || foxStage === "stopy" || foxStage === "pozorovani" ? ["fox_misto"] : []),
+    ...(!state.flags.jezek_intro ? ["jezek_listi"] : []),
+  ];
+  const wildActive = {
+    kaneCircle: !!state.tasksDone.kane_circle,
+    kanePerch: !!state.tasksDone.kane_perch,
+    jezekOut: !!state.flags.jezek_domek && state.season === "podzim" && state.phase === "vecer",
+    srnkaOut: state.phase === "rano" && !tutorialActive(state) && state.day >= 4,
+  };
+
   return (
     <div className="game-world">
-      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo} onInteract={onInteract} onEvent={onWorldEvent} />
+      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo} foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} onInteract={onInteract} onEvent={onWorldEvent} />
       <Hud onOpen={(p) => setOverlay(p)} onDevUnlock={unlockDev} />
       <Controls />
       <DialogBox />

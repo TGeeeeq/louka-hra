@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { AnimalDef, FactCategory } from "../../game/types";
 import { ANIMALS } from "../../game/content/animals";
+import { WILD_ANIMALS } from "../../game/content/wild";
 import { FACTS } from "../../game/content/facts";
 import { QUEST_LINES } from "../../game/content/quests";
 import { AnimalSprite } from "../sprites/AnimalSprite";
@@ -70,6 +71,7 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
       )}
 
       {tab === "zvirata" && (
+        <>
         <div className="enc-grid">
           {ANIMALS.map((a) => {
             const met = state.seenAnimals.includes(a.id);
@@ -95,6 +97,27 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
             );
           })}
         </div>
+        {(() => {
+          const met = WILD_ANIMALS.filter((w) =>
+            w.id === "liska" ? state.fox.stage !== "les" : (state.wildSeen[w.id] ?? 0) > 0,
+          );
+          if (!met.length) return null;
+          return (
+            <>
+              <h4 className="enc-wild-head">🌲 Divocí sousedé</h4>
+              <div className="enc-grid">
+                {met.map((w) => (
+                  <button key={w.id} className="enc-card" onClick={() => onSelect(w)}>
+                    <AnimalSprite animal={w} size={58} />
+                    <b>{w.name}</b>
+                    <small>{w.personality}</small>
+                  </button>
+                ))}
+              </div>
+            </>
+          );
+        })()}
+        </>
       )}
 
       {tab === "vedomosti" && (
@@ -141,7 +164,7 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
           <ul>
             <li><b>Ráno</b> vypusť drůbež, nakrm a napoj všechny, sesbírej vejce.</li>
             <li><b>Poledne</b> ukliď, naštípej dřevo, rozdělej oheň, sbírej byliny a vyráběj.</li>
-            <li><b>Večer</b> dokrm a hlavně <b>zavři zvířata</b> — venku je les a liška.</li>
+            <li><b>Večer</b> dokrm a hlavně <b>zavři zvířata</b> — v klidu se spí líp a les má v noci svůj vlastní život.</li>
             <li>Prodávej výrobky, kupuj zásoby a <b>stavby</b>, co ti ulehčí práci.</li>
             <li>Hlídej spokojenost zvířat i vlastní sytost — a přežij <b>zimu</b>.</li>
           </ul>

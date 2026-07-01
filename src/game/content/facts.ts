@@ -19,6 +19,10 @@ export const FACTS: Fact[] = [
   { id: "f_mech", category: "priroda", title: "Mech drží vodu", text: "Mech v lese funguje jako houba — zadrží vodu a pouští ji pomalu. Proto les po dešti dlouho „dýchá“ vlhkost." },
   { id: "f_houby", category: "priroda", title: "Houby pod zemí", text: "To, co sbíráme, je jen plodnice. Vlastní houba je síť vláken v zemi, která propojuje stromy a pomáhá jim sdílet živiny." },
   { id: "f_srnec", category: "priroda", title: "Srnčí na kraji lesa", text: "Srnec za úsvitu a soumraku vychází na louku spásat. Když ztuhne a dívá se, neutíká hned — testuje, jestli jsi nebezpečí." },
+  { id: "f_liska_duvera", category: "priroda", title: "Liška a důvěra", text: "Divoké zvíře si nezískáš silou ani spěchem. Liška si pamatuje, kdo jí nikdy neublížil — a za trpělivost se odvděčí důvěrou. Krmí se vždy na jejím území, ne z ruky." },
+  { id: "f_kane", category: "priroda", title: "Káně — spojenec louky", text: "Káně lesní uloví stovky hrabošů ročně. Pro louku je to pomocník, ne nepřítel — a drůbeži stačí keř nebo síť, kam se před stínem shora schová." },
+  { id: "f_jezek_mleko", category: "priroda", title: "Ježek a miska mléka", text: "Ježkům se mléko nedává — neumí ho strávit a škodí jim. Nejvíc pomůže miska vody, hromada listí na zimu a zahrada bez chemie. Slimáky vyluxuje jako profík." },
+  { id: "f_srnka_krmeni", category: "priroda", title: "Srnky a pečivo", text: "Srnky se nekrmí pečivem — jejich bachor ho neumí strávit a onemocní z něj. Nejlepší dar pro srnku je klid a kus louky, kde se může v bezpečí pást." },
 
   // --- Roční období --------------------------------------------------------
   { id: "f_zima_jidlo", category: "obdobi", title: "Proč se v zimě víc krmí", text: "V mraze tělo spaluje energii hlavně na zahřátí. Zvířata proto v zimě sežerou výrazně víc než v létě — a potřebují suché závětří." },

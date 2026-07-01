@@ -10,6 +10,28 @@ export type Season = "jaro" | "leto" | "podzim" | "zima";
 /** Placená rozšíření. Vlastnictví žije mimo save (louka-dlc-v1) — reset hry nákupy nemaže. */
 export type DlcId = "senne";
 
+/**
+ * Liščí příběh přátelství. Liška nikdy nikomu neublíží — je to plachá
+ * sousedka z lesa, kterou si hráč získává trpělivostí (žádné násilí).
+ */
+export type FoxStage =
+  | "les" // zatím jen tušení — někdo v noci obchází výběhy
+  | "stopy" // ráno se objevily stopy; prozkoumej je
+  | "pozorovani" // vyhlédni ji večer u kraje lesa (pomalu!)
+  | "krmeni" // nech jí misku u lesa a získávej důvěru
+  | "duvera" // jí, i když se díváš
+  | "kamarad"; // chodí na návštěvy a dá se pohladit
+
+export interface FoxState {
+  stage: FoxStage;
+  /** Důvěra 0–100. Roste krmením, nikdy neklesá — trpělivost, ne trest. */
+  trust: number;
+  /** Kolikrát v noci obešla výběhy (drobné stopy příběhu). */
+  sightings: number;
+  /** Kolikrát dostala večerní misku. */
+  bowlCount: number;
+}
+
 export type Phase = "rano" | "poledne" | "vecer";
 
 export type Weather =
@@ -179,6 +201,10 @@ export interface GameState {
   tasksDone: Record<string, boolean>;
   knownFacts: string[];
   seenAnimals: string[];
+  /** Kolikrát hráč potkal divoké sousedy (liska, kane, jezek, srnka). */
+  wildSeen: Record<string, number>;
+  /** Liščí příběh přátelství. */
+  fox: FoxState;
 
   totalEarned: number;
   daysSurvived: number;

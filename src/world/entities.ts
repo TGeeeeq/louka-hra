@@ -27,7 +27,11 @@ export type InteractKind =
   | "byliny"
   | "brana"
   | "truhla"
-  | "zahrada";
+  | "zahrada"
+  // liščí příběh + divocí sousedé
+  | "stopy"
+  | "krmne_misto"
+  | "listi";
 
 export interface Interactable {
   id: string;
@@ -66,6 +70,11 @@ export const INTERACTABLES: Interactable[] = [
   B("truhla", "truhla", "Truhla se zásobami", 60, 41, 1, 1, false),
   // permakulturní zahrádka (pozor na uprchlíky z výběhů!)
   B("zahrada", "zahrada", "Zahrádka", 33, 12, 2, 2, false),
+  // liščí příběh: stopy a krmné místo na západním kraji lesa; ježčí listí
+  // u zahrádky. Viditelnost řídí App podle postupu příběhu (hiddenIds).
+  B("fox_stopy", "stopy", "Liščí stopy", 7, 22, 1, 1, false),
+  B("fox_misto", "krmne_misto", "Krmné místo u lesa", 6, 24, 1, 1, false),
+  B("jezek_listi", "listi", "Hromada listí", 36, 14, 1, 1, false),
 ];
 
 export const INTERACTABLE_BY_ID: Record<string, Interactable> = Object.fromEntries(

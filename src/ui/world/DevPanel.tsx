@@ -51,8 +51,8 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <small className="dev-hint">
-          Skoky časem přeskočí noční dopady (liška, veterinář, mráz) — jsou čistě na
-          testování všech ročních období.
+          Skoky časem přeskočí noční vyhodnocení (vyplašení, veterinář, mráz) — jsou
+          čistě na testování všech ročních období.
         </small>
       </div>
 
@@ -61,6 +61,9 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
         <div className="dev-btn-row">
           <button onClick={() => dispatch({ type: "DEV_RESTOCK" })}>
             📦 Doplnit zásoby + 5000 Kč
+          </button>
+          <button onClick={() => dispatch({ type: "DEV_FOX" })}>
+            🦊 Posunout liščí příběh ({state.fox.stage}, důvěra {state.fox.trust})
           </button>
         </div>
       </div>

@@ -27,7 +27,7 @@ export function Intro() {
           Přijdeš na <b>zelenou louku</b> uprostřed lesů — a Tomáš tě provede od prvního kůlu.
           Postav si přístřešek, kuchyň, dílnu, chlívky i ohrady. Zvířátka už čekají na svůj domeček!
           A až bude Louka stát, začne to hlavní: přes <b>sto zachráněných zvířat</b> nakrmit,
-          ohlídat před liškou a <b>přežít i zimu</b>. Zvládneš to?
+          večer zavřít na klidnou noc a <b>přežít i zimu</b>. Zvládneš to?
         </p>
 
         <div className="intro-people">

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { FeedGroup, Phase, Season, Weather } from "../../game/types";
+import type { FeedGroup, FoxStage, Phase, Season, Weather } from "../../game/types";
 import { MAP_H, MAP_W, TS } from "../../world/tiles";
 import {
   ANIMAL_SPAWNS,
@@ -29,12 +29,23 @@ import { sound } from "../../audio/sound";
 export type InteractTarget =
   | { kind: "building"; it: Interactable }
   | { kind: "animal"; animalId: string }
-  | { kind: "npc"; npcId: string };
+  | { kind: "npc"; npcId: string }
+  | { kind: "wild"; id: string };
 
 export type WorldEvent =
   | { type: "escape"; animalId: string; npcId: string | null; helped: boolean; line: string }
   | { type: "raid"; animalId: string }
-  | { type: "caught"; animalId: string };
+  | { type: "caught"; animalId: string }
+  | { type: "wildSpooked"; which: string }
+  | { type: "wildSeen"; which: string };
+
+/** Co se zrovna děje s divokými sousedy (odvozeno v App ze stavu hry). */
+export interface WildActive {
+  kaneCircle: boolean; // káně krouží nad drůbeží (bez úkrytu)
+  kanePerch: boolean; // káně sedí na kůlu (s úkrytem) — dá se pozorovat
+  jezekOut: boolean; // ježek šustí u zahrádky (podzimní večery)
+  srnkaOut: boolean; // srnka stojí za úsvitu na kraji louky
+}
 
 interface Props {
   season: Season;
@@ -53,8 +64,36 @@ interface Props {
   tutorial: boolean;
   /** Developerské turbo — rychlejší pohyb po mapě. */
   turbo?: boolean;
+  /** Postup liščího příběhu — řídí, kdy a kde se liška ukazuje. */
+  foxStage: FoxStage;
+  /** Aktivní divocí sousedé (káně, ježek, srnka). */
+  wildActive: WildActive;
+  /** Příběhové objekty, které se zatím nemají ukazovat (stopy, miska, listí). */
+  hiddenIds: string[];
   onInteract: (t: InteractTarget) => void;
   onEvent: (e: WorldEvent) => void;
+}
+
+// Divoký soused ve světě — jednoduché chování: postává/popochází u svého
+// místa, a když se hráč přižene moc rychle, uteče do lesa (ponaučení).
+interface WildMob {
+  id: string; // "liska" | "kane" | "jezek" | "srnka"
+  x: number;
+  y: number;
+  hx: number;
+  hy: number;
+  radius: number;
+  tx: number;
+  ty: number;
+  rest: number;
+  flip: boolean;
+  bob: number;
+  mode: "idle" | "flee" | "gone";
+  fleeTo: { x: number; y: number };
+  skittish: boolean; // uteče před rychlým přiblížením
+  interactable: boolean;
+  eventOnFlee?: WorldEvent;
+  eventOnce?: boolean; // event už odeslán
 }
 
 interface Mob {
@@ -123,15 +162,18 @@ const BUILDING_VERB: Record<string, string> = {
   brana: "Lesní brána",
   truhla: "Otevřít truhlu",
   zahrada: "Zahrádka",
+  stopy: "Prozkoumat stopy",
+  krmne_misto: "Nechat lišce misku",
+  listi: "Hromada listí",
 };
 
-export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, onInteract, onEvent }: Props) {
+export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, onInteract, onEvent }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // měnící se props čteme přes ref, ať smyčku nemusíme restartovat
-  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, onInteract, onEvent });
-  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, onInteract, onEvent };
+  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, onInteract, onEvent });
+  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, onInteract, onEvent };
 
   // Kolize staveb podle toho, co už stojí (blueprint je průchozí). Když hráč
   // dostavěl stavbu „zevnitř" plánu nebo těsně u jejího boku, vysuneme ho ven
@@ -150,6 +192,9 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
   const player = useRef({ x: PLAYER_START.x, y: PLAYER_START.y, dir: "down", moving: false, anim: 0, flip: false });
   const mobs = useRef<Mob[]>([]);
   const npcs = useRef<NpcAgent[]>([]);
+  // Divocí sousedé — přestaví se, kdykoli se změní podmínky (fáze, příběh).
+  const wilds = useRef<WildMob[]>([]);
+  const wildKey = useRef("");
   const npcPhase = useRef<Phase>(phase);
   const cam = useRef({ x: 0, y: 0 });
   const stepAcc = useRef(0);
@@ -209,7 +254,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
   }
 
   useEffect(() => {
-    preloadSprites(ANIMALS.map((a) => a.id), PEOPLE.map((p) => p.id));
+    preloadSprites([...ANIMALS.map((a) => a.id), "liska", "kane", "jezek", "srnka"], PEOPLE.map((p) => p.id));
 
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
@@ -477,6 +522,100 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
         }
       }
 
+      // --- divocí sousedé: liška, káně, ježek, srnka -----------------------
+      if (!P.paused) {
+        // přestavět seznam, když se změní podmínky (fáze / postup příběhu)
+        const key = `${P.phase}|${P.foxStage}|${P.wildActive.kanePerch}|${P.wildActive.jezekOut}|${P.wildActive.srnkaOut}|${P.tutorial}`;
+        if (key !== wildKey.current) {
+          wildKey.current = key;
+          const list: WildMob[] = [];
+          const mk = (id: string, htx: number, hty: number, radius: number, opts: Partial<WildMob>): WildMob => ({
+            id,
+            x: (htx + 0.5) * TS,
+            y: (hty + 0.5) * TS,
+            hx: (htx + 0.5) * TS,
+            hy: (hty + 0.5) * TS,
+            radius: radius * TS,
+            tx: (htx + 0.5) * TS,
+            ty: (hty + 0.5) * TS,
+            rest: 1,
+            flip: false,
+            bob: Math.random() * 6,
+            mode: "idle",
+            fleeTo: { x: 2.5 * TS, y: 26 * TS },
+            skittish: false,
+            interactable: true,
+            ...opts,
+          });
+          if (!P.tutorial) {
+            // liška: večer číhá u kraje lesa (dokud není kamarádka), ráno
+            // jako kamarádka cupitá u pěšiny a dá se pohladit
+            if (P.phase === "vecer" && (P.foxStage === "pozorovani" || P.foxStage === "krmeni" || P.foxStage === "duvera")) {
+              list.push(mk("liska", 6.5, 23.5, 1.4, {
+                skittish: true,
+                eventOnFlee: { type: "wildSpooked", which: "liska" },
+              }));
+            } else if (P.phase === "rano" && P.foxStage === "kamarad") {
+              list.push(mk("liska", 22.5, 21.5, 2, {}));
+            }
+            // srnka: za úsvitu na východním kraji louky; před hráčem prchá,
+            // ale i letmé setkání se počítá (wildSeen)
+            if (P.wildActive.srnkaOut) {
+              list.push(mk("srnka", 50.5, 17.5, 1.6, {
+                skittish: true,
+                fleeTo: { x: 62.5 * TS, y: 8.5 * TS },
+                interactable: false,
+                eventOnFlee: { type: "wildSeen", which: "srnka" },
+              }));
+            }
+            // ježek: podzimní večery u zahrádky (když má domek)
+            if (P.wildActive.jezekOut) list.push(mk("jezek", 34.5, 14.8, 1.1, {}));
+            // káně: s úkrytem sedí na kůlu u drůbežího výběhu
+            if (P.wildActive.kanePerch && P.phase === "poledne") list.push(mk("kane", 17.5, 10.2, 0.2, {}));
+          }
+          wilds.current = list;
+        }
+        for (const wm of wilds.current) {
+          if (wm.mode === "gone") continue;
+          const pd = Math.hypot(p.x - wm.x, p.y - wm.y);
+          // plaché zvíře: rychlé přiblížení = útěk do lesa (+ ponaučení)
+          if (wm.mode === "idle" && wm.skittish && pd < TS * 2.4 && p.moving) {
+            wm.mode = "flee";
+            wm.tx = wm.fleeTo.x;
+            wm.ty = wm.fleeTo.y;
+            if (wm.eventOnFlee && !wm.eventOnce) {
+              wm.eventOnce = true;
+              propsRef.current.onEvent(wm.eventOnFlee);
+            }
+          }
+          // srnka: i klidné setkání zblízka se počítá jako „potkání"
+          if (wm.id === "srnka" && wm.mode === "idle" && pd < TS * 4 && !wm.eventOnce) {
+            wm.eventOnce = true;
+            propsRef.current.onEvent({ type: "wildSeen", which: "srnka" });
+          }
+          wm.rest -= dt;
+          if (wm.rest <= 0 && wm.mode === "idle") {
+            const a = Math.random() * Math.PI * 2;
+            const r = Math.random() * wm.radius;
+            wm.tx = wm.hx + Math.cos(a) * r;
+            wm.ty = wm.hy + Math.sin(a) * r;
+            wm.rest = 1.5 + Math.random() * 3;
+          }
+          const dx = wm.tx - wm.x;
+          const dy = wm.ty - wm.y;
+          const d = Math.hypot(dx, dy);
+          if (d > 1.5) {
+            const sp = (wm.mode === "flee" ? 120 : 20) * dt;
+            const nx = wm.x + (dx / d) * sp;
+            const ny = wm.y + (dy / d) * sp;
+            if (wm.mode === "flee" || !isBlocked(nx, ny)) { wm.x = nx; wm.y = ny; wm.flip = dx < 0; }
+            wm.bob += dt * 8;
+          } else if (wm.mode === "flee") {
+            wm.mode = "gone";
+          }
+        }
+      }
+
       // --- NPC: žijí podle rozvrhu, pomáhají s útěky a reagují na svět ---
       if (!P.paused) {
         // při změně fáze přejdou na nové stanoviště (kromě těch, co honí zvíře)
@@ -574,12 +713,18 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       nearest = null;
       let bestD = INTERACT_RANGE;
       for (const it of INTERACTABLES) {
+        if (P.hiddenIds.includes(it.id)) continue; // příběhem zatím skryté
         const bs = buildStateOf(it);
         if (!bs.isBuilt && !bs.isTarget) continue; // skrytý plán se nedá zaměřit
         const ix = (it.tx + it.fw / 2) * TS;
         const iy = (it.ty + it.fh) * TS;
         const d = Math.hypot(ix - p.x, iy - p.y);
         if (d < bestD) { bestD = d; nearest = { kind: "building", it }; }
+      }
+      for (const wm of wilds.current) {
+        if (wm.mode !== "idle" || !wm.interactable) continue;
+        const d = Math.hypot(wm.x - p.x, wm.y - p.y);
+        if (d < bestD) { bestD = d; nearest = { kind: "wild", id: wm.id }; }
       }
       for (const m of mobs.current) {
         if (m.waiting) continue; // čekající zvířata jen dekorace, nezaměřovat
@@ -609,6 +754,14 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       let actionLabel: string | null = null;
       if (nearest && !P.paused) {
         if (nearest.kind === "npc") actionLabel = "Promluvit — " + (PERSON_BY_ID[nearest.npcId]?.name ?? "");
+        else if (nearest.kind === "wild") {
+          actionLabel =
+            nearest.id === "liska"
+              ? P.foxStage === "kamarad" ? "Pohladit lišku 🦊" : "Pozorovat lišku (potichu!)"
+              : nearest.id === "kane" ? "Pozorovat káně"
+              : nearest.id === "jezek" ? "Pozdravit ježka"
+              : "Pozorovat";
+        }
         else if (nearest.kind === "animal") {
           const id = nearest.animalId;
           const m = mobs.current.find((mm) => mm.id === id);
@@ -636,6 +789,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       const items: Item[] = [];
 
       for (const it of INTERACTABLES) {
+        if (P.hiddenIds.includes(it.id)) continue; // příběhem zatím skryté
         const bs = buildStateOf(it);
         if (!bs.isBuilt && !bs.isTarget) continue; // skrytý plán se nekreslí (zelená louka)
         const baseY = (it.ty + it.fh) * TS;
@@ -650,6 +804,11 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
           draw: () => drawMob(ctx, m, camX, camY, near, now),
         });
       }
+      for (const wm of wilds.current) {
+        if (wm.mode === "gone") continue;
+        const near = nearest?.kind === "wild" && nearest.id === wm.id;
+        items.push({ y: wm.y, draw: () => drawWild(ctx, wm, camX, camY, near, now) });
+      }
       for (const a of npcs.current) {
         const near = nearest?.kind === "npc" && nearest.npcId === a.id;
         items.push({ y: a.y, draw: () => drawNpc(ctx, a, camX, camY, near, now) });
@@ -662,6 +821,9 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       items.sort((a, b) => a.y - b.y);
       for (const it of items) it.draw();
 
+      // káně krouží nad drůbežím výběhem (jen stín a silueta — nikdy neútočí)
+      if (P.wildActive.kaneCircle && P.phase === "poledne") drawKaneCircle(ctx, camX, camY, now);
+
       drawWaterShimmer(ctx, camX, camY, viewW, viewH, now);
       // sluneční světlo (sjednocuje směr osvětlení) → tint fáze/období
       drawSunlight(ctx, viewW, viewH, P.phase, P.season);
@@ -672,7 +834,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       // kontextová akční nápověda
       if (actionLabel) drawActionChip(ctx, viewW, viewH, actionLabel);
       // mini-mapa (pod horní HUD lištou — na mobilu na výšku ji nepřekryje)
-      drawMinimap(ctx, viewW, topInset.current, p.x, p.y, nearest, P.built, P.tutorialTargets);
+      drawMinimap(ctx, viewW, topInset.current, p.x, p.y, nearest, P.built, P.tutorialTargets, P.hiddenIds);
 
       raf = requestAnimationFrame(loop);
     };
@@ -778,6 +940,77 @@ function drawMob(
     ctx.textAlign = "center";
     ctx.fillText("💬", sx, sy - size - 4 + b);
   }
+}
+
+// Divoký soused — kreslí se jako zvíře; plachý navíc dostane ikonku „ticho".
+function drawWild(
+  ctx: CanvasRenderingContext2D,
+  wm: WildMob,
+  camX: number,
+  camY: number,
+  near: boolean,
+  time: number,
+) {
+  const img = animalImg(wm.id);
+  const sx = wm.x - camX;
+  const sy = wm.y - camY;
+  const scale = wm.id === "srnka" ? 1.35 : wm.id === "jezek" ? 0.45 : wm.id === "kane" ? 0.8 : 1.0;
+  const size = TS * 0.95 * scale;
+  const bobN = Math.sin(wm.bob);
+  softShadow(ctx, sx, sy, size * 0.34, Math.max(0, bobN));
+  if (near) {
+    ctx.save();
+    ctx.shadowColor = "rgba(240,232,146,0.95)";
+    ctx.shadowBlur = 16;
+  }
+  if (ready(img)) {
+    ctx.save();
+    ctx.translate(sx, sy - size * 0.52 + bobN * 1.5);
+    if (wm.flip) ctx.scale(-1, 1);
+    ctx.drawImage(img, -size / 2, -size / 2, size, size);
+    ctx.restore();
+  }
+  if (near) ctx.restore();
+  if (near) {
+    const b = Math.sin(time * 0.006) * 3;
+    ctx.font = `20px ${EMOJI_FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(wm.skittish ? "🤫" : "💬", sx, sy - size - 4 + b);
+  }
+}
+
+// Kroužící káně nad drůbežím výběhem: stín na zemi + silueta nad ním.
+function drawKaneCircle(ctx: CanvasRenderingContext2D, camX: number, camY: number, time: number) {
+  const cx = 14 * TS - camX;
+  const cy = 12 * TS - camY;
+  const a = time * 0.0009;
+  const r = TS * 2.6;
+  const bx = cx + Math.cos(a) * r;
+  const by = cy + Math.sin(a) * r * 0.6;
+  // stín klouže po zemi
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  ctx.fillStyle = "#1a1f1c";
+  ctx.beginPath();
+  ctx.ellipse(bx, by + 14, 13, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  // silueta s roztaženými křídly (mírně nad zemí, nezávislá na Y-sortu)
+  ctx.save();
+  ctx.translate(bx, by - TS * 1.6);
+  ctx.rotate(Math.cos(a) * 0.15);
+  ctx.fillStyle = "#4a3a28";
+  ctx.beginPath();
+  const flap = Math.sin(time * 0.004) * 3;
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(-16, -6 - flap, -26, -2 - flap);
+  ctx.quadraticCurveTo(-14, 2, -4, 4);
+  ctx.quadraticCurveTo(0, 8, 4, 4);
+  ctx.quadraticCurveTo(14, 2, 26, -2 - flap);
+  ctx.quadraticCurveTo(16, -6 - flap, 0, 0);
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawNpc(
@@ -924,6 +1157,7 @@ function drawMinimap(
   nearest: InteractTarget | null,
   built: string[],
   tutorialTargets: string[],
+  hiddenIds: string[],
 ) {
   const base = getMinimapBase();
   const mw = Math.min(160, Math.max(viewW * 0.3, 116));
@@ -948,6 +1182,7 @@ function drawMinimap(
   const tx = mw / base.width;
   const ty = mh / base.height;
   for (const it of INTERACTABLES) {
+    if (hiddenIds.includes(it.id)) continue; // příběhem zatím skryté
     const gated = TUTORIAL_BUILDING_IDS.includes(it.id);
     const isTarget = !built.includes(it.id) && tutorialTargets.includes(it.id);
     if (gated && !built.includes(it.id) && !isTarget) continue; // skrytý plán

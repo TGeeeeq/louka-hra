@@ -40,7 +40,7 @@ export const PEOPLE: PersonDef[] = [
       "Ráno nejdřív vypusť a nakrm — zvířata na tebe čekají. Úklid počká.",
       "Dřevo nasekej do zásoby. V zimě ho spotřebuješ víc, než čekáš.",
       "Dochází ti energie? Najez se dřív, než padneš. Práce nikam neuteče.",
-      "Na noc vždy zavři výběhy. Liška si počká na první tvou chybu.",
+      "Na noc vždy zavři výběhy. Zvířata pak spí klidně — a liška obejde dvůr jen ze zvědavosti.",
       "V zimě je všechno těžší — nachystej krmení i dřevo už na podzim.",
     ],
   },

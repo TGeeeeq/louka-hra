@@ -354,6 +354,7 @@ button:disabled { cursor: not-allowed; }
 .enc-card b { font-size: 0.8rem; }
 .enc-card small { font-size: 0.68rem; color: var(--muted); line-height: 1.25; }
 .enc-portrait { position: relative; display: inline-block; }
+.enc-wild-head { margin: 12px 0 6px; color: var(--moss-deep); }
 /* Foto-odznak — odemkne se, až zvíře potkáš naživo. */
 .enc-photo {
   position: absolute; right: -8px; bottom: -4px; width: 30px; height: 30px;
