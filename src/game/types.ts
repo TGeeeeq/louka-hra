@@ -7,6 +7,9 @@
 
 export type Season = "jaro" | "leto" | "podzim" | "zima";
 
+/** Placená rozšíření. Vlastnictví žije mimo save (louka-dlc-v1) — reset hry nákupy nemaže. */
+export type DlcId = "senne";
+
 export type Phase = "rano" | "poledne" | "vecer";
 
 export type Weather =
@@ -182,8 +185,15 @@ export interface GameState {
   gameOver: string | null;
 
   // Questy a dialogy
-  questLine: number; // index v MAIN_QUESTS
+  /** @deprecated Zrcadlo `questProgress.main` — drženo kvůli starým uložením. */
+  questLine: number;
+  /** Postup v každé questové lince (id linky → index dalšího questu). */
+  questProgress: Record<string, number>;
   questCompleted: string[];
+  /** Vlastněná DLC — zrcadlo entitlements (zdroj pravdy je mimo save). */
+  dlcOwned: DlcId[];
+  /** Verze save formátu pro migrace. */
+  saveVersion: number;
   flags: Record<string, boolean>; // např. pet_flicek, made_mast, sold
   dialog: { speaker?: string; lines: string[] } | null;
 

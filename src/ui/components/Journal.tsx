@@ -2,11 +2,12 @@ import { useState } from "react";
 import type { AnimalDef, FactCategory } from "../../game/types";
 import { ANIMALS } from "../../game/content/animals";
 import { FACTS } from "../../game/content/facts";
+import { QUEST_LINES } from "../../game/content/quests";
 import { AnimalSprite } from "../sprites/AnimalSprite";
 import { useGame } from "../store";
 import { photoUrl } from "../photo";
 
-type Tab = "zvirata" | "vedomosti" | "olouce";
+type Tab = "zvirata" | "ukoly" | "vedomosti" | "olouce";
 
 const CAT_LABEL: Record<FactCategory, string> = {
   zvirata: "🐾 Zvířata",
@@ -27,9 +28,46 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
     <div className="journal">
       <div className="subtabs">
         <button className={tab === "zvirata" ? "on" : ""} onClick={() => setTab("zvirata")}>🐾 Zvířata</button>
+        <button className={tab === "ukoly" ? "on" : ""} onClick={() => setTab("ukoly")}>📋 Úkoly</button>
         <button className={tab === "vedomosti" ? "on" : ""} onClick={() => setTab("vedomosti")}>📖 Vědomosti</button>
         <button className={tab === "olouce" ? "on" : ""} onClick={() => setTab("olouce")}>🌿 O Louce</button>
       </div>
+
+      {tab === "ukoly" && (
+        <div className="facts">
+          {QUEST_LINES.filter(
+            (l) => (!l.dlc || state.dlcOwned.includes(l.dlc)) && l.unlocked(state),
+          ).map((l) => {
+            const idx = state.questProgress[l.id] ?? 0;
+            const current = l.quests[idx];
+            return (
+              <div key={l.id} className="fact-cat">
+                <h4>
+                  {l.icon} {l.title}{" "}
+                  <small className="quest-progress">
+                    {Math.min(idx, l.quests.length)}/{l.quests.length}
+                  </small>
+                </h4>
+                {l.quests.map((q, i) => (
+                  <div key={q.id} className={`fact-row ${i < idx ? "" : i === idx ? "" : "locked"}`}>
+                    {i < idx ? (
+                      <b>✓ {q.title}</b>
+                    ) : i === idx ? (
+                      <>
+                        <b>▸ {q.title}</b>
+                        <p>{q.hint}</p>
+                      </>
+                    ) : (
+                      <b className="lock">🔒 …</b>
+                    )}
+                  </div>
+                ))}
+                {!current && <p className="panel-lead">Linka dokončená! 🎉</p>}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {tab === "zvirata" && (
         <div className="enc-grid">

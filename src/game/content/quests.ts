@@ -1,4 +1,4 @@
-import type { FeedGroup, GameState } from "../types";
+import type { DlcId, FeedGroup, GameState } from "../types";
 import { invCount } from "../engine/util";
 
 export interface Quest {
@@ -9,6 +9,21 @@ export interface Quest {
   reward?: { money?: number; energy?: number };
   speaker?: string;
   onComplete: string;
+}
+
+/**
+ * Questová linka — hlavní příběh + vedlejší (liška, divocí sousedé, DLC mise).
+ * Každá linka běží nezávisle; postup drží `state.questProgress[line.id]`.
+ */
+export interface QuestLine {
+  id: string;
+  icon: string;
+  title: string;
+  /** Linka patří k DLC — bez vlastnictví se neukazuje ani nepostupuje. */
+  dlc?: DlcId;
+  /** Kdy se linka hráči objeví (po tutoriálu, v létě…). */
+  unlocked: (s: GameState) => boolean;
+  quests: Quest[];
 }
 
 const allFed = (s: GameState) =>
@@ -92,3 +107,13 @@ export const MAIN_QUESTS: Quest[] = [
       "Týden na Louce máš za sebou! Zvířata jsou živá, ty taky — a to není málo. Klobouk dolů. 🎉",
   },
 ];
+
+// Všechny linky hry. MAIN_QUESTS zůstávají beze změny pořadí (kompatibilita
+// starých uložení); nové questy patří vždy do nové linky, nikdy doprostřed.
+export const QUEST_LINES: QuestLine[] = [
+  { id: "main", icon: "📋", title: "Život na Louce", unlocked: () => true, quests: MAIN_QUESTS },
+];
+
+export const QUEST_LINE_BY_ID: Record<string, QuestLine> = Object.fromEntries(
+  QUEST_LINES.map((l) => [l.id, l]),
+);

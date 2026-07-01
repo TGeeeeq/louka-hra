@@ -9,7 +9,7 @@ import {
   WEATHER_ICON,
 } from "../labels";
 import { weatherName } from "../../game/engine/reducer";
-import { MAIN_QUESTS } from "../../game/content/quests";
+import { MAIN_QUESTS, QUEST_LINES } from "../../game/content/quests";
 import { CHAPTER_COUNT, currentStep, tutorialActive } from "../../game/content/tutorial";
 import { ITEM_BY_ID } from "../../game/content/items";
 import { invCount } from "../../game/engine/util";
@@ -48,9 +48,19 @@ export function Hud({
     }
   };
 
-  const quest = MAIN_QUESTS[state.questLine];
+  const quest = MAIN_QUESTS[state.questProgress.main ?? state.questLine];
   const tut = tutorialActive(state);
   const step = currentStep(state);
+
+  // Nejrozdělanější vedlejší linka — ukáže se kompaktně pod hlavním úkolem.
+  const sideLine = QUEST_LINES.filter(
+    (l) =>
+      l.id !== "main" &&
+      (!l.dlc || state.dlcOwned.includes(l.dlc)) &&
+      l.unlocked(state) &&
+      (state.questProgress[l.id] ?? 0) < l.quests.length,
+  )[0];
+  const sideQuest = sideLine?.quests[state.questProgress[sideLine.id] ?? 0];
 
   const phaseBtn =
     state.phase === "vecer"
@@ -92,7 +102,7 @@ export function Hud({
         </div>
       ) : quest ? (
         <div className="hud-quest">
-          <span className="quest-label">📋 Úkol {state.questLine + 1}/{MAIN_QUESTS.length}</span>
+          <span className="quest-label">📋 Úkol {(state.questProgress.main ?? 0) + 1}/{MAIN_QUESTS.length}</span>
           <b>{quest.title}</b>
           <small>{quest.hint}</small>
         </div>
@@ -100,6 +110,13 @@ export function Hud({
         <div className="hud-quest done">
           <b>🎉 Všechny úkoly hotové!</b>
           <small>Teď je Louka jen tvoje — hospodař, jak umíš.</small>
+        </div>
+      )}
+      {!tut && sideQuest && (
+        <div className="hud-quest side">
+          <span className="quest-label">{sideLine.icon} {sideLine.title}</span>
+          <b>{sideQuest.title}</b>
+          <small>{sideQuest.hint}</small>
         </div>
       )}
       </div>

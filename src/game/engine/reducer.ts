@@ -35,7 +35,7 @@ import {
   WINTER_FACTS,
 } from "../content/facts";
 import { initialState } from "./state";
-import { MAIN_QUESTS } from "../content/quests";
+import { QUEST_LINES } from "../content/quests";
 import { TUTORIAL_STEPS, tutorialActive } from "../content/tutorial";
 import {
   addLog,
@@ -192,19 +192,27 @@ export function reducer(state: GameState, action: Action): GameState {
 }
 
 function advanceQuests(s: GameState) {
-  while (s.questLine < MAIN_QUESTS.length) {
-    const q = MAIN_QUESTS[s.questLine];
-    if (!q.done(s)) break;
-    s.questCompleted.push(q.id);
-    s.questLine += 1;
-    if (q.reward?.money) {
-      s.money += q.reward.money;
-      s.totalEarned += q.reward.money;
+  for (const line of QUEST_LINES) {
+    if (line.dlc && !s.dlcOwned.includes(line.dlc)) continue;
+    if (!line.unlocked(s)) continue;
+    let idx = s.questProgress[line.id] ?? 0;
+    while (idx < line.quests.length) {
+      const q = line.quests[idx];
+      if (!q.done(s)) break;
+      s.questCompleted.push(q.id);
+      idx += 1;
+      s.questProgress[line.id] = idx;
+      if (q.reward?.money) {
+        s.money += q.reward.money;
+        s.totalEarned += q.reward.money;
+      }
+      if (q.reward?.energy) s.energy = clamp(s.energy + q.reward.energy, 0, s.maxEnergy);
+      pushDialog(s, q.speaker ?? "Louka", [q.onComplete]);
+      addLog(s, `✓ Splněn úkol: ${q.title}`, "good");
     }
-    if (q.reward?.energy) s.energy = clamp(s.energy + q.reward.energy, 0, s.maxEnergy);
-    pushDialog(s, q.speaker ?? "Louka", [q.onComplete]);
-    addLog(s, `✓ Splněn úkol: ${q.title}`, "good");
   }
+  // Zrcadlo pro stará uložení a stávající UI.
+  s.questLine = s.questProgress.main ?? 0;
 }
 
 function core(state: GameState, action: Action): GameState {
@@ -618,6 +626,7 @@ function core(state: GameState, action: Action): GameState {
         s.maxEnergy = SEASON_ENERGY[s.season];
         s.energy = SEASON_ENERGY[s.season];
         s.questLine = 0;
+        s.questProgress.main = 0;
         s.flags.tutorial_done = true;
         flash(s, "Louka je postavená! Teď začíná to hlavní — přežít. 🌱", "good");
       }

@@ -542,6 +542,12 @@ button:disabled { cursor: not-allowed; }
 .hud-quest b { font-family: var(--font-serif); color: var(--moss-deep); font-size: 0.96rem; }
 .hud-quest small { font-size: 0.78rem; color: var(--text); }
 .hud-quest.done { border-left-color: var(--good); }
+/* Vedlejší linka (liška, divocí sousedé, DLC) — menší a zelená. */
+.hud-quest.side { border-left-color: var(--moss-soft); padding: 5px 12px; }
+.hud-quest.side b { font-size: 0.84rem; }
+.hud-quest.side small { font-size: 0.7rem; }
+.hud-quest.side .quest-label { color: var(--moss-soft); }
+.quest-progress { font-weight: 500; color: var(--muted); }
 
 /* --- Phase / sleep tlačítko --- */
 .phase-fab {
