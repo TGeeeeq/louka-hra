@@ -4,6 +4,7 @@ import { ANIMALS } from "../../game/content/animals";
 import { FACTS } from "../../game/content/facts";
 import { AnimalSprite } from "../sprites/AnimalSprite";
 import { useGame } from "../store";
+import { photoUrl } from "../photo";
 
 type Tab = "zvirata" | "vedomosti" | "olouce";
 
@@ -32,13 +33,29 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
 
       {tab === "zvirata" && (
         <div className="enc-grid">
-          {ANIMALS.map((a) => (
-            <button key={a.id} className="enc-card" onClick={() => onSelect(a)}>
-              <AnimalSprite animal={a} size={58} />
-              <b>{a.name}</b>
-              <small>{a.personality}</small>
-            </button>
-          ))}
+          {ANIMALS.map((a) => {
+            const met = state.seenAnimals.includes(a.id);
+            const photo = met ? photoUrl(a) : null;
+            return (
+              <button key={a.id} className="enc-card" onClick={() => onSelect(a)}>
+                <span className="enc-portrait">
+                  <AnimalSprite animal={a} size={58} />
+                  {photo && (
+                    <img
+                      className="enc-photo"
+                      src={photo}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      onError={(e) => e.currentTarget.remove()}
+                    />
+                  )}
+                </span>
+                <b>{a.name}</b>
+                <small>{a.personality}</small>
+              </button>
+            );
+          })}
         </div>
       )}
 

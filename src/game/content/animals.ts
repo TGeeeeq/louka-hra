@@ -308,6 +308,13 @@ export const ANIMALS: AnimalDef[] = [
   },
 ];
 
+// Skutečné fotky z nechmerust.org — public/animals/<id>.webp (stahuje `npm run photos`).
+// List fotku nemá: pohřešuje se a ve hře zůstává jako vzpomínka.
+const WITHOUT_PHOTO = new Set(["list"]);
+for (const a of ANIMALS) {
+  if (!WITHOUT_PHOTO.has(a.id)) a.photo = `${a.id}.webp`;
+}
+
 export const ANIMAL_BY_ID: Record<string, AnimalDef> = Object.fromEntries(
   ANIMALS.map((a) => [a.id, a]),
 );

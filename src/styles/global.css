@@ -353,6 +353,12 @@ button:disabled { cursor: not-allowed; }
 .enc-card:hover { background: #fff; transform: translateY(-2px); box-shadow: var(--shadow-sm); }
 .enc-card b { font-size: 0.8rem; }
 .enc-card small { font-size: 0.68rem; color: var(--muted); line-height: 1.25; }
+.enc-portrait { position: relative; display: inline-block; }
+/* Foto-odznak — odemkne se, až zvíře potkáš naživo. */
+.enc-photo {
+  position: absolute; right: -8px; bottom: -4px; width: 30px; height: 30px;
+  object-fit: cover; border-radius: 999px; border: 2px solid #fff; box-shadow: var(--shadow-sm);
+}
 
 .facts { max-height: 60vh; overflow-y: auto; }
 .fact-cat h4 { margin: 12px 0 6px; }
@@ -399,8 +405,21 @@ button:disabled { cursor: not-allowed; }
 }
 .modal-close:hover { background: rgba(0,0,0,0.06); color: var(--text); }
 
-.animal-modal-top { display: flex; gap: 14px; align-items: center; }
+.animal-modal-top { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .animal-portrait { background: #fff; border-radius: var(--r); padding: 6px; box-shadow: var(--shadow-sm); }
+
+/* Skutečná fotka z Louky — „polaroid" vedle kresleného portrétu. */
+.animal-photo {
+  margin: 0; background: #fff; padding: 6px 6px 3px; border-radius: 6px;
+  border: 1px solid var(--border); box-shadow: var(--shadow-sm);
+  transform: rotate(2.5deg); max-width: 132px;
+}
+.animal-photo img {
+  display: block; width: 120px; height: 96px; object-fit: cover; border-radius: 3px;
+}
+.photo-credit {
+  display: block; font-size: 0.58rem; color: var(--muted); text-align: center; padding-top: 2px;
+}
 .animal-headings h2 { font-size: 1.5rem; }
 .species-tag, .group-tag, .missing-tag {
   display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 2px 9px;
