@@ -8,6 +8,7 @@ import {
   PLAYER_START,
   isBlocked,
   setConstructed,
+  unstuckFromBuildings,
   type Bounds,
   type Interactable,
 } from "../../world/entities";
@@ -130,8 +131,19 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
   const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, onInteract, onEvent });
   propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, onInteract, onEvent };
 
-  // Kolize staveb podle toho, co už stojí (blueprint je průchozí).
-  useEffect(() => { setConstructed(built); }, [built]);
+  // Kolize staveb podle toho, co už stojí (blueprint je průchozí). Když hráč
+  // dostavěl stavbu „zevnitř" plánu nebo těsně u jejího boku, vysuneme ho ven
+  // před ni, ať nezůstane zaseknutý ani schovaný za novou stavbou.
+  const builtPrev = useRef<string[]>(built);
+  useEffect(() => {
+    setConstructed(built);
+    const added = built.filter((id) => !builtPrev.current.includes(id));
+    builtPrev.current = built;
+    if (added.length) {
+      const spot = unstuckFromBuildings(player.current.x, player.current.y, added);
+      if (spot) { player.current.x = spot.x; player.current.y = spot.y; }
+    }
+  }, [built]);
 
   const player = useRef({ x: PLAYER_START.x, y: PLAYER_START.y, dir: "down", moving: false, anim: 0, flip: false });
   const mobs = useRef<Mob[]>([]);

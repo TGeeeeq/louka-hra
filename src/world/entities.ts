@@ -146,6 +146,53 @@ export function isTileBlocked(tx: number, ty: number): boolean {
   return solidBuildingTiles.has(`${tx},${ty}`);
 }
 
+/**
+ * Vysune postavu ven, pokud po dostavění stavby (`addedIds`) zůstala stát tak,
+ * že ji stavba schová. Plán stavby je průchozí, takže hráč může stavět i
+ * „zevnitř" nebo těsně u boku — po dostavění pak buď:
+ *   a) uvázne v solidním půdorysu (`isBlocked`), nebo
+ *   b) je schovaný ZA stavbou, protože stojí nad její spodní hranou (baseY) a
+ *      překrývá se s ní vodorovně (kreslení podle baseY = malířův algoritmus).
+ * Obojí platí pro VŠECHNY stavby tutoriálu (široké i úzké — u úzkých sahá
+ * dosah interakce i na průchozí dlaždici vedle půdorysu). Hráče přesuneme na
+ * první volnou dlaždici na jih od baseY, kde stojí PŘED stavbou a je vidět.
+ * Vrací novou pozici (world px), nebo null, když není třeba nic dělat.
+ */
+export function unstuckFromBuildings(
+  px: number,
+  py: number,
+  addedIds: readonly string[],
+): { x: number; y: number } | null {
+  for (const id of addedIds) {
+    const it = INTERACTABLE_BY_ID[id];
+    if (!it) continue;
+    const baseY = (it.ty + it.fh) * TS;
+    const depth = Math.max(12, it.fw * TS * 0.26); // 3D bok stavby (dozadu-vpravo)
+    const half = TS * 0.85; // půlka šířky sprite postavy (kryje i okraj)
+    const left = it.tx * TS - half;
+    const right = (it.tx + it.fw) * TS + depth + half;
+    const occluded = py < baseY && px >= left && px <= right; // hráč je ZA stavbou
+    if (!occluded && !isBlocked(px, py)) continue; // venku a vidět → nech být
+    const tx = Math.floor(px / TS);
+    // dolů (na jih) na první volnou dlaždici, jejíž střed je pod baseY → hráč
+    // se kreslí PŘED stavbou (dveře i mýtina staveb jsou vždy na jihu)
+    const fromY = Math.max(it.ty + it.fh, Math.floor(py / TS) + 1);
+    for (let y = fromY; y < MAP.h - 1; y++)
+      if (!isTileBlocked(tx, y)) return { x: (tx + 0.5) * TS, y: (y + 0.5) * TS };
+    // pojistka: spirála se sklonem k jihu, jen dlaždice pod baseY (viditelné)
+    const sty = Math.floor(py / TS);
+    for (let r = 1; r < 10; r++)
+      for (let dy = r; dy >= -r; dy--)
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+          const ny = sty + dy;
+          if ((ny + 0.5) * TS >= baseY && !isTileBlocked(tx + dx, ny))
+            return { x: (tx + dx + 0.5) * TS, y: (ny + 0.5) * TS };
+        }
+  }
+  return null;
+}
+
 // --- Rozmístění zvířat po zónách ----------------------------------------
 export interface Bounds { x0: number; y0: number; x1: number; y1: number }
 export interface AnimalSpawn {
