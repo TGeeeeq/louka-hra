@@ -7,6 +7,8 @@ import {
   INTERACTABLES,
   PLAYER_START,
   isBlocked,
+  isBoxBlocked,
+  nearestFreeSpot,
   setConstructed,
   unstuckFromBuildings,
   type Bounds,
@@ -341,16 +343,9 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
     // Malý kruhový-ish kolizní rámeček u nohou — průchozí mezery i přiblížení
     // ke stavbám jsou plynulé (keře už nejsou solid). Pohyb je po osách
     // oddělený výš (klouže podél zdí), takže rohy nezasekávají.
-    const canMoveTo = (nx: number, ny: number) => {
-      const hw = 8;
-      return (
-        !isBlocked(nx - hw, ny) &&
-        !isBlocked(nx + hw, ny) &&
-        !isBlocked(nx - hw, ny - 8) &&
-        !isBlocked(nx + hw, ny - 8) &&
-        !isBlocked(nx, ny)
-      );
-    };
+    // Rámeček definuje isBoxBlocked v entities.ts — STEJNÝ používá unstuck
+    // logika, takže „pohyb blokuje, ale záchrana zásek nevidí" nemůže nastat.
+    const canMoveTo = (nx: number, ny: number) => !isBoxBlocked(nx, ny);
 
     // sezónní částice (sníh / listí / okvětní lístky / pyl)
     type Particle = { x: number; y: number; rot: number; rv: number; sz: number };
@@ -393,6 +388,13 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
 
       // --- update pohybu ---
       if (!P.paused) {
+        // Pojistka proti zaseknutí: pokud se hráč z JAKÉHOKOLI důvodu ocitl
+        // v kolizi (dostavěná budova, starý save, budoucí změny mapy…),
+        // vysuneme ho na nejbližší volné místo místo věčného zaklínění.
+        if (isBoxBlocked(p.x, p.y)) {
+          const spot = nearestFreeSpot(p.x, p.y);
+          if (spot) { p.x = spot.x; p.y = spot.y; }
+        }
         let vx = 0;
         let vy = 0;
         if (input.left) vx -= 1;
