@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useGame } from "../store";
 import { PEOPLE } from "../../game/content/people";
 import { PersonSprite } from "../sprites/PersonSprite";
@@ -9,12 +9,37 @@ import { sound } from "../../audio/sound";
 
 const PEEK = ["karel", "princezna", "avala", "pogo", "riky", "roman", "husy", "kralici"];
 
-type Stage = "logo" | "menu";
+type Stage = "rotate" | "logo" | "menu";
+
+// Zběsilá smečka úvodního přeběhu: dráha (bottom v %), velikost, tempo,
+// zpoždění a směr jsou ručně rozhozené, ať se zvířata míjejí a kříží.
+// „jump" = skokani s výraznějším hopsáním (ovce, králíci, psi…).
+const STAMPEDE: { id: string; y: number; size: number; dur: number; delay: number; dir: 1 | -1; jump?: boolean }[] = [
+  { id: "riky", y: 4, size: 88, dur: 2.0, delay: 0.0, dir: 1, jump: true },
+  { id: "husy", y: 16, size: 68, dur: 2.6, delay: 0.15, dir: -1 },
+  { id: "pogo", y: 9, size: 80, dur: 1.7, delay: 0.4, dir: 1, jump: true },
+  { id: "princezna", y: 2, size: 100, dur: 2.9, delay: 0.6, dir: -1 },
+  { id: "kralici", y: 20, size: 54, dur: 1.5, delay: 0.8, dir: 1, jump: true },
+  { id: "karel", y: 6, size: 106, dur: 3.2, delay: 1.0, dir: 1 },
+  { id: "roman", y: 14, size: 62, dur: 1.8, delay: 1.2, dir: -1, jump: true },
+  { id: "kachny", y: 22, size: 56, dur: 2.4, delay: 1.5, dir: 1 },
+  { id: "avala", y: 3, size: 112, dur: 3.5, delay: 1.7, dir: -1 },
+  { id: "flicek", y: 11, size: 74, dur: 1.9, delay: 2.0, dir: 1, jump: true },
+  { id: "yakul", y: 7, size: 94, dur: 2.5, delay: 2.3, dir: -1 },
+  { id: "pipinky", y: 18, size: 46, dur: 2.1, delay: 2.5, dir: 1, jump: true },
+];
+
+// Mobil držený na výšku → nejdřív poprosit o otočení (hra je dělaná naležato).
+const needsRotate = () =>
+  typeof window !== "undefined" &&
+  window.matchMedia("(orientation: portrait)").matches &&
+  window.matchMedia("(pointer: coarse)").matches;
 
 /**
- * Úvodní sekvence: logo azylu (kreslený lísteček) → východ slunce nad loukou
+ * Úvodní sekvence: (mobil na výšku → výzva k otočení) → zvířecí stampede,
+ * při které se štětcem „nakreslí" logo azylu → východ slunce nad loukou
  * → menu. Klik/klávesa přeskočí, prefers-reduced-motion jde rovnou na menu.
- * Vše CSS/SVG — žádné knihovny, žádné velké assety.
+ * Vše CSS/SVG + jeden webp — žádné knihovny, žádné velké assety.
  */
 export function Intro({ onDlc }: { onDlc?: () => void }) {
   const { state, dispatch } = useGame();
@@ -22,13 +47,23 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
   const reduced =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const [stage, setStage] = useState<Stage>(reduced ? "menu" : "logo");
+  const [stage, setStage] = useState<Stage>(reduced ? "menu" : needsRotate() ? "rotate" : "logo");
   const [leaving, setLeaving] = useState(false);
 
-  // Logo splash ~2,2 s, pak menu. Jakýkoli klik/klávesa přeskočí.
+  // Výzva k otočení: jakmile se telefon překlopí na šířku, spustí se animace.
+  useEffect(() => {
+    if (stage !== "rotate") return;
+    const mq = window.matchMedia("(orientation: landscape)");
+    const onChange = () => { if (mq.matches) setStage("logo"); };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [stage]);
+
+  // Logo animace ~5,4 s (kreslení ~3 s + doznění), pak menu.
+  // Jakýkoli klik/klávesa přeskočí.
   useEffect(() => {
     if (stage !== "logo") return;
-    const t = window.setTimeout(() => setStage("menu"), 2200);
+    const t = window.setTimeout(() => setStage("menu"), 5400);
     const skip = () => setStage("menu");
     window.addEventListener("pointerdown", skip);
     window.addEventListener("keydown", skip);
@@ -63,15 +98,48 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
         </svg>
       </div>
 
-      {stage === "logo" ? (
-        <div className="intro-splash">
-          <svg viewBox="0 0 120 120" width="120" height="120" aria-label="Nech mě růst">
-            {/* stonek + lístky — kreslí se tahem (stroke-dashoffset) */}
-            <path className="sprout draw1" d="M60 104 C60 84 60 66 60 48" fill="none" stroke="#2d5a3d" strokeWidth="5" strokeLinecap="round" />
-            <path className="sprout draw2" d="M60 70 C48 66 38 56 36 42 C50 44 60 54 60 70 Z" fill="none" stroke="#4a8a5c" strokeWidth="4" strokeLinejoin="round" />
-            <path className="sprout draw3" d="M60 56 C72 52 82 42 84 28 C70 30 60 40 60 56 Z" fill="none" stroke="#4a8a5c" strokeWidth="4" strokeLinejoin="round" />
-          </svg>
-          <p className="splash-name">Nech mě růst</p>
+      {/* zběsilý přeběh zvířat přes spodek obrazovky během kreslení loga */}
+      {stage === "logo" && (
+        <div className="stampede" aria-hidden>
+          {STAMPEDE.map((r) => {
+            const a = ANIMAL_BY_ID[r.id];
+            return a ? (
+              <span
+                key={r.id}
+                className={`runner${r.jump ? " jumpy" : ""}${r.dir < 0 ? " rev" : ""}`}
+                style={{ bottom: `${r.y}%`, "--dur": `${r.dur}s`, "--delay": `${r.delay}s` } as CSSProperties}
+              >
+                <span className="runner-bob">
+                  <AnimalSprite animal={a} size={r.size} />
+                </span>
+              </span>
+            ) : null;
+          })}
+        </div>
+      )}
+
+      {stage === "rotate" ? (
+        <div className="intro-splash rotate-hint">
+          <div className="rotate-phone" aria-hidden />
+          <p className="rotate-title">Otoč telefon na šířku</p>
+          <p className="rotate-sub">Louka se hraje naležato — zvířátka potřebují rozběh 🐾</p>
+          <button className="rotate-anyway" onClick={() => setStage("logo")}>
+            pokračovat na výšku
+          </button>
+        </div>
+      ) : stage === "logo" ? (
+        <div className="intro-splash logo-splash">
+          <div className="splash-logo">
+            <img
+              className="splash-logo-img"
+              src={`${import.meta.env.BASE_URL}logo.webp`}
+              alt="Nech mě růst"
+              width={1000}
+              height={707}
+            />
+            {/* zlatá „tužka", která logo maluje */}
+            <span className="splash-pen" aria-hidden />
+          </div>
           <p className="splash-sub">azyl pro zvířata uvádí</p>
           <p className="splash-skip">klepni pro přeskočení</p>
         </div>

@@ -500,30 +500,137 @@ button:disabled { cursor: not-allowed; }
   position: absolute; left: 50%; top: 62%; width: 110px; height: 110px; margin-left: -55px;
   border-radius: 999px; background: radial-gradient(circle, #ffe9a8 0%, #ffd36e 55%, rgba(255,211,110,0) 72%);
   box-shadow: 0 0 80px 30px rgba(255,220,140,0.45);
-  transition: top 2.6s cubic-bezier(0.2, 0.6, 0.3, 1);
+  transition: top 2.6s cubic-bezier(0.2, 0.6, 0.3, 1), opacity 2.6s ease;
+  /* před rozedněním jen tlumená záře, ať nepřesvěcuje kreslené logo */
+  opacity: 0.35;
 }
-.intro.sunrise .intro-sun { top: 12%; }
+.intro.sunrise .intro-sun { top: 12%; opacity: 1; }
 .intro-hills { position: absolute; left: -2%; right: -2%; width: 104%; bottom: 0; }
 .intro-hills.back { height: 30vh; opacity: 0.55; transform: translateY(14px); transition: transform 2.4s ease; }
 .intro-hills.front { height: 22vh; opacity: 0.8; transform: translateY(20px); transition: transform 2.4s ease; }
 .intro.sunrise .intro-hills.back { transform: translateY(0); }
 .intro.sunrise .intro-hills.front { transform: translateY(4px); }
 
-/* logo splash */
-.intro-splash { position: relative; text-align: center; color: #f7f2e7; animation: splash-in 0.5s ease; }
+/* logo splash — logo azylu se „maluje" štětcem, dole běží zvířecí stampede */
+.intro-splash { position: relative; z-index: 2; text-align: center; color: #f7f2e7; animation: splash-in 0.5s ease; }
 @keyframes splash-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
-.sprout { stroke-dasharray: 160; stroke-dashoffset: 160; }
-.sprout.draw1 { animation: sprout-draw 0.7s ease-out 0.1s forwards; }
-.sprout.draw2 { animation: sprout-draw 0.7s ease-out 0.6s forwards; }
-.sprout.draw3 { animation: sprout-draw 0.7s ease-out 1.0s forwards; }
-@keyframes sprout-draw { to { stroke-dashoffset: 0; } }
-.splash-name {
-  font-family: var(--font-serif); font-size: 1.7rem; margin-top: 10px;
-  opacity: 0; animation: fade-up 0.6s ease 1.2s forwards;
+
+.splash-logo {
+  /* šířka omezená i výškou (mobil naležato), poměr loga je ~1,41:1 */
+  position: relative; width: min(74vw, 420px, 80vh); margin: 0 auto;
+  animation: logo-settle 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.3) 2.9s both;
 }
-.splash-sub { font-size: 0.85rem; color: rgba(247,242,231,0.75); opacity: 0; animation: fade-up 0.6s ease 1.5s forwards; }
-.splash-skip { margin-top: 26px; font-size: 0.68rem; color: rgba(247,242,231,0.5); opacity: 0; animation: fade-up 0.6s ease 1.8s forwards; }
+@keyframes logo-settle {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.05) rotate(-1deg); }
+  100% { transform: scale(1); }
+}
+.splash-logo-img {
+  width: 100%; height: auto; display: block;
+  filter: drop-shadow(0 4px 22px rgba(0, 0, 0, 0.35));
+  /* měkká hrana masky = tah štětce; posun masky logo odkrývá zleva doprava */
+  -webkit-mask-image: linear-gradient(100deg, #000 46%, transparent 54%);
+  mask-image: linear-gradient(100deg, #000 46%, transparent 54%);
+  -webkit-mask-size: 260% 100%;
+  mask-size: 260% 100%;
+  -webkit-mask-position: 100% 0;
+  mask-position: 100% 0;
+  animation:
+    logo-paint 2.4s cubic-bezier(0.45, 0.05, 0.35, 1) 0.5s forwards,
+    logo-glow 1.8s ease 3.1s;
+}
+@keyframes logo-paint { to { -webkit-mask-position: 0% 0; mask-position: 0% 0; } }
+@keyframes logo-glow {
+  0% { filter: drop-shadow(0 4px 22px rgba(0, 0, 0, 0.35)); }
+  35% { filter: drop-shadow(0 0 26px rgba(255, 214, 130, 0.85)); }
+  100% { filter: drop-shadow(0 4px 22px rgba(0, 0, 0, 0.35)); }
+}
+/* zlatá jiskra putující po logu jako hrot štětce (synchronně s maskou) */
+.splash-pen {
+  position: absolute; width: 15px; height: 15px; border-radius: 50%;
+  background: radial-gradient(circle, #fff3c9 0%, #ffd66e 45%, rgba(201, 138, 59, 0) 72%);
+  box-shadow: 0 0 20px 7px rgba(255, 214, 130, 0.75);
+  opacity: 0; pointer-events: none;
+  animation: pen-sweep 2.4s cubic-bezier(0.45, 0.05, 0.35, 1) 0.5s forwards;
+}
+@keyframes pen-sweep {
+  0% { left: 0%; top: 56%; opacity: 0; }
+  6% { opacity: 1; }
+  22% { left: 22%; top: 22%; }
+  42% { left: 45%; top: 68%; }
+  62% { left: 66%; top: 26%; }
+  84% { left: 88%; top: 60%; }
+  94% { opacity: 1; }
+  100% { left: 101%; top: 42%; opacity: 0; }
+}
+.splash-sub { margin-top: 14px; font-size: 0.85rem; color: rgba(247,242,231,0.85); text-shadow: 0 1px 8px rgba(30,35,50,0.6); opacity: 0; animation: fade-up 0.6s ease 3.1s forwards; }
+.splash-skip { margin-top: 22px; font-size: 0.68rem; color: rgba(247,242,231,0.65); text-shadow: 0 1px 8px rgba(30,35,50,0.6); opacity: 0; animation: fade-up 0.6s ease 1.4s forwards; }
 @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* zběsilá zvířecí stampede: přeběhy po „kopcích" ve třech hloubkách */
+.stampede { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
+.runner {
+  position: absolute; left: 0; will-change: transform;
+  animation: run-across var(--dur, 2.4s) linear var(--delay, 0s) infinite both;
+}
+.runner.rev { animation-name: run-across-rev; }
+@keyframes run-across { from { transform: translateX(-22vw); } to { transform: translateX(118vw); } }
+@keyframes run-across-rev { from { transform: translateX(118vw); } to { transform: translateX(-22vw); } }
+.runner.rev svg { transform: scaleX(-1); }
+/* cupitání: rychlé pohupování s náklonem, odraz od země */
+.runner-bob {
+  display: inline-block; transform-origin: 50% 100%;
+  animation: run-bob 0.3s ease-in-out infinite alternate;
+}
+@keyframes run-bob {
+  from { transform: translateY(0) rotate(-4deg) scale(1.02, 0.95); }
+  to { transform: translateY(-11px) rotate(5deg) scale(0.98, 1.04); }
+}
+/* skokani: velký oblouk se squash & stretch při dopadu */
+.runner.jumpy .runner-bob { animation: run-jump 0.62s cubic-bezier(0.34, 0, 0.24, 1) infinite; }
+@keyframes run-jump {
+  0% { transform: translateY(0) scale(1.08, 0.88); }
+  28% { transform: translateY(-34px) scale(0.94, 1.1) rotate(7deg); }
+  52% { transform: translateY(-10px) rotate(-4deg); }
+  68% { transform: translateY(0) scale(1.12, 0.84); }
+  100% { transform: translateY(0) scale(1.04, 0.94); }
+}
+/* obláček prachu pod kopýtky */
+.runner::after {
+  content: ""; position: absolute; left: 12%; bottom: -5px; width: 62%; height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(247, 242, 231, 0.4) 0%, transparent 70%);
+  animation: dust-puff 0.3s ease-in-out infinite alternate;
+}
+@keyframes dust-puff {
+  from { opacity: 0.25; transform: scaleX(0.7); }
+  to { opacity: 0.7; transform: scaleX(1.15); }
+}
+
+/* výzva k otočení telefonu na šířku (jen mobil na výšku) */
+.rotate-hint { max-width: 300px; }
+.rotate-phone {
+  width: 58px; height: 92px; margin: 0 auto 20px; position: relative;
+  border: 4px solid #f7f2e7; border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+  animation: phone-turn 2.4s ease-in-out infinite;
+}
+.rotate-phone::after {
+  content: ""; position: absolute; left: 50%; bottom: 5px; width: 18px; height: 4px;
+  margin-left: -9px; border-radius: 4px; background: #f7f2e7;
+}
+@keyframes phone-turn {
+  0%, 18% { transform: rotate(0); }
+  48%, 82% { transform: rotate(-90deg); }
+  100% { transform: rotate(0); }
+}
+.rotate-title { font-family: var(--font-serif); font-size: 1.45rem; }
+.rotate-sub { margin-top: 8px; font-size: 0.85rem; color: rgba(247, 242, 231, 0.75); }
+.rotate-anyway {
+  margin-top: 22px; padding: 10px 18px; border-radius: 999px; font-weight: 600;
+  font-size: 0.78rem; color: rgba(247, 242, 231, 0.85);
+  border: 1px solid rgba(247, 242, 231, 0.35); background: transparent;
+}
 
 /* menu: karta a její obsah postupně naskočí */
 .intro-card { position: relative; animation: card-in 0.5s ease both; }
@@ -534,7 +641,9 @@ button:disabled { cursor: not-allowed; }
 @keyframes peek-in { from { opacity: 0; transform: translateY(10px) scale(0.6); } to { opacity: 1; transform: none; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .intro, .intro::before, .intro-sun, .intro-hills, .intro-card, .title-letter, .peek-pop { animation: none !important; transition: none !important; opacity: 1; }
+  .intro, .intro::before, .intro-sun, .intro-hills, .intro-card, .title-letter, .peek-pop,
+  .runner, .runner-bob, .runner::after, .splash-logo, .splash-pen, .rotate-phone { animation: none !important; transition: none !important; opacity: 1; }
+  .splash-logo-img { animation: none !important; -webkit-mask-image: none; mask-image: none; }
   .intro { background: linear-gradient(#dcf1e4 0%, #a9d68f 55%, #8cc270 100%); }
   .intro-sun { top: 12%; }
 }
