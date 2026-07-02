@@ -503,10 +503,21 @@ function core(state: GameState, action: Action): GameState {
         return s;
       }
       give(s, "byliny", herbs);
-      addLog(s, `Nasbíral jsi ${herbs}× byliny v lese. 🌿`, "good");
+      // Sezónní bonus: v létě luční květy (na sirup), na podzim šípky (na čaj).
+      let bonus = "";
+      if (s.season === "leto" && chance(0.35)) {
+        const k = randInt(1, 2);
+        give(s, "kvety", k);
+        bonus = ` A k tomu ${k}× luční květy! 🌼`;
+      } else if (s.season === "podzim" && chance(0.35)) {
+        const k = randInt(1, 3);
+        give(s, "sipek", k);
+        bonus = ` A k tomu ${k}× šípky! 🍒`;
+      }
+      addLog(s, `Nasbíral jsi ${herbs}× byliny v lese. 🌿${bonus}`, "good");
       flash(
         s,
-        `Košík plný bylin (+${herbs}).`,
+        `Košík plný bylin (+${herbs}).${bonus}`,
         "good",
         learnFact(s, FACT_BY_ID[pick(FORAGE_FACTS)]),
       );
@@ -525,7 +536,7 @@ function core(state: GameState, action: Action): GameState {
       if (notEnoughEnergy(s, recipe.energy)) return s;
       s.energy -= recipe.energy;
       take(s, recipe.inputs);
-      const usesHerbs = recipe.inputs.some((i) => i.item === "byliny");
+      const usesHerbs = recipe.inputs.some((i) => i.item === "byliny" || i.item === "kvety" || i.item === "sipek");
       const bonus = usesHerbs && has(s, "susarna") ? 1 : 0;
       for (const out of recipe.outputs) give(s, out.item, out.qty + bonus);
       if (recipe.id === "make_salve") s.flags.made_mast = true;

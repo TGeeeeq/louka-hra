@@ -479,10 +479,74 @@ button:disabled { cursor: not-allowed; }
 /* ===== Intro ============================================================= */
 .intro {
   min-height: 100%; display: flex; align-items: center; justify-content: center; padding: 20px;
+  position: relative; overflow: hidden;
+  /* úsvit — po přepnutí do menu se rozední (transition přes background nejde,
+     tak se prolíná přes ::before vrstvu) */
+  background: linear-gradient(#2a3a52 0%, #7a6a8a 45%, #c78a6a 78%, #8cc270 100%);
+  transition: opacity 0.42s ease;
+}
+.intro::before {
+  content: ""; position: absolute; inset: 0; opacity: 0; transition: opacity 2.4s ease;
   background:
     radial-gradient(1200px 500px at 50% -10%, #bfe6f2 0%, transparent 60%),
     linear-gradient(#dcf1e4 0%, #a9d68f 55%, #8cc270 100%);
 }
+.intro.sunrise::before { opacity: 1; }
+.intro.leaving { opacity: 0; }
+
+/* nebe: slunce stoupá, kopce parallaxně povyjedou */
+.intro-sky { position: absolute; inset: 0; pointer-events: none; }
+.intro-sun {
+  position: absolute; left: 50%; top: 62%; width: 110px; height: 110px; margin-left: -55px;
+  border-radius: 999px; background: radial-gradient(circle, #ffe9a8 0%, #ffd36e 55%, rgba(255,211,110,0) 72%);
+  box-shadow: 0 0 80px 30px rgba(255,220,140,0.45);
+  transition: top 2.6s cubic-bezier(0.2, 0.6, 0.3, 1);
+}
+.intro.sunrise .intro-sun { top: 12%; }
+.intro-hills { position: absolute; left: -2%; right: -2%; width: 104%; bottom: 0; }
+.intro-hills.back { height: 30vh; opacity: 0.55; transform: translateY(14px); transition: transform 2.4s ease; }
+.intro-hills.front { height: 22vh; opacity: 0.8; transform: translateY(20px); transition: transform 2.4s ease; }
+.intro.sunrise .intro-hills.back { transform: translateY(0); }
+.intro.sunrise .intro-hills.front { transform: translateY(4px); }
+
+/* logo splash */
+.intro-splash { position: relative; text-align: center; color: #f7f2e7; animation: splash-in 0.5s ease; }
+@keyframes splash-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
+.sprout { stroke-dasharray: 160; stroke-dashoffset: 160; }
+.sprout.draw1 { animation: sprout-draw 0.7s ease-out 0.1s forwards; }
+.sprout.draw2 { animation: sprout-draw 0.7s ease-out 0.6s forwards; }
+.sprout.draw3 { animation: sprout-draw 0.7s ease-out 1.0s forwards; }
+@keyframes sprout-draw { to { stroke-dashoffset: 0; } }
+.splash-name {
+  font-family: var(--font-serif); font-size: 1.7rem; margin-top: 10px;
+  opacity: 0; animation: fade-up 0.6s ease 1.2s forwards;
+}
+.splash-sub { font-size: 0.85rem; color: rgba(247,242,231,0.75); opacity: 0; animation: fade-up 0.6s ease 1.5s forwards; }
+.splash-skip { margin-top: 26px; font-size: 0.68rem; color: rgba(247,242,231,0.5); opacity: 0; animation: fade-up 0.6s ease 1.8s forwards; }
+@keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* menu: karta a její obsah postupně naskočí */
+.intro-card { position: relative; animation: card-in 0.5s ease both; }
+@keyframes card-in { from { opacity: 0; transform: translateY(18px) scale(0.98); } to { opacity: 1; transform: none; } }
+.title-letter { display: inline-block; opacity: 0; animation: letter-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+@keyframes letter-in { from { opacity: 0; transform: translateY(-14px) rotate(-6deg); } to { opacity: 1; transform: none; } }
+.peek-pop { display: inline-block; opacity: 0; animation: peek-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.25) both; }
+@keyframes peek-in { from { opacity: 0; transform: translateY(10px) scale(0.6); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .intro, .intro::before, .intro-sun, .intro-hills, .intro-card, .title-letter, .peek-pop { animation: none !important; transition: none !important; opacity: 1; }
+  .intro { background: linear-gradient(#dcf1e4 0%, #a9d68f 55%, #8cc270 100%); }
+  .intro-sun { top: 12%; }
+}
+
+/* měkký nástup do světa po startu hry */
+.game-fade-in {
+  position: absolute; inset: 0; z-index: 90; pointer-events: none;
+  background: linear-gradient(#dcf1e4 0%, #a9d68f 55%, #8cc270 100%);
+  animation: game-fade 0.7s ease 0.05s forwards;
+}
+@keyframes game-fade { to { opacity: 0; visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .game-fade-in { display: none; } }
 .intro-card {
   background: var(--cream); border-radius: var(--r-lg); box-shadow: var(--shadow-lg);
   padding: 28px; max-width: 600px; text-align: center;

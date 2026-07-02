@@ -69,6 +69,35 @@ export const RECIPES: Recipe[] = [
     desc: "Posbírané byliny usušíš a spaříš. Zahřeje tebe i prodává se.",
     fact: "Měsíček, máta a meduňka z luk a mezí patří k nejstarším léčivkám u nás.",
   },
+  {
+    id: "make_sirup",
+    name: "Uvařit květový sirup",
+    emoji: "🍯",
+    inputs: [
+      { item: "kvety", qty: 3 },
+      { item: "voda", qty: 1 },
+      { item: "sklenice", qty: 1 },
+    ],
+    outputs: [{ item: "sirup", qty: 1 }],
+    energy: 6,
+    requiresFire: true,
+    desc: "Bezový a lipový květ se spaří s vodou a zavaří. Voní po celém létě.",
+    fact: "Sirup z bezového květu je klasika venkovských kuchyní — pár květů, voda, citron a trpělivost.",
+  },
+  {
+    id: "make_sipkovy_caj",
+    name: "Usušit šípkový čaj",
+    emoji: "🍒",
+    inputs: [
+      { item: "sipek", qty: 2 },
+      { item: "voda", qty: 1 },
+    ],
+    outputs: [{ item: "caj", qty: 3 }],
+    energy: 3,
+    requiresFire: true,
+    desc: "Podzimní šípky usušíš na zimní čaj — vitamínová zásoba na celé mrazy.",
+    fact: "Šípky mají víc vitaminu C než citrony. Sbírají se po prvních mrazících, kdy zesládnou.",
+  },
 ];
 
 export const RECIPE_BY_ID: Record<string, Recipe> = Object.fromEntries(

@@ -69,9 +69,30 @@ export function reactionFor(id: string, w: WorldSnapshot): Reaction | null {
 }
 
 const IDLE: Record<string, string[]> = {
-  tomas: ["Práce je tu nad hlavu 🪓", "Co kus dřeva, to teplo.", "Dobrý den na louce."],
-  maruska: ["Držím vše pohromadě 📋", "Papíry počkají, zvířata ne.", "Voní to tu bylinkami 🌿"],
-  tony: ["Skoro se to opraví samo 🔧", "Dráty a chvíli klidu…", "Šlongo, a jede to ⚡"],
+  tomas: [
+    "Práce je tu nad hlavu 🪓",
+    "Co kus dřeva, to teplo.",
+    "Dobrý den na louce.",
+    "Karel mi zase ožužlal rukáv. Třetí tenhle týden.",
+    "Kosa se drží takhle. Ne, takhle.",
+    "Cítím v kolenou změnu počasí. Nebo jen kolena.",
+  ],
+  maruska: [
+    "Držím vše pohromadě 📋",
+    "Papíry počkají, zvířata ne.",
+    "Voní to tu bylinkami 🌿",
+    "Princezna zase snědla seznam úkolů. Chytrá holka.",
+    "Kdo nezažil sto krků u snídaně, neví, co je ráno.",
+    "Mast se prodává líp než cokoli. Louka voní i na dálku.",
+  ],
+  tony: [
+    "Skoro se to opraví samo 🔧",
+    "Dráty a chvíli klidu…",
+    "Šlongo, a jede to ⚡",
+    "Slepice mi rozebraly nářadí. Zase.",
+    "Jednou postavím dron na zahánění. Jednou.",
+    "Solár šlape, pumpa šlape. Já… si sednu.",
+  ],
 };
 
 /** Náhodná „small-talk" hláška do bubliny, když je vše v klidu. */

@@ -21,7 +21,7 @@ export function Craft() {
         const haveAll = r.inputs.every((i) => invCount(inv, i.item) >= i.qty);
         const fireOk = !r.requiresFire || state.fireLit;
         const energyOk = state.energy >= r.energy;
-        const usesHerbs = r.inputs.some((i) => i.item === "byliny");
+        const usesHerbs = r.inputs.some((i) => i.item === "byliny" || i.item === "kvety" || i.item === "sipek");
         return (
           <div className="recipe" key={r.id}>
             <div className="recipe-head">
