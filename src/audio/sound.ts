@@ -106,6 +106,7 @@ class SoundEngine {
   private master: GainNode | null = null;
   private limiter: DynamicsCompressorNode | null = null; // brání klipování při překryvu tónů
   private verb: ConvolverNode | null = null;
+  private verbIn: GainNode | null = null; // send do dozvuku (přes predelay)
   muted = false;
   musicOn = true;
 
@@ -136,10 +137,16 @@ class SoundEngine {
   private windGain: GainNode | null = null;
   private windLfo: OscillatorNode | null = null;
 
+  // „Vzduch louky" — tichý kontinuální podklad, ať svět nikdy neztichne úplně
+  private airSrc: AudioBufferSourceNode | null = null;
+  private airGain: GainNode | null = null;
+  private airLfo: OscillatorNode | null = null;
+
   // Tension system
   private tensionLevel: TensionLevel = 0;
   private dangerGain: GainNode | null = null;
   private dangerOsc: OscillatorNode | null = null;
+  private dangerLfo: OscillatorNode | null = null;
   private reliefTimer: number | null = null;
 
   // Cooldowny
@@ -153,22 +160,31 @@ class SoundEngine {
     if (!this.ctx) {
       const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AC) return;
-      this.ctx = new AC();
+      // „balanced": o chlup větší audio buffer než default — na slabších
+      // zařízeních nepraská, když canvas smyčka vytíží CPU.
+      this.ctx = new AC({ latencyHint: "balanced" });
       this.master = this.ctx.createGain();
       this.master.gain.value = BASE_MASTER;
       // Limiter na výstupu: chytá špičky z překrývajících se FM tónů + dozvuku.
+      // Měkké koleno a mírnější ratio — tvrdé koleno s 20:1 na basech „žvýkalo".
       this.limiter = this.ctx.createDynamicsCompressor();
-      this.limiter.threshold.value = -8;
-      this.limiter.knee.value = 0;
-      this.limiter.ratio.value = 20;
-      this.limiter.attack.value = 0.003;
-      this.limiter.release.value = 0.12;
+      this.limiter.threshold.value = -10;
+      this.limiter.knee.value = 10;
+      this.limiter.ratio.value = 12;
+      this.limiter.attack.value = 0.005;
+      this.limiter.release.value = 0.25;
       this.verb = this.ctx.createConvolver();
-      this.verb.buffer = this.makeReverb(1.1, 2.2);
+      this.verb.buffer = this.makeReverb(2.4);
       const verbGain = this.ctx.createGain();
-      verbGain.gain.value = 0.18;
+      verbGain.gain.value = 0.2;
       this.master.connect(this.limiter);
       this.limiter.connect(this.ctx.destination);
+      // Predelay před konvolucí: oddělí přímý zvuk od dozvuku → víc „prostoru".
+      this.verbIn = this.ctx.createGain();
+      const preDelay = this.ctx.createDelay(0.1);
+      preDelay.delayTime.value = 0.025;
+      this.verbIn.connect(preDelay);
+      preDelay.connect(this.verb);
       this.verb.connect(verbGain);
       verbGain.connect(this.master);
 
@@ -206,27 +222,48 @@ class SoundEngine {
     if (this.ctx.state === "suspended") void this.ctx.resume();
   }
 
-  private makeReverb(seconds: number, decay: number): AudioBuffer {
+  // Impulzní odezva dozvuku: exponenciálně doznívající šum hnaný one-pole
+  // lowpassem, který se s časem zavírá — výšky mizí dřív než basy, ocas zní
+  // jako vzduch nad loukou. (Surový bílý šum v konvoluci syčel a „chrčel".)
+  private makeReverb(seconds: number): AudioBuffer {
     const rate = this.ctx!.sampleRate;
     const len = Math.floor(rate * seconds);
     const buf = this.ctx!.createBuffer(2, len, rate);
     for (let ch = 0; ch < 2; ch++) {
       const d = buf.getChannelData(ch);
-      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+      let lp = 0;
+      for (let i = 0; i < len; i++) {
+        const p = i / len;
+        const a = 0.45 - 0.38 * p; // filtr se zavírá → tmavnoucí ocas
+        lp += (Math.random() * 2 - 1 - lp) * a;
+        d[i] = lp * Math.exp(-4.6 * p) * 2.2;
+      }
     }
     return buf;
   }
 
   // ─── PRIMITIVES ────────────────────────────────────────────────────────────
 
+  // Vloží mezi uzel a výstup StereoPanner (pokud pan ≠ 0 a prohlížeč ho umí).
+  private panTo(node: AudioNode, out: AudioNode, pan: number): void {
+    if (pan && this.ctx && this.ctx.createStereoPanner) {
+      const p = this.ctx.createStereoPanner();
+      p.pan.value = Math.max(-1, Math.min(1, pan));
+      node.connect(p);
+      p.connect(out);
+    } else {
+      node.connect(out);
+    }
+  }
+
   // Měkký tón — okamžitý (SFX). Výstup jde na master (+ dozvuk).
-  private tone(freq: number, dur: number, type: Wave = "sine", gain = 0.1, delay = 0, jitter = 0) {
+  private tone(freq: number, dur: number, type: Wave = "sine", gain = 0.1, delay = 0, jitter = 0, pan = 0) {
     if (!this.ctx || !this.master || this.muted) return;
-    this.toneAt(freq, dur, this.ctx.currentTime + delay, type, gain, this.master, true, jitter);
+    this.toneAt(freq, dur, this.ctx.currentTime + delay, type, gain, this.master, true, jitter, pan);
   }
 
   // Tón v absolutním čase `when` do zadaného uzlu — základ scheduleru.
-  private toneAt(freq: number, dur: number, when: number, type: Wave, gain: number, out: AudioNode, verbSend = false, jitter = 0) {
+  private toneAt(freq: number, dur: number, when: number, type: Wave, gain: number, out: AudioNode, verbSend = false, jitter = 0, pan = 0) {
     if (!this.ctx || this.muted) return;
     if (jitter) {
       freq *= 1 + (Math.random() - 0.5) * jitter;
@@ -240,8 +277,8 @@ class SoundEngine {
     g.gain.exponentialRampToValueAtTime(Math.max(gain, 0.0002), when + Math.min(0.06, dur * 0.3));
     g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
     osc.connect(g);
-    g.connect(out);
-    if (verbSend && this.verb) g.connect(this.verb);
+    this.panTo(g, out, pan);
+    if (verbSend && this.verbIn) g.connect(this.verbIn);
     osc.start(when);
     osc.stop(when + dur + 0.05);
   }
@@ -265,6 +302,7 @@ class SoundEngine {
     wave: Wave = "sine",
     delay = 0,
     portamentoTo?: number,
+    pan = 0,
   ): void {
     if (!this.ctx || !this.master || this.muted) return;
     const t0 = this.ctx.currentTime + delay;
@@ -290,24 +328,21 @@ class SoundEngine {
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
 
     osc.connect(g);
-    g.connect(this.master);
-    if (this.verb) g.connect(this.verb);
+    this.panTo(g, this.master, pan);
+    if (this.verbIn) g.connect(this.verbIn);
 
     mod.start(t0); mod.stop(t0 + dur + 0.05);
     osc.start(t0); osc.stop(t0 + dur + 0.05);
   }
 
-  // Noise burst — přes LP filtr (SFX)
+  // Noise burst — přes LP filtr (SFX). Čte ze sdíleného bufferu s náhodným
+  // offsetem — žádné alokace + GC pauzy za běhu.
   private noise(dur: number, gain: number, lpFreq: number, delay = 0): void {
-    if (!this.ctx || !this.master || this.muted) return;
+    if (!this.ctx || !this.master || !this.noiseBuf || this.muted) return;
     const t0 = this.ctx.currentTime + delay;
-    const bufLen = Math.floor(this.ctx.sampleRate * Math.max(dur, 0.05));
-    const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < bufLen; i++) d[i] = Math.random() * 2 - 1;
-
     const src = this.ctx.createBufferSource();
-    src.buffer = buf;
+    src.buffer = this.noiseBuf;
+    src.loop = true;
     const lp = this.ctx.createBiquadFilter();
     lp.type = "lowpass";
     lp.frequency.value = lpFreq;
@@ -316,7 +351,7 @@ class SoundEngine {
     g.gain.exponentialRampToValueAtTime(gain, t0 + 0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     src.connect(lp); lp.connect(g); g.connect(this.master);
-    src.start(t0); src.stop(t0 + dur + 0.05);
+    src.start(t0, Math.random()); src.stop(t0 + dur + 0.05);
   }
 
   // ─── PERKUSE (plánované v absolutním čase, suché — bez dozvuku) ─────────────
@@ -337,7 +372,7 @@ class SoundEngine {
     osc.stop(t + 0.3);
   }
 
-  private noiseHit(t: number, g: number, dur: number, type: BiquadFilterType, freq: number, q = 1) {
+  private noiseHit(t: number, g: number, dur: number, type: BiquadFilterType, freq: number, q = 1, pan = 0) {
     if (!this.ctx || !this.layers || !this.noiseBuf) return;
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf;
@@ -350,17 +385,18 @@ class SoundEngine {
     gn.gain.setValueAtTime(0.0001, t);
     gn.gain.exponentialRampToValueAtTime(g, t + 0.008);
     gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(f); f.connect(gn); gn.connect(this.layers.perc);
+    src.connect(f); f.connect(gn);
+    this.panTo(gn, this.layers.perc, pan);
     src.start(t, Math.random());
     src.stop(t + dur + 0.05);
   }
 
   private percHat(t: number, g: number, open = false) {
-    this.noiseHit(t, g, open ? 0.12 : 0.03, "highpass", 7000);
+    this.noiseHit(t, g, open ? 0.12 : 0.03, "highpass", 7000, 1, 0.22);
   }
 
   private percShaker(t: number, g: number) {
-    this.noiseHit(t, g * (0.7 + Math.random() * 0.6), 0.06, "bandpass", 4000, 1.2);
+    this.noiseHit(t, g * (0.7 + Math.random() * 0.6), 0.06, "bandpass", 4000, 1.2, -0.22);
   }
 
   private percBlock(t: number, g: number) {
@@ -374,7 +410,7 @@ class SoundEngine {
     gn.gain.exponentialRampToValueAtTime(g, t + 0.003);
     gn.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
     osc.connect(gn);
-    gn.connect(this.layers.perc);
+    this.panTo(gn, this.layers.perc, 0.15);
     osc.start(t);
     osc.stop(t + 0.1);
   }
@@ -683,10 +719,11 @@ class SoundEngine {
     if ((this.lastNpcSpeak[npcId] ?? 0) + this.NPC_SPEAK_COOLDOWN > now) return;
     this.lastNpcSpeak[npcId] = now;
 
+    // Každý mluvčí má „své místo" mírně mimo střed — dialog se dá sledovat ušima.
     const profiles = {
-      tomas:   { carrier: 155, modRatio: 1.8, modDepth: 0.25, wave: "triangle" as Wave, syllDur: 0.16, syllGap: 0.06 },
-      maruska: { carrier: 275, modRatio: 2.1, modDepth: 0.18, wave: "triangle" as Wave, syllDur: 0.09, syllGap: 0.025 },
-      tony:    { carrier: 120, modRatio: 0.9, modDepth: 0.45, wave: "sawtooth" as Wave, syllDur: 0.20, syllGap: 0.09 },
+      tomas:   { carrier: 155, modRatio: 1.8, modDepth: 0.25, wave: "triangle" as Wave, syllDur: 0.16, syllGap: 0.06, pan: -0.15 },
+      maruska: { carrier: 275, modRatio: 2.1, modDepth: 0.18, wave: "triangle" as Wave, syllDur: 0.09, syllGap: 0.025, pan: 0.18 },
+      tony:    { carrier: 120, modRatio: 0.9, modDepth: 0.45, wave: "sawtooth" as Wave, syllDur: 0.20, syllGap: 0.09, pan: -0.22 },
     };
     const p = profiles[npcId];
 
@@ -711,7 +748,7 @@ class SoundEngine {
       if (sentiment === "positive")
         freq *= 1.0 + Math.sin((i / syllCount) * Math.PI) * 0.1;
 
-      this.fm(freq, p.modRatio, p.modDepth, p.syllDur, 0.12, p.wave, t);
+      this.fm(freq, p.modRatio, p.modDepth, p.syllDur, 0.12, p.wave, t, undefined, p.pan);
       t += p.syllDur + p.syllGap + Math.random() * 0.03;
     }
   }
@@ -758,12 +795,12 @@ class SoundEngine {
     ramp(this.layers.arp, m.arp, 0.8);
     // tempo se projeví na dalším kroku scheduleru → plynulé accelerando
     this.tempoMult = m.tempo;
-    // relief: krátké projasnění celé hudby
+    // relief: krátké projasnění celé hudby (mírné — ať netlačí do limiteru)
     if (level === 3 && this.musicBus) {
       const g = this.musicBus.gain;
       g.cancelScheduledValues(now);
       g.setValueAtTime(g.value, now);
-      g.linearRampToValueAtTime(1.25, now + 0.3);
+      g.linearRampToValueAtTime(1.15, now + 0.3);
       g.linearRampToValueAtTime(1.0, now + 1.8);
     }
   }
@@ -775,19 +812,37 @@ class SoundEngine {
     this.dangerGain = this.ctx.createGain();
     this.dangerOsc.type = "sawtooth";
     this.dangerOsc.frequency.value = 55; // hluboké A1 — drone poplachu
+    // Lowpass: z pily zbyde temné dunění, ne bzučivé „chrčení".
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 240;
+    lp.Q.value = 0.7;
+    // Pomalé vlnění hlasitosti — drone žije, netlačí staticky.
+    this.dangerLfo = this.ctx.createOscillator();
+    this.dangerLfo.frequency.value = 0.22;
+    const lfoGain = this.ctx.createGain();
+    lfoGain.gain.value = 0.012;
+    this.dangerLfo.connect(lfoGain);
+    lfoGain.connect(this.dangerGain.gain);
     this.dangerGain.gain.setValueAtTime(0.0001, t0);
     this.dangerGain.gain.linearRampToValueAtTime(0.045, t0 + 1.2);
-    this.dangerOsc.connect(this.dangerGain);
+    this.dangerOsc.connect(lp);
+    lp.connect(this.dangerGain);
     this.dangerGain.connect(this.musicBus);
     this.dangerOsc.start(t0);
+    this.dangerLfo.start(t0);
   }
 
   private stopDangerDrone() {
     if (!this.dangerOsc || !this.dangerGain || !this.ctx) return;
     const t0 = this.ctx.currentTime;
+    this.dangerGain.gain.cancelScheduledValues(t0);
+    this.dangerGain.gain.setValueAtTime(this.dangerGain.gain.value, t0);
     this.dangerGain.gain.linearRampToValueAtTime(0.0001, t0 + 1.5);
     this.dangerOsc.stop(t0 + 1.6);
+    this.dangerLfo?.stop(t0 + 1.6);
     this.dangerOsc = null;
+    this.dangerLfo = null;
     this.dangerGain = null;
   }
 
@@ -938,8 +993,38 @@ class SoundEngine {
 
   startAmbient(season: Season) {
     this.season = season;
+    this.startAir();
     if (this.ambientTimer != null) return;
     this.ambientTick();
+  }
+
+  // Tichý „vzduch louky": filtrovaný šum s pomalým vlněním. Svět tak nikdy
+  // neztichne úplně — mezi ptačími ozvami nezůstává digitální ticho.
+  private startAir() {
+    if (!this.ctx || !this.master || !this.noiseBuf || this.airSrc) return;
+    const now = this.ctx.currentTime;
+    this.airSrc = this.ctx.createBufferSource();
+    this.airSrc.buffer = this.noiseBuf;
+    this.airSrc.loop = true;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 520;
+    bp.Q.value = 0.4;
+    this.airGain = this.ctx.createGain();
+    this.airGain.gain.setValueAtTime(0.0001, now);
+    this.airGain.gain.linearRampToValueAtTime(0.005, now + 4);
+    // pomalé dýchání hladiny (±40 %) — jako vánek v trávě
+    this.airLfo = this.ctx.createOscillator();
+    this.airLfo.frequency.value = 0.06;
+    const lfoGain = this.ctx.createGain();
+    lfoGain.gain.value = 0.002;
+    this.airLfo.connect(lfoGain);
+    lfoGain.connect(this.airGain.gain);
+    this.airSrc.connect(bp);
+    bp.connect(this.airGain);
+    this.airGain.connect(this.master);
+    this.airSrc.start(now, Math.random());
+    this.airLfo.start(now);
   }
 
   private ambientTick() {
@@ -953,19 +1038,23 @@ class SoundEngine {
 
       } else if (p === "vecer") {
         if (Math.random() < 0.65) {
+          // cvrček se ozývá z náhodného místa scény
           const f = 2500 + Math.random() * 320;
-          this.tone(f, 0.045, "sine", 0.020, 0);
-          this.tone(f + 10, 0.045, "sine", 0.016, 0.07);
-          this.tone(f, 0.045, "sine", 0.014, 0.14);
+          const pan = (Math.random() - 0.5) * 0.9;
+          this.tone(f, 0.045, "sine", 0.020, 0, 0, pan);
+          this.tone(f + 10, 0.045, "sine", 0.016, 0.07, 0, pan);
+          this.tone(f, 0.045, "sine", 0.014, 0.14, 0, pan);
         }
         if (Math.random() < 0.3) this.tone(88 + Math.random() * 25, 1.4, "sine", 0.018);
 
       } else if (p === "rano") {
         if (Math.random() < 0.6) {
+          // pták zpívá z jednoho místa, odpověď může přijít odjinud
           const base = 1600 + Math.random() * 900;
-          this.tone(base, 0.07, "sine", 0.032, 0);
-          this.tone(base * 1.33, 0.06, "sine", 0.025, 0.10);
-          if (Math.random() < 0.5) this.tone(base * 0.75, 0.09, "sine", 0.018, 0.18);
+          const pan = (Math.random() - 0.5) * 0.9;
+          this.tone(base, 0.07, "sine", 0.032, 0, 0, pan);
+          this.tone(base * 1.33, 0.06, "sine", 0.025, 0.10, 0, pan);
+          if (Math.random() < 0.5) this.tone(base * 0.75, 0.09, "sine", 0.018, 0.18, 0, -pan * 0.7);
         }
         if ((s === "jaro" || s === "leto") && Math.random() < 0.18)
           this.tone(75 + Math.random() * 20, 1.5, "sine", 0.014);
@@ -973,13 +1062,14 @@ class SoundEngine {
       } else { // poledne
         if (s === "leto" && Math.random() < 0.5) {
           const f = 3200 + Math.random() * 400;
-          this.tone(f, 0.03, "sine", 0.016);
-          this.tone(f + 8, 0.03, "sine", 0.014, 0.04);
+          const pan = (Math.random() - 0.5) * 0.8;
+          this.tone(f, 0.03, "sine", 0.016, 0, 0, pan);
+          this.tone(f + 8, 0.03, "sine", 0.014, 0.04, 0, pan);
         } else if (s === "podzim" && Math.random() < 0.3) {
           this.tone(95 + Math.random() * 30, 1.8, "sine", 0.020);
         } else if (Math.random() < 0.35) {
           const base = 1800 + Math.random() * 600;
-          this.tone(base, 0.06, "sine", 0.022);
+          this.tone(base, 0.06, "sine", 0.022, 0, 0, (Math.random() - 0.5) * 0.8);
         }
       }
     }
@@ -994,6 +1084,22 @@ class SoundEngine {
 
   stopAmbient() {
     if (this.ambientTimer != null) { window.clearTimeout(this.ambientTimer); this.ambientTimer = null; }
+    if (this.airSrc && this.airGain && this.ctx) {
+      const src = this.airSrc;
+      const lfo = this.airLfo;
+      const g = this.airGain;
+      this.airSrc = null;
+      this.airLfo = null;
+      this.airGain = null;
+      const now = this.ctx.currentTime;
+      g.gain.cancelScheduledValues(now);
+      g.gain.setValueAtTime(g.gain.value, now);
+      g.gain.linearRampToValueAtTime(0.0001, now + 1);
+      window.setTimeout(() => {
+        try { src.stop(); lfo?.stop(); } catch { /* už zastaveny */ }
+        g.disconnect();
+      }, 1200);
+    }
   }
 
   // ─── HUDBA — vrstvený lookahead scheduler ──────────────────────────────────
@@ -1063,6 +1169,15 @@ class SoundEngine {
 
   private schedulerLoop() {
     if (!this.ctx) return;
+    // Po uspání tabu (prohlížeč škrtí/pozastaví interval) je nextStepTime
+    // hluboko v minulosti — bez resyncu by se všechny zameškané kroky
+    // naplánovaly „do minulosti" a zazněly NARÁZ jako chrčivý shluk.
+    if (this.nextStepTime < this.ctx.currentTime - 0.05) {
+      const d = this.gridDurSec();
+      const missed = Math.ceil((this.ctx.currentTime - this.nextStepTime) / d);
+      this.nextStepTime += missed * d;
+      this.gridStep += missed;
+    }
     while (this.nextStepTime < this.ctx.currentTime + 0.12) {
       if (!this.muted && this.musicOn) this.scheduleStep(this.gridStep, this.nextStepTime);
       this.nextStepTime += this.gridDurSec();
@@ -1075,16 +1190,21 @@ class SoundEngine {
     const key = `${this.season}_${this.phase}`;
     const mel = this.THEMES[key] ?? this.THEMES[`${this.season}_rano`];
     const grid32 = step % 32;
+    // lehký swing: liché osminy o kousek později — rytmus „dýchá"
+    const swing = step % 2 === 1 ? this.gridDurSec() * 0.08 : 0;
 
     // melodie + bas: na sudých gridech (původní krok)
     if (step % 2 === 0) {
       const mstep = step / 2;
-      const mg = this.getMelodyGain(this.phase);
       const f = mel[mstep % mel.length];
       if (f > 0) {
-        this.toneAt(f, 1.0, t, "sine", mg, this.layers.melody, true);
-        this.toneAt(f * 1.004, 1.0, t, "sine", mg * 0.75, this.layers.melody, true); // chorus
-        if (this.phase === "vecer") this.toneAt(f * 0.5, 1.4, t, "sine", 0.018, this.layers.melody, true);
+        // humanizace: ±5 ms časování, ±8 % síly, akcent na těžké době
+        const th = t + (Math.random() - 0.5) * 0.01;
+        const accent = mstep % 8 === 0 ? 1.12 : 1;
+        const mg = this.getMelodyGain(this.phase) * accent * (0.92 + Math.random() * 0.16);
+        this.toneAt(f, 1.0, th, "sine", mg, this.layers.melody, true, 0, -0.14);
+        this.toneAt(f * 1.004, 1.0, th + 0.012, "sine", mg * 0.75, this.layers.melody, true, 0, 0.18); // chorus vpravo
+        if (this.phase === "vecer") this.toneAt(f * 0.5, 1.4, th, "sine", 0.018, this.layers.melody, true);
       }
       const bass = this.BASS[this.season];
       const bassF = bass[mstep % bass.length];
@@ -1100,33 +1220,34 @@ class SoundEngine {
       const chords = PADS[this.season];
       const chord = chords[Math.floor(step / 16) % chords.length];
       for (const f of chord) {
-        // dva jemně rozladěné trianglee — šířka bez chorus efektu
-        this.padVoice(f * 0.998, t);
-        this.padVoice(f * 1.002, t);
+        // dva jemně rozladěné trianglee roztažené do stran — široký, měkký koberec
+        this.padVoice(f * 0.998, t, -0.35);
+        this.padVoice(f * 1.002, t, 0.35);
       }
     }
 
-    // perkuse podle tension vzoru
+    // perkuse podle tension vzoru (haty/shaker se swingem, kick drží tempo)
     const pat = PERC[this.tensionLevel];
     const kick = pat.kick[grid32] ?? 0;
     const hat = pat.hat[grid32] ?? 0;
     const shk = pat.shaker[grid32] ?? 0;
     const blk = pat.block[grid32] ?? 0;
     if (kick) this.percKick(t, 0.16 * kick);
-    if (hat) this.percHat(t, 0.05 * hat, grid32 === 30);
-    if (shk) this.percShaker(t, 0.035 * shk);
-    if (blk) this.percBlock(t, 0.07 * blk);
+    if (hat) this.percHat(t + swing, 0.05 * hat, grid32 === 30);
+    if (shk) this.percShaker(t + swing, 0.035 * shk);
+    if (blk) this.percBlock(t + swing, 0.07 * blk);
 
-    // akční arpeggio — jede na každém gridu (slyšet jen při arp gain > 0)
+    // akční arpeggio — jede na každém gridu (slyšet jen při arp gain > 0),
+    // ping-ponguje mezi kanály
     if (this.tensionLevel >= 1) {
       const arp = ARPS[this.season];
       const f = arp[step % arp.length] * (this.tensionLevel === 2 ? 1.19 : 1); // danger o malou tercii výš
-      this.toneAt(f, 0.09, t, "triangle", 0.05, this.layers.arp);
+      this.toneAt(f, 0.09, t + swing, "triangle", 0.05, this.layers.arp, false, 0, step % 2 ? 0.24 : -0.24);
     }
   }
 
   // Jedna nota padu — triangle s pomalým náběhem a dozvukem přes lowpass.
-  private padVoice(freq: number, t: number) {
+  private padVoice(freq: number, t: number, pan = 0) {
     if (!this.ctx || !this.padFilter) return;
     const barDur = this.gridDurSec() * 16;
     const osc = this.ctx.createOscillator();
@@ -1138,8 +1259,8 @@ class SoundEngine {
     g.gain.setValueAtTime(0.016, t + barDur);
     g.gain.linearRampToValueAtTime(0.0001, t + barDur + 2);
     osc.connect(g);
-    g.connect(this.padFilter);
-    if (this.verb) g.connect(this.verb);
+    this.panTo(g, this.padFilter, pan);
+    if (this.verbIn) g.connect(this.verbIn);
     osc.start(t);
     osc.stop(t + barDur + 2.1);
   }

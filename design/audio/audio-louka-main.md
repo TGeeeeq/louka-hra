@@ -111,3 +111,24 @@ sound.npcSpeak(npcId: 'tomas'|'maruska'|'tony', sentiment)
 - Káně trigger (zatím není herní mechanikou)
 - `animalHappy()` volat při nakrmení zvířete
 - Více sentimentů pro NPC dle kontextu (quest dialog vs. routine)
+
+## Changelog — mix & imerze (2026-07)
+
+Oprava „občasného chrčení" + pozvednutí prostoru. Vše v `src/audio/sound.ts`:
+
+- **Resync scheduleru po uspání tabu** *(hlavní příčina chrčení)*: po probuzení
+  prohlížeče se zameškané kroky přeskočí místo naplánování do minulosti —
+  dřív zazněly všechny naráz jako chrčivý shluk.
+- **Dozvuk**: impulz už není surový bílý šum (syčel), ale exponenciálně
+  doznívající šum s postupně se zavírajícím lowpassem (2,4 s) + 25ms predelay.
+- **Danger drone**: pila 55 Hz nově přes lowpass 240 Hz + pomalé LFO — temné
+  dunění místo bzučení.
+- **Limiter**: měkké koleno (knee 10), ratio 12:1, pomalejší release — nežvýká basy.
+- **Latence**: `latencyHint: "balanced"` — větší buffer, méně podtečení na mobilech.
+- **`noise()`** čte ze sdíleného bufferu (žádné alokace/GC pauzy za běhu).
+- **Stereo obraz**: melodie/chorus L↔P, pad ±0.35, hat/shaker/block rozmístěné,
+  arpeggio ping-pong, ptáci a cvrčci z náhodných míst, NPC hlasy mají „své místo".
+- **Humanizace**: melodie ±5 ms / ±8 % velocity + akcent těžké doby; haty,
+  shaker a arp s lehkým swingem (8 % osminy).
+- **„Vzduch louky"**: tichý kontinuální bandpass šum (520 Hz) s pomalým LFO
+  dýcháním — svět mezi ptačími ozvami neztichne do digitálního ticha.
