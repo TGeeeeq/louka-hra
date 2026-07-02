@@ -5,11 +5,11 @@ import { PersonSprite } from "../sprites/PersonSprite";
 import { ANIMAL_BY_ID } from "../../game/content/animals";
 import { AnimalSprite } from "../sprites/AnimalSprite";
 import AFLogo from "./AFLogo";
+import { SEASON_LABEL } from "../labels";
 import { sound } from "../../audio/sound";
 
-const PEEK = ["karel", "princezna", "avala", "pogo", "riky", "roman", "husy", "kralici"];
-
-type Stage = "rotate" | "logo" | "menu";
+type Stage = "choice" | "logo" | "outro" | "menu";
+type Orient = "landscape" | "portrait";
 
 // Zběsilá smečka úvodního přeběhu: dráha (bottom v %), velikost, tempo,
 // zpoždění a směr jsou ručně rozhozené, ať se zvířata míjejí a kříží.
@@ -29,16 +29,56 @@ const STAMPEDE: { id: string; y: number; size: number; dur: number; delay: numbe
   { id: "pipinky", y: 18, size: 46, dur: 2.1, delay: 2.5, dir: 1, jump: true },
 ];
 
-// Mobil držený na výšku → nejdřív poprosit o otočení (hra je dělaná naležato).
-const needsRotate = () =>
+// Pasoucí se zvířata v menu — klidná dekorace na kopcích (left/bottom v %).
+const GRAZE: { id: string; x: number; y: number; size: number; flip?: boolean }[] = [
+  { id: "avala", x: 5, y: 9, size: 74 },
+  { id: "karel", x: 16, y: 4, size: 86, flip: true },
+  { id: "kralici", x: 30, y: 2, size: 44 },
+  { id: "husy", x: 58, y: 3, size: 52, flip: true },
+  { id: "princezna", x: 79, y: 7, size: 78 },
+  { id: "riky", x: 91, y: 3, size: 62, flip: true },
+];
+
+// Světelné pyly plující scénou menu (left %, velikost px, délka a zpoždění s).
+const MOTES: { x: number; s: number; dur: number; delay: number }[] = [
+  { x: 12, s: 5, dur: 11, delay: 0 },
+  { x: 26, s: 3, dur: 14, delay: 3 },
+  { x: 41, s: 6, dur: 9, delay: 1.5 },
+  { x: 58, s: 4, dur: 13, delay: 5 },
+  { x: 71, s: 5, dur: 10, delay: 2.5 },
+  { x: 86, s: 3, dur: 12, delay: 6.5 },
+];
+
+// Načasování intra: malba loga (2,4 s od 0,5 s) → usazení + záře → outro,
+// při kterém se logo rozpustí do rozednění — žádný tvrdý střih do menu.
+const OUTRO_AT = 6800;
+const MENU_AT = OUTRO_AT + 1600;
+
+// Dotykové zařízení na výšku → nabídnout volbu, jak hrát (hra umí obojí,
+// naležato je ale pohodlnější). Desktop jde rovnou na intro.
+const needsChoice = () =>
   typeof window !== "undefined" &&
   window.matchMedia("(orientation: portrait)").matches &&
   window.matchMedia("(pointer: coarse)").matches;
 
+// Volba „na šířku": zkusit fullscreen + zámek orientace. Best-effort —
+// iOS Safari neumí ani jedno, hra pak prostě běží tak, jak telefon drží.
+const tryLockLandscape = () => {
+  const el = document.documentElement as HTMLElement & { requestFullscreen?: () => Promise<void> };
+  const lock = () => {
+    const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+    o?.lock?.("landscape").catch(() => {});
+  };
+  const fs = el.requestFullscreen?.();
+  if (fs) fs.then(lock).catch(lock);
+  else lock();
+};
+
 /**
- * Úvodní sekvence: (mobil na výšku → výzva k otočení) → zvířecí stampede,
- * při které se štětcem „nakreslí" logo azylu → východ slunce nad loukou
- * → menu. Klik/klávesa přeskočí, prefers-reduced-motion jde rovnou na menu.
+ * Úvodní sekvence: (dotyk na výšku → volba orientace) → zvířecí stampede,
+ * při které se štětcem „nakreslí" logo azylu → logo se rozpustí do východu
+ * slunce → hlavní menu ve stejné scéně (plynulý crossfade, žádný střih).
+ * Klik/klávesa přeskočí, prefers-reduced-motion jde rovnou na menu.
  * Vše CSS/SVG + jeden webp — žádné knihovny, žádné velké assety.
  */
 export function Intro({ onDlc }: { onDlc?: () => void }) {
@@ -47,32 +87,47 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
   const reduced =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const [stage, setStage] = useState<Stage>(reduced ? "menu" : needsRotate() ? "rotate" : "logo");
+  const [stage, setStage] = useState<Stage>(reduced ? "menu" : needsChoice() ? "choice" : "logo");
+  const [orient, setOrient] = useState<Orient>("landscape");
   const [leaving, setLeaving] = useState(false);
+  const [about, setAbout] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
-  // Výzva k otočení: jakmile se telefon překlopí na šířku, spustí se animace.
+  // Intro: v čase OUTRO_AT se logo začne rozpouštět a scéna rozednívat,
+  // v MENU_AT nastoupí menu.
   useEffect(() => {
-    if (stage !== "rotate") return;
-    const mq = window.matchMedia("(orientation: landscape)");
-    const onChange = () => { if (mq.matches) setStage("logo"); };
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
+    if (stage === "logo") {
+      const t = window.setTimeout(() => setStage("outro"), OUTRO_AT);
+      return () => window.clearTimeout(t);
+    }
+    if (stage === "outro") {
+      const t = window.setTimeout(() => setStage("menu"), MENU_AT - OUTRO_AT);
+      return () => window.clearTimeout(t);
+    }
   }, [stage]);
 
-  // Logo animace ~5,4 s (kreslení ~3 s + doznění), pak menu.
-  // Jakýkoli klik/klávesa přeskočí.
+  // Jakýkoli klik/klávesa během intra skočí rovnou na menu. Schválně „click",
+  // ne „pointerdown": menu by se jinak vykreslilo ještě před click fází a tentýž
+  // ťuk by omylem zmáčkl tlačítko, které se objeví pod prstem.
   useEffect(() => {
-    if (stage !== "logo") return;
-    const t = window.setTimeout(() => setStage("menu"), 5400);
+    if (stage !== "logo" && stage !== "outro") return;
     const skip = () => setStage("menu");
-    window.addEventListener("pointerdown", skip);
+    window.addEventListener("click", skip);
     window.addEventListener("keydown", skip);
     return () => {
-      window.clearTimeout(t);
-      window.removeEventListener("pointerdown", skip);
+      window.removeEventListener("click", skip);
       window.removeEventListener("keydown", skip);
     };
   }, [stage]);
+
+  const confirmChoice = (e: React.MouseEvent) => {
+    // nesmí probublat na window — skip listener intra by ho vzal jako „přeskoč"
+    e.stopPropagation();
+    sound.ensure();
+    sound.select();
+    if (orient === "landscape") tryLockLandscape();
+    setStage("logo");
+  };
 
   const start = (type: "START" | "RESET") => {
     sound.ensure();
@@ -85,8 +140,16 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
     window.setTimeout(() => dispatch({ type }), 420);
   };
 
+  const newGame = () => {
+    if (hasSave) setConfirmReset(true);
+    else start("RESET");
+  };
+
+  const inMenu = stage === "menu";
+  const dawn = inMenu || stage === "outro";
+
   return (
-    <div className={`intro ${stage === "menu" ? "sunrise" : ""} ${leaving ? "leaving" : ""}`}>
+    <div className={`intro ${dawn ? "sunrise" : ""} ${leaving ? "leaving" : ""}`}>
       {/* parallax vrstvy: slunce + siluety lesa (jen transform/opacity) */}
       <div className="intro-sky" aria-hidden>
         <div className="intro-sun" />
@@ -99,8 +162,8 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
       </div>
 
       {/* zběsilý přeběh zvířat přes spodek obrazovky během kreslení loga */}
-      {stage === "logo" && (
-        <div className="stampede" aria-hidden>
+      {(stage === "logo" || stage === "outro") && (
+        <div className={`stampede${stage === "outro" ? " out" : ""}`} aria-hidden>
           {STAMPEDE.map((r) => {
             const a = ANIMAL_BY_ID[r.id];
             return a ? (
@@ -118,17 +181,104 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
         </div>
       )}
 
-      {stage === "rotate" ? (
-        <div className="intro-splash rotate-hint">
-          <div className="rotate-phone" aria-hidden />
-          <p className="rotate-title">Otoč telefon na šířku</p>
-          <p className="rotate-sub">Louka se hraje naležato — zvířátka potřebují rozběh 🐾</p>
-          <button className="rotate-anyway" onClick={() => setStage("logo")}>
-            pokračovat na výšku
+      {stage === "choice" ? (
+        <div className="intro-splash orient-splash">
+          <p className="orient-eyebrow">Nech mě růst uvádí</p>
+          <h1 className="orient-title">Jak chceš hrát?</h1>
+          <p className="orient-sub">Louku si nejlíp užiješ na šířku — ale je to na tobě.</p>
+          <div className="orient-cards" role="radiogroup" aria-label="Orientace obrazovky">
+            <button
+              className={`orient-card${orient === "landscape" ? " on" : ""}`}
+              role="radio"
+              aria-checked={orient === "landscape"}
+              onClick={() => setOrient("landscape")}
+            >
+              <span className="orient-badge">doporučeno</span>
+              <span className="orient-glyph wide" aria-hidden />
+              <b>Na šířku</b>
+              <small>celá Louka před tebou</small>
+            </button>
+            <button
+              className={`orient-card${orient === "portrait" ? " on" : ""}`}
+              role="radio"
+              aria-checked={orient === "portrait"}
+              onClick={() => setOrient("portrait")}
+            >
+              <span className="orient-glyph tall" aria-hidden />
+              <b>Na výšku</b>
+              <small>hraní jednou rukou</small>
+            </button>
+          </div>
+          <button className="orient-go" onClick={confirmChoice}>
+            Spustit ▸
           </button>
         </div>
-      ) : stage === "logo" ? (
-        <div className="intro-splash logo-splash">
+      ) : stage === "menu" ? (
+        <div className="menu-screen">
+          {/* pasoucí se zvířata + světelné pyly — klidný život ve scéně */}
+          <div className="menu-fauna" aria-hidden>
+            {GRAZE.map((g, i) => {
+              const a = ANIMAL_BY_ID[g.id];
+              return a ? (
+                <span
+                  key={g.id}
+                  className={`graze${g.flip ? " flip" : ""}`}
+                  style={{ left: `${g.x}%`, bottom: `${g.y}%`, animationDelay: `${0.4 + i * 0.12}s`, "--bob": `${3.2 + i * 0.4}s` } as CSSProperties}
+                >
+                  <AnimalSprite animal={a} size={g.size} />
+                </span>
+              ) : null;
+            })}
+            {MOTES.map((m, i) => (
+              <span
+                key={i}
+                className="mote"
+                style={{ left: `${m.x}%`, width: m.s, height: m.s, animationDuration: `${m.dur}s`, animationDelay: `${m.delay}s` }}
+              />
+            ))}
+          </div>
+
+          <div className="menu-hero">
+            <h1 className="menu-title">Louka</h1>
+            <p className="menu-tag">survival azylu Nech mě růst</p>
+          </div>
+
+          <nav className="menu-nav" aria-label="Hlavní menu">
+            {hasSave ? (
+              <>
+                <button className="menu-btn primary" style={{ animationDelay: "0.55s" }} onClick={() => start("START")}>
+                  Pokračovat
+                  <small>Den {state.day} · {SEASON_LABEL[state.season]}</small>
+                </button>
+                <button className="menu-btn" style={{ animationDelay: "0.65s" }} onClick={newGame}>
+                  Nová hra
+                </button>
+              </>
+            ) : (
+              <button className="menu-btn primary" style={{ animationDelay: "0.55s" }} onClick={() => start("RESET")}>
+                Začít hrát
+              </button>
+            )}
+            <button className="menu-btn" style={{ animationDelay: "0.75s" }} onClick={() => setAbout(true)}>
+              O Louce
+            </button>
+            {onDlc && (
+              <button className="menu-btn" style={{ animationDelay: "0.85s" }} onClick={onDlc}>
+                Rozšíření
+              </button>
+            )}
+          </nav>
+
+          <footer className="menu-foot">
+            <span>Podle skutečných zvířat azylu · nechmerust.org</span>
+            <a className="af-credit" href="https://www.antoninfigueroa.cz" target="_blank" rel="noopener noreferrer">
+              <AFLogo size={26} />
+              <span>web vytvořil <span className="af-name">Antonín Figueroa</span></span>
+            </a>
+          </footer>
+        </div>
+      ) : (
+        <div className={`intro-splash logo-splash${stage === "outro" ? " out" : ""}`}>
           <div className="splash-logo">
             <img
               className="splash-logo-img"
@@ -143,58 +293,48 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
           <p className="splash-sub">azyl pro zvířata uvádí</p>
           <p className="splash-skip">klepni pro přeskočení</p>
         </div>
-      ) : (
-        <div className="intro-card">
-          <div className="intro-peek">
-            {PEEK.map((id, i) => {
-              const a = ANIMAL_BY_ID[id];
-              return a ? (
-                <span key={id} className="peek-pop" style={{ animationDelay: `${0.15 + i * 0.08}s` }}>
-                  <AnimalSprite animal={a} size={62} />
-                </span>
-              ) : null;
-            })}
-          </div>
-          <h1 className="intro-title">
-            {"Louka".split("").map((ch, i) => (
-              <span key={i} className="title-letter" style={{ animationDelay: `${0.05 + i * 0.07}s` }}>{ch}</span>
-            ))}
-          </h1>
-          <p className="intro-sub">survival azylu <b>Nech mě růst</b></p>
-          <p className="intro-text">
-            Přijdeš na <b>zelenou louku</b> uprostřed lesů — a Tomáš tě provede od prvního kůlu.
-            Postav si přístřešek, kuchyň, dílnu, chlívky i ohrady. Zvířátka už čekají na svůj domeček!
-            A až bude Louka stát, začne to hlavní: přes <b>sto zachráněných zvířat</b> nakrmit,
-            večer zavřít na klidnou noc a <b>přežít i zimu</b>. Zvládneš to?
-          </p>
+      )}
 
-          <div className="intro-people">
-            {PEOPLE.map((p) => (
-              <div key={p.id} className="intro-person">
-                <PersonSprite person={p} size={84} />
-                <b>{p.name}</b>
-                <small>{p.role}</small>
-                <p>„{p.line}“</p>
-              </div>
-            ))}
+      {/* O Louce — příběh hry a průvodci (dřív rozházené po menu kartě) */}
+      {about && (
+        <div className="modal-backdrop" onClick={() => setAbout(false)}>
+          <div className="modal about-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setAbout(false)} aria-label="Zavřít">×</button>
+            <h2>O Louce</h2>
+            <p className="intro-text">
+              Přijdeš na <b>zelenou louku</b> uprostřed lesů — a Tomáš tě provede od prvního kůlu.
+              Postav si přístřešek, kuchyň, dílnu, chlívky i ohrady. Zvířátka už čekají na svůj domeček!
+              A až bude Louka stát, začne to hlavní: přes <b>sto zachráněných zvířat</b> nakrmit,
+              večer zavřít na klidnou noc a <b>přežít i zimu</b>. Zvládneš to?
+            </p>
+            <div className="intro-people">
+              {PEOPLE.map((p) => (
+                <div key={p.id} className="intro-person">
+                  <PersonSprite person={p} size={84} />
+                  <b>{p.name}</b>
+                  <small>{p.role}</small>
+                  <p>„{p.line}“</p>
+                </div>
+              ))}
+            </div>
+            <p className="intro-credit">Postavičky, fotky a příběhy podle skutečných obyvatel Louky · nechmerust.org</p>
           </div>
+        </div>
+      )}
 
-          <div className="intro-actions">
-            <button className="big-btn" onClick={() => start("START")}>
-              {hasSave ? "Pokračovat 🌱" : "Začít hrát 🌱"}
-            </button>
-            {hasSave && (
-              <button className="ghost-btn" onClick={() => start("RESET")}>
-                Nová hra od začátku
-              </button>
-            )}
-            {onDlc && <button className="ghost-btn" onClick={onDlc}>🌾 Rozšíření</button>}
+      {/* Nová hra přes uložený postup — potvrzení, ať o něj hráč nepřijde omylem */}
+      {confirmReset && (
+        <div className="modal-backdrop" onClick={() => setConfirmReset(false)}>
+          <div className="modal confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Začít znovu?</h2>
+            <p className="intro-text">
+              Uložený postup (Den {state.day} · {SEASON_LABEL[state.season]}) se smaže a Louka začne od prvního dne.
+            </p>
+            <div className="intro-actions">
+              <button className="big-btn" onClick={() => start("RESET")}>Ano, začít znovu</button>
+              <button className="ghost-btn" onClick={() => setConfirmReset(false)}>Zpět</button>
+            </div>
           </div>
-          <p className="intro-credit">Postavičky, fotky a příběhy podle skutečných obyvatel Louky · nechmerust.org</p>
-          <a className="af-credit" href="https://www.antoninfigueroa.cz" target="_blank" rel="noopener noreferrer" style={{ marginTop: 10 }}>
-            <AFLogo size={34} />
-            <span>web vytvořil <span className="af-name">Antonín Figueroa</span></span>
-          </a>
         </div>
       )}
     </div>

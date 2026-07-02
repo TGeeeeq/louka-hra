@@ -607,45 +607,63 @@ button:disabled { cursor: not-allowed; }
   to { opacity: 0.7; transform: scaleX(1.15); }
 }
 
-/* výzva k otočení telefonu na šířku (jen mobil na výšku) */
-.rotate-hint { max-width: 300px; }
-.rotate-phone {
-  width: 58px; height: 92px; margin: 0 auto 20px; position: relative;
-  border: 4px solid #f7f2e7; border-radius: 12px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
-  animation: phone-turn 2.4s ease-in-out infinite;
+/* outro intra: logo se rozpustí do rozednění, stampede dozní — žádný střih */
+.logo-splash.out { animation: splash-out 1.5s ease forwards; pointer-events: none; }
+@keyframes splash-out {
+  to { opacity: 0; transform: scale(1.07) translateY(-14px); }
 }
-.rotate-phone::after {
-  content: ""; position: absolute; left: 50%; bottom: 5px; width: 18px; height: 4px;
-  margin-left: -9px; border-radius: 4px; background: #f7f2e7;
-}
-@keyframes phone-turn {
-  0%, 18% { transform: rotate(0); }
-  48%, 82% { transform: rotate(-90deg); }
-  100% { transform: rotate(0); }
-}
-.rotate-title { font-family: var(--font-serif); font-size: 1.45rem; }
-.rotate-sub { margin-top: 8px; font-size: 0.85rem; color: rgba(247, 242, 231, 0.75); }
-.rotate-anyway {
-  margin-top: 22px; padding: 10px 18px; border-radius: 999px; font-weight: 600;
-  font-size: 0.78rem; color: rgba(247, 242, 231, 0.85);
-  border: 1px solid rgba(247, 242, 231, 0.35); background: transparent;
-}
+.stampede { transition: opacity 1.3s ease; }
+.stampede.out { opacity: 0; }
 
-/* menu: karta a její obsah postupně naskočí */
-.intro-card { position: relative; animation: card-in 0.5s ease both; }
-@keyframes card-in { from { opacity: 0; transform: translateY(18px) scale(0.98); } to { opacity: 1; transform: none; } }
-.title-letter { display: inline-block; opacity: 0; animation: letter-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
-@keyframes letter-in { from { opacity: 0; transform: translateY(-14px) rotate(-6deg); } to { opacity: 1; transform: none; } }
-.peek-pop { display: inline-block; opacity: 0; animation: peek-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.25) both; }
-@keyframes peek-in { from { opacity: 0; transform: translateY(10px) scale(0.6); } to { opacity: 1; transform: none; } }
+/* volba orientace — místo direktivní výzvy si hráč vybere, jak hrát */
+.orient-splash { max-width: 480px; }
+.orient-eyebrow {
+  font-size: 0.68rem; font-weight: 600; letter-spacing: 0.24em; text-transform: uppercase;
+  color: rgba(247, 242, 231, 0.55);
+}
+.orient-title { font-family: var(--font-serif); font-size: clamp(1.7rem, 5vw, 2.2rem); color: #f7f2e7; margin-top: 8px; }
+.orient-sub { margin-top: 8px; font-size: 0.88rem; color: rgba(247, 242, 231, 0.75); }
+.orient-cards { display: flex; gap: 14px; justify-content: center; margin-top: 24px; }
+.orient-card {
+  position: relative; width: 150px; padding: 20px 14px 16px; border-radius: 18px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  color: rgba(247, 242, 231, 0.85);
+  background: rgba(247, 242, 231, 0.06); border: 1px solid rgba(247, 242, 231, 0.22);
+  backdrop-filter: blur(4px);
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+}
+.orient-card:hover { transform: translateY(-2px); border-color: rgba(247, 242, 231, 0.45); }
+.orient-card.on {
+  color: #fff; border-color: var(--accent); background: rgba(240, 232, 146, 0.12);
+  box-shadow: 0 0 0 1px var(--accent), 0 18px 36px -18px rgba(0, 0, 0, 0.6);
+}
+.orient-card b { font-size: 0.95rem; margin-top: 8px; }
+.orient-card small { font-size: 0.7rem; opacity: 0.75; line-height: 1.3; }
+.orient-badge {
+  position: absolute; top: -9px; left: 50%; transform: translateX(-50%);
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  background: var(--accent); color: var(--moss-deep); padding: 2px 10px; border-radius: 999px;
+}
+/* glyf telefonu — jen obrys, poměr stran napoví orientaci (výška bloku 64px) */
+.orient-glyph { border: 3px solid currentColor; border-radius: 8px; opacity: 0.9; }
+.orient-glyph.wide { width: 58px; height: 36px; margin: 11px 0; }
+.orient-glyph.tall { width: 36px; height: 58px; margin: 0; }
+.orient-go {
+  margin-top: 26px; padding: 13px 44px; border-radius: 999px;
+  background: var(--cream); color: var(--moss-deep); font-weight: 700; font-size: 1rem;
+  letter-spacing: 0.02em; box-shadow: 0 14px 34px -12px rgba(0, 0, 0, 0.55);
+  transition: transform 0.14s ease, filter 0.14s ease;
+}
+.orient-go:hover { transform: translateY(-2px); filter: brightness(1.05); }
+.orient-card:focus-visible, .orient-go:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .intro, .intro::before, .intro-sun, .intro-hills, .intro-card, .title-letter, .peek-pop,
-  .runner, .runner-bob, .runner::after, .splash-logo, .splash-pen, .rotate-phone { animation: none !important; transition: none !important; opacity: 1; }
+  .intro, .intro::before, .intro-sun, .intro-hills, .menu-hero, .menu-btn, .menu-foot,
+  .graze, .orient-splash, .runner, .runner-bob, .runner::after, .splash-logo, .splash-pen { animation: none !important; transition: none !important; opacity: 1; }
   .splash-logo-img { animation: none !important; -webkit-mask-image: none; mask-image: none; }
   .intro { background: linear-gradient(#dcf1e4 0%, #a9d68f 55%, #8cc270 100%); }
   .intro-sun { top: 12%; }
+  .mote { display: none; }
 }
 
 /* měkký nástup do světa po startu hry */
@@ -656,13 +674,108 @@ button:disabled { cursor: not-allowed; }
 }
 @keyframes game-fade { to { opacity: 0; visibility: hidden; } }
 @media (prefers-reduced-motion: reduce) { .game-fade-in { display: none; } }
-.intro-card {
-  background: var(--cream); border-radius: var(--r-lg); box-shadow: var(--shadow-lg);
-  padding: 28px; max-width: 600px; text-align: center;
+/* ===== Hlavní menu — čistý full-screen title screen ===================== */
+.menu-screen {
+  position: relative; z-index: 2; width: 100%; align-self: stretch;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: clamp(18px, 5vh, 44px); padding: 24px 20px 70px;
 }
-.intro-peek { display: flex; justify-content: center; flex-wrap: wrap; gap: 2px; margin-bottom: 6px; }
-.intro-title { font-size: 3rem; color: var(--moss-deep); letter-spacing: -0.01em; }
-.intro-sub { font-size: 1.1rem; color: var(--terracotta); margin-bottom: 14px; }
+/* jemná vinětace — prohloubí scénu, obsah nechává čistý */
+.menu-screen::before {
+  content: ""; position: absolute; inset: -24px; pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 40%, transparent 58%, rgba(31, 61, 42, 0.2) 100%);
+}
+
+.menu-hero { text-align: center; animation: fade-up 0.9s ease 0.15s both; }
+.menu-title {
+  font-size: clamp(3.4rem, 11vmin, 5.6rem); font-weight: 600; color: var(--moss-deep);
+  letter-spacing: 0.01em; line-height: 1;
+  text-shadow: 0 2px 0 rgba(247, 242, 231, 0.55), 0 10px 42px rgba(247, 242, 231, 0.55);
+}
+.menu-tag {
+  margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 12px;
+  font-size: 0.76rem; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
+  color: rgba(31, 61, 42, 0.72); white-space: nowrap;
+}
+.menu-tag::before, .menu-tag::after { content: ""; width: 34px; height: 1px; background: rgba(31, 61, 42, 0.35); flex-shrink: 0; }
+
+.menu-nav { display: flex; flex-direction: column; gap: 11px; width: min(320px, 84vw); }
+.menu-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 13px 20px; border-radius: 15px;
+  font-size: 1rem; font-weight: 600; letter-spacing: 0.05em;
+  color: var(--cream); background: rgba(31, 61, 42, 0.68);
+  border: 1px solid rgba(247, 242, 231, 0.14);
+  backdrop-filter: blur(5px);
+  box-shadow: 0 14px 30px -16px rgba(31, 61, 42, 0.6);
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  animation: fade-up 0.7s ease both;
+}
+.menu-btn:hover {
+  transform: translateY(-2px); background: rgba(31, 61, 42, 0.85);
+  border-color: rgba(240, 232, 146, 0.55); box-shadow: 0 18px 36px -16px rgba(31, 61, 42, 0.7);
+}
+.menu-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.menu-btn small { font-size: 0.66rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.72; }
+.menu-btn.primary {
+  background: var(--cream); color: var(--moss-deep); border-color: transparent; font-weight: 700;
+  box-shadow: 0 18px 40px -14px rgba(31, 61, 42, 0.55);
+}
+.menu-btn.primary:hover { background: #fffdf6; }
+.menu-btn.primary small { color: var(--terracotta); opacity: 0.9; }
+
+.menu-foot {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px 18px; flex-wrap: wrap;
+  padding: 26px 18px 12px; font-size: 0.7rem; color: rgba(247, 242, 231, 0.85);
+  text-shadow: 0 1px 6px rgba(31, 61, 42, 0.55);
+  /* scrim: text patičky zůstane čitelný i přes zvířata a kopce */
+  background: linear-gradient(to top, rgba(31, 61, 42, 0.42), transparent);
+  animation: fade-up 0.8s ease 0.95s both;
+}
+.menu-foot .af-credit { font-size: 0.7rem; color: rgba(247, 242, 231, 0.85); }
+.menu-foot .af-credit:hover { color: #fff; }
+@media (max-width: 560px) { .menu-foot { justify-content: center; text-align: center; } }
+
+/* pasoucí se zvířata + světelné pyly — klidný život ve scéně menu */
+.menu-fauna { position: absolute; inset: 0; pointer-events: none; z-index: -1; }
+.graze {
+  position: absolute; opacity: 0;
+  filter: drop-shadow(0 6px 6px rgba(31, 61, 42, 0.18));
+  animation:
+    graze-in 0.8s ease both,
+    graze-bob var(--bob, 3.4s) ease-in-out 1.4s infinite alternate;
+}
+@keyframes graze-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes graze-bob { from { transform: translateY(0); } to { transform: translateY(-3px); } }
+.graze.flip svg { transform: scaleX(-1); }
+.mote {
+  position: absolute; bottom: 16%; border-radius: 50%;
+  background: rgba(255, 244, 190, 0.85); box-shadow: 0 0 10px 2px rgba(255, 236, 160, 0.5);
+  opacity: 0; animation: mote-float 12s linear infinite;
+}
+@keyframes mote-float {
+  0% { transform: translate(0, 0); opacity: 0; }
+  12% { opacity: 0.85; }
+  80% { opacity: 0.4; }
+  100% { transform: translate(26px, -46vh); opacity: 0; }
+}
+
+/* nízký displej (mobil naležato): hero vlevo, menu vpravo — konzolový layout */
+@media (max-height: 500px) {
+  .menu-screen { flex-direction: row; justify-content: center; gap: clamp(28px, 7vw, 80px); padding-bottom: 48px; }
+  .menu-title { font-size: clamp(2.6rem, 13vmin, 4rem); }
+  .menu-nav { width: min(280px, 46vw); gap: 8px; }
+  .menu-btn { padding: 10px 16px; font-size: 0.92rem; border-radius: 13px; }
+  .menu-foot { padding: 8px 14px; }
+}
+
+/* modaly menu: O Louce (příběh + průvodci) a potvrzení nové hry */
+.about-modal { max-width: 560px; max-height: 86vh; overflow-y: auto; }
+.about-modal h2 { margin-bottom: 10px; }
+.confirm-modal { max-width: 400px; text-align: center; }
+.confirm-modal h2 { margin-bottom: 8px; }
+
 .intro-text { font-size: 0.95rem; color: var(--text); margin-bottom: 18px; }
 .intro-people { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
 .intro-person { max-width: 160px; display: flex; flex-direction: column; align-items: center; }
@@ -677,7 +790,7 @@ button:disabled { cursor: not-allowed; }
 .big-btn:hover { transform: translateY(-2px); filter: brightness(1.07); }
 .ghost-btn { color: var(--muted); padding: 12px 18px; border-radius: 999px; font-weight: 600; }
 .ghost-btn:hover { background: rgba(0,0,0,0.05); }
-.intro-credit { margin-top: 16px; font-size: 0.74rem; color: var(--muted); }
+.intro-credit { margin-top: 4px; font-size: 0.74rem; color: var(--muted); }
 
 /* =========================================================================
    SVĚT (Pokémon-style mapa) — Canvas, HUD, dialog, ovládání, overlay
