@@ -8,7 +8,7 @@ const GADGETS: Gadget[] = [
   { id: "solar", icon: "☀️", name: "Solární panel", does: "Přes den dobíjí baterii — večer svítí" },
   { id: "pump", icon: "💧", name: "Vodní pumpa", does: "Žene vodu do napáječek" },
   { id: "heat", icon: "♨️", name: "Vyhřívaná napáječka", does: "V zimě voda nezamrzne" },
-  { id: "fence", icon: "⚡", name: "Elektrický ohradník", does: "V noci odradí lišku" },
+  { id: "fence", icon: "⚡", name: "Elektrický ohradník", does: "Udrží stádo uvnitř a noční zvědavce venku" },
 ];
 
 function shuffle<T>(arr: T[]): T[] {

@@ -1,11 +1,15 @@
 import { useState } from "react";
 import type { AnimalDef, FactCategory } from "../../game/types";
 import { ANIMALS } from "../../game/content/animals";
+import { WILD_ANIMALS } from "../../game/content/wild";
 import { FACTS } from "../../game/content/facts";
+import { QUEST_LINES } from "../../game/content/quests";
+import { ownedOnly } from "../../game/dlc/gate";
 import { AnimalSprite } from "../sprites/AnimalSprite";
 import { useGame } from "../store";
+import { photoUrl } from "../photo";
 
-type Tab = "zvirata" | "vedomosti" | "olouce";
+type Tab = "zvirata" | "ukoly" | "vedomosti" | "olouce";
 
 const CAT_LABEL: Record<FactCategory, string> = {
   zvirata: "🐾 Zvířata",
@@ -20,36 +24,112 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
   const [tab, setTab] = useState<Tab>("zvirata");
 
   const known = new Set(state.knownFacts);
+  const ownedFacts = ownedOnly(state, FACTS);
   const cats: FactCategory[] = ["byliny", "priroda", "obdobi", "azyl"];
 
   return (
     <div className="journal">
       <div className="subtabs">
         <button className={tab === "zvirata" ? "on" : ""} onClick={() => setTab("zvirata")}>🐾 Zvířata</button>
+        <button className={tab === "ukoly" ? "on" : ""} onClick={() => setTab("ukoly")}>📋 Úkoly</button>
         <button className={tab === "vedomosti" ? "on" : ""} onClick={() => setTab("vedomosti")}>📖 Vědomosti</button>
         <button className={tab === "olouce" ? "on" : ""} onClick={() => setTab("olouce")}>🌿 O Louce</button>
       </div>
 
-      {tab === "zvirata" && (
-        <div className="enc-grid">
-          {ANIMALS.map((a) => (
-            <button key={a.id} className="enc-card" onClick={() => onSelect(a)}>
-              <AnimalSprite animal={a} size={58} />
-              <b>{a.name}</b>
-              <small>{a.personality}</small>
-            </button>
-          ))}
+      {tab === "ukoly" && (
+        <div className="facts">
+          {QUEST_LINES.filter(
+            (l) => (!l.dlc || state.dlcOwned.includes(l.dlc)) && l.unlocked(state),
+          ).map((l) => {
+            const idx = state.questProgress[l.id] ?? 0;
+            const current = l.quests[idx];
+            return (
+              <div key={l.id} className="fact-cat">
+                <h4>
+                  {l.icon} {l.title}{" "}
+                  <small className="quest-progress">
+                    {Math.min(idx, l.quests.length)}/{l.quests.length}
+                  </small>
+                </h4>
+                {l.quests.map((q, i) => (
+                  <div key={q.id} className={`fact-row ${i < idx ? "" : i === idx ? "" : "locked"}`}>
+                    {i < idx ? (
+                      <b>✓ {q.title}</b>
+                    ) : i === idx ? (
+                      <>
+                        <b>▸ {q.title}</b>
+                        <p>{q.hint}</p>
+                      </>
+                    ) : (
+                      <b className="lock">🔒 …</b>
+                    )}
+                  </div>
+                ))}
+                {!current && <p className="panel-lead">Linka dokončená! 🎉</p>}
+              </div>
+            );
+          })}
         </div>
+      )}
+
+      {tab === "zvirata" && (
+        <>
+        <div className="enc-grid">
+          {ANIMALS.map((a) => {
+            const met = state.seenAnimals.includes(a.id);
+            const photo = met ? photoUrl(a) : null;
+            return (
+              <button key={a.id} className="enc-card" onClick={() => onSelect(a)}>
+                <span className="enc-portrait">
+                  <AnimalSprite animal={a} size={58} />
+                  {photo && (
+                    <img
+                      className="enc-photo"
+                      src={photo}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      onError={(e) => e.currentTarget.remove()}
+                    />
+                  )}
+                </span>
+                <b>{a.name}</b>
+                <small>{a.personality}</small>
+              </button>
+            );
+          })}
+        </div>
+        {(() => {
+          const met = WILD_ANIMALS.filter((w) =>
+            w.id === "liska" ? state.fox.stage !== "les" : (state.wildSeen[w.id] ?? 0) > 0,
+          );
+          if (!met.length) return null;
+          return (
+            <>
+              <h4 className="enc-wild-head">🌲 Divocí sousedé</h4>
+              <div className="enc-grid">
+                {met.map((w) => (
+                  <button key={w.id} className="enc-card" onClick={() => onSelect(w)}>
+                    <AnimalSprite animal={w} size={58} />
+                    <b>{w.name}</b>
+                    <small>{w.personality}</small>
+                  </button>
+                ))}
+              </div>
+            </>
+          );
+        })()}
+        </>
       )}
 
       {tab === "vedomosti" && (
         <div className="facts">
           <p className="panel-lead">
-            Objeveno {FACTS.filter((f) => known.has(f.id)).length} z {FACTS.length} zajímavostí. Objevuj je
+            Objeveno {ownedFacts.filter((f) => known.has(f.id)).length} z {ownedFacts.length} zajímavostí. Objevuj je
             prací — sběrem bylin, úklidem, zavíráním na noc…
           </p>
           {cats.map((c) => {
-            const list = FACTS.filter((f) => f.category === c);
+            const list = ownedFacts.filter((f) => f.category === c);
             return (
               <div key={c} className="fact-cat">
                 <h4>{CAT_LABEL[c]}</h4>
@@ -86,7 +166,7 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
           <ul>
             <li><b>Ráno</b> vypusť drůbež, nakrm a napoj všechny, sesbírej vejce.</li>
             <li><b>Poledne</b> ukliď, naštípej dřevo, rozdělej oheň, sbírej byliny a vyráběj.</li>
-            <li><b>Večer</b> dokrm a hlavně <b>zavři zvířata</b> — venku je les a liška.</li>
+            <li><b>Večer</b> dokrm a hlavně <b>zavři zvířata</b> — v klidu se spí líp a les má v noci svůj vlastní život.</li>
             <li>Prodávej výrobky, kupuj zásoby a <b>stavby</b>, co ti ulehčí práci.</li>
             <li>Hlídej spokojenost zvířat i vlastní sytost — a přežij <b>zimu</b>.</li>
           </ul>

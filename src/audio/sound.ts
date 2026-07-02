@@ -1,21 +1,110 @@
 // Zvukový engine na Web Audio API — žádné soubory, čistá syntéza.
-// FM syntéza, noise bursts, tension systém, NPC hlasy, adaptivní hudba.
-// Spouští se až po prvním gestu uživatele (autoplay policy).
+// FM syntéza, noise bursts, tension systém, NPC hlasy a VRSTVENÁ adaptivní
+// hudba (melodie / bas / pad / perkuse / akční arpeggio) s lookahead
+// schedulerem. Napětí mění mix i tempo; blížící se zima hudbu postupně
+// ztmavuje („hardship"). Spouští se až po prvním gestu uživatele.
 
-import type { Phase, Season } from "../game/types";
+import type { Phase, Season, Weather } from "../game/types";
+import { DAYS_PER_SEASON } from "../game/balance";
 
 type Wave = OscillatorType;
 
 export type TensionLevel = 0 | 1 | 2 | 3;
-// 0 = calm, 1 = alert, 2 = danger, 3 = relief
+// 0 = calm, 1 = alert (útěk), 2 = danger (poplach), 3 = relief (úleva)
 
 export type NpcId = "tomas" | "maruska" | "tony";
 export type NpcSentiment = "positive" | "neutral" | "negative" | "urgent" | "question";
 
+type LayerName = "melody" | "bass" | "pad" | "perc" | "arp";
+
+export interface MusicContext {
+  season: Season;
+  phase: Phase;
+  dayInSeason: number;
+  weather: Weather;
+}
+
+const BASE_MASTER = 0.3;
+
+// Mix vrstev + tempo podle napětí. Alert = „heartbeat", danger = hnací
+// rytmus s arpeggiem, relief = krátké projasnění.
+const MIX: Record<TensionLevel, { melody: number; bass: number; pad: number; perc: number; arp: number; tempo: number }> = {
+  0: { melody: 1.0, bass: 1.0, pad: 0.9, perc: 0.25, arp: 0, tempo: 1.0 },
+  1: { melody: 0.65, bass: 1.0, pad: 0.6, perc: 0.85, arp: 0.4, tempo: 1.15 },
+  2: { melody: 0.3, bass: 1.2, pad: 0.3, perc: 1.0, arp: 1.0, tempo: 1.35 },
+  3: { melody: 1.1, bass: 1.0, pad: 1.0, perc: 0.2, arp: 0, tempo: 1.0 },
+};
+
+// Perkusní vzory — 32 pozic (grid = osminy, 2 takty). 0 = nic, jinak gain mult.
+const PERC: Record<TensionLevel, { kick: number[]; hat: number[]; shaker: number[]; block: number[] }> = {
+  // calm: jen jemný shaker na osminách
+  0: {
+    kick: [],
+    hat: [],
+    shaker: [1, 0, 0, 0, 0.7, 0, 0, 0, 1, 0, 0, 0, 0.7, 0, 0, 0, 1, 0, 0, 0, 0.7, 0, 0, 0, 1, 0, 0, 0, 0.7, 0, 0, 0],
+    block: [],
+  },
+  // alert: „heartbeat" — lub-dub na začátku taktu
+  1: {
+    kick: [1, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    hat: [0, 0, 0, 0, 0, 0, 0, 0, 0.4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.4, 0, 0, 0, 0, 0, 0, 0],
+    shaker: [],
+    block: [],
+  },
+  // danger: hnací čtvrťový kick + off-beat hi-haty + akcenty
+  2: {
+    kick: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+    hat: [0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0, 0, 0, 0, 0, 0.8, 0, 1, 0],
+    shaker: [],
+    block: [0, 0, 0, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  },
+  // relief: jediný měkký shaker
+  3: {
+    kick: [],
+    hat: [],
+    shaker: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    block: [],
+  },
+};
+
+// Akční arpeggio per sezóna (v jejím modu, oktáva nad basem). 8 kroků.
+const ARPS: Record<Season, number[]> = {
+  jaro: [523, 659, 784, 659, 523, 784, 659, 784], // C dur (lydicky světlé)
+  leto: [587, 740, 880, 740, 587, 880, 740, 880], // D mixolydicky
+  podzim: [440, 523, 659, 523, 440, 659, 523, 659], // A aiolsky
+  zima: [330, 392, 494, 392, 330, 494, 392, 494], // E moll — ledové
+};
+
+// Akordové pady — 2 akordy per sezóna, střídají se po taktu (16 grid kroků).
+// Zima schválně bez tercie (prázdné kvinty = chlad).
+const PADS: Record<Season, number[][]> = {
+  jaro: [
+    [130.8, 164.8, 196.0, 246.9], // Cmaj7
+    [146.8, 185.0, 220.0], // D
+  ],
+  leto: [
+    [98.0, 123.5, 146.8, 174.6], // G7
+    [87.3, 110.0, 130.8], // F
+  ],
+  podzim: [
+    [110.0, 130.8, 164.8], // Am
+    [98.0, 123.5, 146.8], // G
+  ],
+  zima: [
+    [82.4, 123.5, 164.8], // E5 (bez tercie)
+    [65.4, 98.0, 130.8], // C5 (bez tercie)
+  ],
+};
+
+// Kořen tóniny sezóny (pro fanfáry a motivy v tónině).
+const KEY_ROOT: Record<Season, number> = { jaro: 261.6, leto: 293.7, podzim: 220.0, zima: 164.8 };
+// Tercie modu: dur pro jaro/léto, moll pro podzim/zimu.
+const KEY_THIRD: Record<Season, number> = { jaro: 1.26, leto: 1.26, podzim: 1.19, zima: 1.19 };
+
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
-  private limiter: DynamicsCompressorNode | null = null; // brání klipování (chrčení) při překryvu tónů
+  private limiter: DynamicsCompressorNode | null = null; // brání klipování při překryvu tónů
   private verb: ConvolverNode | null = null;
   muted = false;
   musicOn = true;
@@ -24,20 +113,39 @@ class SoundEngine {
   private ambientTimer: number | null = null;
   private ambientIntervalRange: [number, number] = [2200, 3500];
 
-  // Music
-  private musicTimer: number | null = null;
-  private musicStep = 0;
+  // Hudba — vrstvy + lookahead scheduler
+  private musicBus: GainNode | null = null;
+  private layers: Record<LayerName, GainNode> | null = null;
+  private padFilter: BiquadFilterNode | null = null;
+  private schedTimer: number | null = null;
+  private nextStepTime = 0;
+  private gridStep = 0;
+  private tempoMult = 1.0;
+  private noiseBuf: AudioBuffer | null = null; // sdílený šum pro haty/shaker/vítr
+
   private season: Season = "jaro";
   private phase: Phase = "rano";
+  private dayInSeason = 1;
+  /** 0..1 — jak „tvrdý" je právě život (pozdní podzim → zima = 1). */
+  private hardship = 0;
+
+  // Zimní drone + vítr (meteorologická vrstva)
+  private winterOsc: OscillatorNode[] = [];
+  private winterGain: GainNode | null = null;
+  private windSrc: AudioBufferSourceNode | null = null;
+  private windGain: GainNode | null = null;
+  private windLfo: OscillatorNode | null = null;
 
   // Tension system
   private tensionLevel: TensionLevel = 0;
   private dangerGain: GainNode | null = null;
   private dangerOsc: OscillatorNode | null = null;
+  private reliefTimer: number | null = null;
 
-  // NPC cooldown
+  // Cooldowny
   private lastNpcSpeak: Record<string, number> = {};
   private NPC_SPEAK_COOLDOWN = 1800; // ms
+  private lastLowEnergy = 0;
 
   // ─── INIT ──────────────────────────────────────────────────────────────────
 
@@ -47,9 +155,8 @@ class SoundEngine {
       if (!AC) return;
       this.ctx = new AC();
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.3;
-      // Limiter na výstupu: chytá špičky z překrývajících se FM tónů + dozvuku,
-      // takže se signál nepřebudí do tvrdého ořezu (to bylo to „zachrčení").
+      this.master.gain.value = BASE_MASTER;
+      // Limiter na výstupu: chytá špičky z překrývajících se FM tónů + dozvuku.
       this.limiter = this.ctx.createDynamicsCompressor();
       this.limiter.threshold.value = -8;
       this.limiter.knee.value = 0;
@@ -60,11 +167,41 @@ class SoundEngine {
       this.verb.buffer = this.makeReverb(1.1, 2.2);
       const verbGain = this.ctx.createGain();
       verbGain.gain.value = 0.18;
-      // vše teče přes master → limiter → výstup (dozvuk taky, ať respektuje mute i limit)
       this.master.connect(this.limiter);
       this.limiter.connect(this.ctx.destination);
       this.verb.connect(verbGain);
       verbGain.connect(this.master);
+
+      // Hudební sběrnice: vrstvy → musicBus → master. Ducking (tension) se
+      // děje TADY — SFX na masteru zůstávají v plné síle i při poplachu.
+      this.musicBus = this.ctx.createGain();
+      this.musicBus.gain.value = 1.0;
+      this.musicBus.connect(this.master);
+      const mk = (v: number) => {
+        const g = this.ctx!.createGain();
+        g.gain.value = v;
+        g.connect(this.musicBus!);
+        return g;
+      };
+      const m0 = MIX[0];
+      this.layers = {
+        melody: mk(m0.melody),
+        bass: mk(m0.bass),
+        pad: mk(m0.pad),
+        perc: mk(m0.perc),
+        arp: mk(m0.arp),
+      };
+      // Pad má společný lowpass — „teplota" zvuku podle hardship.
+      this.padFilter = this.ctx.createBiquadFilter();
+      this.padFilter.type = "lowpass";
+      this.padFilter.frequency.value = 3000;
+      this.padFilter.connect(this.layers.pad);
+
+      // Sdílený 2s šumový buffer (haty, shaker, vítr) — žádné alokace za běhu.
+      const rate = this.ctx.sampleRate;
+      this.noiseBuf = this.ctx.createBuffer(1, rate * 2, rate);
+      const nd = this.noiseBuf.getChannelData(0);
+      for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
   }
@@ -82,29 +219,34 @@ class SoundEngine {
 
   // ─── PRIMITIVES ────────────────────────────────────────────────────────────
 
-  // Měkký sinusový tón — základ pro melodie a ambient
+  // Měkký tón — okamžitý (SFX). Výstup jde na master (+ dozvuk).
   private tone(freq: number, dur: number, type: Wave = "sine", gain = 0.1, delay = 0, jitter = 0) {
     if (!this.ctx || !this.master || this.muted) return;
+    this.toneAt(freq, dur, this.ctx.currentTime + delay, type, gain, this.master, true, jitter);
+  }
+
+  // Tón v absolutním čase `when` do zadaného uzlu — základ scheduleru.
+  private toneAt(freq: number, dur: number, when: number, type: Wave, gain: number, out: AudioNode, verbSend = false, jitter = 0) {
+    if (!this.ctx || this.muted) return;
     if (jitter) {
       freq *= 1 + (Math.random() - 0.5) * jitter;
       gain *= 0.82 + Math.random() * 0.36;
     }
-    const t0 = this.ctx.currentTime + delay;
     const osc = this.ctx.createOscillator();
     const g = this.ctx.createGain();
     osc.type = type;
-    osc.frequency.setValueAtTime(freq, t0);
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(gain, t0 + Math.min(0.06, dur * 0.3));
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.frequency.setValueAtTime(freq, when);
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(Math.max(gain, 0.0002), when + Math.min(0.06, dur * 0.3));
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
     osc.connect(g);
-    g.connect(this.master);
-    if (this.verb) g.connect(this.verb);
-    osc.start(t0);
-    osc.stop(t0 + dur + 0.05);
+    g.connect(out);
+    if (verbSend && this.verb) g.connect(this.verb);
+    osc.start(when);
+    osc.stop(when + dur + 0.05);
   }
 
-  // Sekvence tónů
+  // Sekvence tónů (SFX)
   private seq(notes: { f: number; d: number; t?: Wave; g?: number }[], gap = 0.02) {
     let when = 0;
     for (const n of notes) {
@@ -155,7 +297,7 @@ class SoundEngine {
     osc.start(t0); osc.stop(t0 + dur + 0.05);
   }
 
-  // Noise burst — přes LP filtr, s průběhem gain
+  // Noise burst — přes LP filtr (SFX)
   private noise(dur: number, gain: number, lpFreq: number, delay = 0): void {
     if (!this.ctx || !this.master || this.muted) return;
     const t0 = this.ctx.currentTime + delay;
@@ -175,6 +317,66 @@ class SoundEngine {
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     src.connect(lp); lp.connect(g); g.connect(this.master);
     src.start(t0); src.stop(t0 + dur + 0.05);
+  }
+
+  // ─── PERKUSE (plánované v absolutním čase, suché — bez dozvuku) ─────────────
+
+  private percKick(t: number, g: number) {
+    if (!this.ctx || !this.layers) return;
+    const osc = this.ctx.createOscillator();
+    const gn = this.ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(150, t);
+    osc.frequency.exponentialRampToValueAtTime(50, t + 0.04);
+    gn.gain.setValueAtTime(0.0001, t);
+    gn.gain.exponentialRampToValueAtTime(g, t + 0.004);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    osc.connect(gn);
+    gn.connect(this.layers.perc);
+    osc.start(t);
+    osc.stop(t + 0.3);
+  }
+
+  private noiseHit(t: number, g: number, dur: number, type: BiquadFilterType, freq: number, q = 1) {
+    if (!this.ctx || !this.layers || !this.noiseBuf) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.loop = true;
+    const f = this.ctx.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = freq;
+    f.Q.value = q;
+    const gn = this.ctx.createGain();
+    gn.gain.setValueAtTime(0.0001, t);
+    gn.gain.exponentialRampToValueAtTime(g, t + 0.008);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f); f.connect(gn); gn.connect(this.layers.perc);
+    src.start(t, Math.random());
+    src.stop(t + dur + 0.05);
+  }
+
+  private percHat(t: number, g: number, open = false) {
+    this.noiseHit(t, g, open ? 0.12 : 0.03, "highpass", 7000);
+  }
+
+  private percShaker(t: number, g: number) {
+    this.noiseHit(t, g * (0.7 + Math.random() * 0.6), 0.06, "bandpass", 4000, 1.2);
+  }
+
+  private percBlock(t: number, g: number) {
+    if (!this.ctx || !this.layers) return;
+    // dřevěné ťuknutí — krátký FM tón do perc vrstvy
+    const osc = this.ctx.createOscillator();
+    const gn = this.ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(820 + Math.random() * 60, t);
+    gn.gain.setValueAtTime(0.0001, t);
+    gn.gain.exponentialRampToValueAtTime(g, t + 0.003);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    osc.connect(gn);
+    gn.connect(this.layers.perc);
+    osc.start(t);
+    osc.stop(t + 0.1);
   }
 
   // ─── SFX — základní (zpětná kompatibilita) ─────────────────────────────────
@@ -216,9 +418,17 @@ class SoundEngine {
     this.seq([{ f: 523, d: 0.12 }, { f: 659, d: 0.12 }, { f: 784, d: 0.2 }]);
   }
 
+  // Fanfára v tónině aktuální sezóny — sedí k padu, nezní „mimo".
   questDone() {
     this.ensure();
-    this.seq([{ f: 587, d: 0.14 }, { f: 740, d: 0.14 }, { f: 880, d: 0.14 }, { f: 1175, d: 0.3 }]);
+    const r = KEY_ROOT[this.season];
+    const third = KEY_THIRD[this.season];
+    this.seq([
+      { f: r, d: 0.14 },
+      { f: r * third, d: 0.14 },
+      { f: r * 1.5, d: 0.14 },
+      { f: r * 2, d: 0.3 },
+    ]);
   }
 
   build() {
@@ -254,13 +464,25 @@ class SoundEngine {
     this.tone(freq, 0.42, "sine", 0.13);
   }
 
-  // ─── ZVÍŘATA — stávající kompatibilní + FM verze ───────────────────────────
+  // Docházejí síly — měkký klesající motiv (max 1× za 30 s).
+  lowEnergy() {
+    this.ensure();
+    const now = Date.now();
+    if (now - this.lastLowEnergy < 30_000) return;
+    this.lastLowEnergy = now;
+    this.seq([
+      { f: 392, d: 0.18, g: 0.07 },
+      { f: 330, d: 0.3, g: 0.06 },
+    ]);
+    this.fm(98, 0.5, 0.15, 0.9, 0.04, "sine", 0.15);
+  }
+
+  // ─── ZVÍŘATA ────────────────────────────────────────────────────────────────
 
   animal(kind: string) {
     this.ensure();
     switch (kind) {
       case "drubez":
-        // FM klovkání 320–380 Hz, modRatio 6.0 = ostré harmoniky
         this.fm(340 + Math.random() * 40, 6.0, 0.8, 0.07, 0.08, "sine", 0);
         this.fm(320 + Math.random() * 40, 6.0, 0.7, 0.06, 0.07, "sine", 0.09);
         if (Math.random() < 0.4)
@@ -268,19 +490,16 @@ class SoundEngine {
         break;
 
       case "prasata":
-        // Hluboké FM 85–110 Hz, modRatio 0.5 = hrubé, + noise frknutí
         this.fm(90 + Math.random() * 20, 0.5, 1.2, 0.28, 0.10, "sawtooth", 0);
         if (Math.random() < 0.5) this.noise(0.12, 0.07, 320, 0.24);
         break;
 
       case "stado":
-        // Kráva: 98 Hz FM + vibrato přes FM modRatio 0.06 + kvinta dozvuk
         this.fm(98, 0.06, 0.15, 1.4, 0.09, "sine", 0);
         this.fm(98 * 1.5, 1.0, 0.3, 0.9, 0.05, "sine", 0.3);
         break;
 
       case "mazlici":
-        // Psi/kočky — portamento klesající
         this.seq([{ f: 580, d: 0.1, g: 0.07 }, { f: 460, d: 0.13, g: 0.06 }]);
         break;
 
@@ -289,13 +508,10 @@ class SoundEngine {
     }
   }
 
-  // ─── NOVÉ ANIMAL EVENTY ────────────────────────────────────────────────────
-
   animalPanic(kind: string) {
     this.ensure();
     switch (kind) {
       case "drubez":
-        // Rychlé opakované klovkání × 4 + panický výkřik
         for (let i = 0; i < 4; i++) {
           this.fm(440 + Math.random() * 80, 7.0, 1.2, 0.06, 0.10, "sine", i * 0.08);
         }
@@ -303,13 +519,11 @@ class SoundEngine {
         break;
 
       case "prasata":
-        // Kvičení: 220 Hz FM portamento nahoru 220→380
         this.fm(220, 4.0, 1.8, 0.35, 0.13, "sawtooth", 0, 380);
         this.noise(0.18, 0.08, 600, 0.32);
         break;
 
       case "stado":
-        // Stádo: rychlý mú + dupání (noise)
         this.fm(130, 2.0, 0.9, 0.3, 0.12, "sine", 0);
         this.fm(145, 2.0, 0.9, 0.25, 0.10, "sine", 0.12);
         this.noise(0.2, 0.06, 200, 0.05);
@@ -325,7 +539,6 @@ class SoundEngine {
         break;
 
       default:
-        // Generický panic — opakované FM pipy
         for (let i = 0; i < 3; i++) {
           this.fm(500 + Math.random() * 100, 5.0, 1.0, 0.07, 0.09, "sine", i * 0.09);
         }
@@ -336,25 +549,21 @@ class SoundEngine {
     this.ensure();
     switch (kind) {
       case "drubez":
-        // Dvě měkká klopknutí + portamento klesající (spokojené)
         this.fm(350, 5.0, 0.5, 0.10, 0.07, "sine", 0);
         this.fm(370, 4.5, 0.4, 0.09, 0.06, "sine", 0.12);
         this.fm(360, 4.0, 0.3, 0.16, 0.07, "sine", 0.26, 320);
         break;
 
       case "prasata":
-        // Pomalé hrdelní bublání: 95 Hz FM modRatio 0.3
         this.fm(95, 0.3, 0.5, 0.55, 0.08, "sine", 0);
         this.fm(100, 0.3, 0.4, 0.45, 0.07, "sine", 0.28);
         break;
 
       case "stado":
-        // Klidné mú, vibrato slabé, klesá na konci
         this.fm(98, 0.06, 0.08, 1.6, 0.08, "sine", 0, 88);
         break;
 
       case "mazlici":
-        // Předení / vrčení: 55 Hz FM, modRatio 30 = charakter předení
         this.fm(55, 30.0, 0.04, 1.0, 0.07, "sine", 0);
         break;
 
@@ -365,34 +574,28 @@ class SoundEngine {
 
   animalEscape(kind: string) {
     this.ensure();
-    // Alert pip — vždy
     this.tone(1400, 0.08, "sine", 0.14, 0);
     this.tone(1400, 0.08, "sine", 0.11, 0.12);
-    // Druh-specifická panika
     this.animalPanic(kind);
-    // Tension → alert
     this.setTension(1);
   }
 
   animalCaught() {
     this.ensure();
-    // Vzestupná triáda — "chytil jsem tě"
     this.seq([
       { f: 523, d: 0.10, t: "sine",     g: 0.10 },
       { f: 659, d: 0.10, t: "sine",     g: 0.10 },
       { f: 784, d: 0.22, t: "triangle", g: 0.09 },
     ]);
-    // Reset tension pokud žádný predátor aktivní
     if (this.tensionLevel <= 1) this.setTension(0);
   }
 
-  // ─── PREDÁTORSKÉ EVENTY ────────────────────────────────────────────────────
+  // ─── DIVOKÉ EVENTY (poplach = úlek, nikdy útok na zvíře) ───────────────────
 
   foxAlert() {
     this.ensure();
-    // Growl: 65 Hz FM, modRatio 7.0 = znepokojivý charakter
+    // zvědavé liščí pípnutí + growl (charakter, ne hrozba)
     this.fm(65, 7.0, 2.5, 0.28, 0.09, "sawtooth", 0);
-    // Alert pip dvakrát
     this.tone(1400, 0.06, "sine", 0.13, 0.22);
     this.tone(1400, 0.06, "sine", 0.10, 0.32);
     this.setTension(1);
@@ -400,39 +603,76 @@ class SoundEngine {
 
   foxAttack() {
     this.ensure();
-    // Útočný growl — delší, hlubší, více modulovaný
     this.fm(65, 7.0, 3.5, 0.55, 0.14, "sawtooth", 0);
     this.fm(72, 6.5, 3.0, 0.45, 0.11, "sawtooth", 0.12);
-    // Noise šelest: skok v trávě
     this.noise(0.18, 0.09, 800, 0.08);
-    // Zvíře reaguje panikou
     this.animalPanic("drubez");
     this.setTension(2);
   }
 
   eagleAttack() {
     this.ensure();
-    // Glissando střemhlavý let: 2200→800 Hz
     this.fm(2200, 1.0, 0.1, 0.6, 0.11, "sine", 0, 800);
-    // Výkřik: 1800 Hz krátký a ostrý
     this.tone(1800, 0.14, "sine", 0.14, 0.52);
-    // Šum křídel
     this.noise(0.25, 0.08, 2000, 0.18);
-    // Zvíře v panice
     this.animalPanic("drubez");
     this.setTension(2);
   }
 
   dangerRelief() {
     this.ensure();
-    // Sestupný tón — úleva
     this.seq([
       { f: 784, d: 0.14, t: "sine",     g: 0.08 },
       { f: 659, d: 0.14, t: "sine",     g: 0.07 },
       { f: 523, d: 0.28, t: "triangle", g: 0.07 },
     ]);
     this.setTension(3);
-    window.setTimeout(() => this.setTension(0), 2000);
+  }
+
+  // Rostoucí liščí důvěra — hřejivý stoupající motiv v tónině sezóny.
+  foxTrustMotif(level: 1 | 2 | 3 = 1) {
+    this.ensure();
+    const r = KEY_ROOT[this.season];
+    const third = KEY_THIRD[this.season];
+    const notes: { f: number; d: number; t?: Wave; g?: number }[] = [
+      { f: r * 0.5, d: 0.2, g: 0.07 },
+      { f: r * 0.5 * 1.5, d: 0.2, g: 0.07 },
+    ];
+    if (level >= 2) notes.push({ f: r * 0.5 * third * 1.5, d: 0.24, g: 0.07 });
+    if (level >= 3) notes.push({ f: r, d: 0.4, t: "triangle", g: 0.08 });
+    this.seq(notes, 0.03);
+    // krátké prohřátí padu
+    if (this.padFilter && this.ctx) {
+      const now = this.ctx.currentTime;
+      const cur = this.padFilter.frequency.value;
+      this.padFilter.frequency.cancelScheduledValues(now);
+      this.padFilter.frequency.setValueAtTime(cur, now);
+      this.padFilter.frequency.linearRampToValueAtTime(Math.min(4200, cur + 1200), now + 0.5);
+      this.padFilter.frequency.linearRampToValueAtTime(cur, now + 3);
+    }
+  }
+
+  // Mazlení s liškou — pomalá kolébavá figura, perkuse na chvíli ztichnou.
+  foxLullaby() {
+    this.ensure();
+    const r = KEY_ROOT[this.season] * 0.5;
+    const third = KEY_THIRD[this.season];
+    this.seq([
+      { f: r, d: 0.5, g: 0.07 },
+      { f: r * 1.5, d: 0.5, g: 0.06 },
+      { f: r * third, d: 0.7, t: "triangle", g: 0.07 },
+    ], 0.05);
+    if (this.layers && this.ctx) {
+      const now = this.ctx.currentTime;
+      for (const l of ["perc", "arp"] as const) {
+        const g = this.layers[l].gain;
+        const back = MIX[this.tensionLevel][l];
+        g.cancelScheduledValues(now);
+        g.setValueAtTime(g.value, now);
+        g.linearRampToValueAtTime(0.0001, now + 0.4);
+        g.linearRampToValueAtTime(back, now + 4);
+      }
+    }
   }
 
   // ─── NPC HLASY ─────────────────────────────────────────────────────────────
@@ -464,13 +704,10 @@ class SoundEngine {
       const jitter = 0.92 + Math.random() * 0.16;
       let freq = baseFreq * jitter;
 
-      // question: poslední dvě slabiky stoupají
       if (sentiment === "question" && i >= syllCount - 2)
         freq *= 1.0 + (i - syllCount + 2) * 0.09;
-      // negative: slabiky klesají
       if (sentiment === "negative")
         freq *= 1.0 - (i / syllCount) * 0.14;
-      // positive: mírný oblouk nahoru pak dolů
       if (sentiment === "positive")
         freq *= 1.0 + Math.sin((i / syllCount) * Math.PI) * 0.1;
 
@@ -479,44 +716,69 @@ class SoundEngine {
     }
   }
 
-  // ─── TENSION SYSTEM ────────────────────────────────────────────────────────
+  // ─── TENSION SYSTEM — mix vrstev + tempo ───────────────────────────────────
 
   setTension(level: TensionLevel) {
     if (this.tensionLevel === level) return;
     this.tensionLevel = level;
-    this.updateMusicTension(level);
+    this.applyTensionMix(level);
     this.updateAmbientTension(level);
-  }
-
-  private updateMusicTension(level: TensionLevel) {
-    if (!this.ctx || !this.master) return;
-    const now = this.ctx.currentTime;
-    const targetGain = ([1.0, 0.7, 0.35, 0.85] as const)[level] ?? 1.0;
-    this.master.gain.cancelScheduledValues(now);
-    this.master.gain.setValueAtTime(this.master.gain.value, now);
-    this.master.gain.linearRampToValueAtTime(0.3 * targetGain, now + 0.8);
-
     if (level === 2) this.startDangerDrone();
     else this.stopDangerDrone();
-
+    // relief se po 2 s sám rozpustí do klidu
+    if (this.reliefTimer != null) { window.clearTimeout(this.reliefTimer); this.reliefTimer = null; }
     if (level === 3) {
-      // Relief: krátký bump pak fade zpět
-      this.master.gain.linearRampToValueAtTime(0.38, now + 0.3);
-      this.master.gain.linearRampToValueAtTime(0.3, now + 1.8);
+      this.reliefTimer = window.setTimeout(() => {
+        this.reliefTimer = null;
+        this.setTension(0);
+      }, 2000);
+    }
+  }
+
+  getTension(): TensionLevel {
+    return this.tensionLevel;
+  }
+
+  private applyTensionMix(level: TensionLevel) {
+    if (!this.ctx || !this.layers) {
+      this.tempoMult = MIX[level].tempo;
+      return;
+    }
+    const m = MIX[level];
+    const now = this.ctx.currentTime;
+    const ramp = (g: GainNode, v: number, dur = 1.0) => {
+      g.gain.cancelScheduledValues(now);
+      g.gain.setValueAtTime(g.gain.value, now);
+      g.gain.linearRampToValueAtTime(Math.max(v, 0.0001), now + dur);
+    };
+    ramp(this.layers.melody, m.melody * (1 - 0.3 * this.hardship));
+    ramp(this.layers.bass, m.bass);
+    ramp(this.layers.pad, m.pad);
+    ramp(this.layers.perc, m.perc, 0.8);
+    ramp(this.layers.arp, m.arp, 0.8);
+    // tempo se projeví na dalším kroku scheduleru → plynulé accelerando
+    this.tempoMult = m.tempo;
+    // relief: krátké projasnění celé hudby
+    if (level === 3 && this.musicBus) {
+      const g = this.musicBus.gain;
+      g.cancelScheduledValues(now);
+      g.setValueAtTime(g.value, now);
+      g.linearRampToValueAtTime(1.25, now + 0.3);
+      g.linearRampToValueAtTime(1.0, now + 1.8);
     }
   }
 
   private startDangerDrone() {
-    if (!this.ctx || !this.master || this.dangerOsc) return;
+    if (!this.ctx || !this.musicBus || this.dangerOsc) return;
     const t0 = this.ctx.currentTime;
     this.dangerOsc = this.ctx.createOscillator();
     this.dangerGain = this.ctx.createGain();
     this.dangerOsc.type = "sawtooth";
-    this.dangerOsc.frequency.value = 55; // hluboké A1 — drone nebezpečí
+    this.dangerOsc.frequency.value = 55; // hluboké A1 — drone poplachu
     this.dangerGain.gain.setValueAtTime(0.0001, t0);
     this.dangerGain.gain.linearRampToValueAtTime(0.045, t0 + 1.2);
     this.dangerOsc.connect(this.dangerGain);
-    this.dangerGain.connect(this.master);
+    this.dangerGain.connect(this.musicBus);
     this.dangerOsc.start(t0);
   }
 
@@ -530,7 +792,6 @@ class SoundEngine {
   }
 
   private updateAmbientTension(level: TensionLevel) {
-    // Různé intervaly ticků dle urgence
     const intervals: [number, number][] = [
       [2200, 3500], // calm
       [1200, 1600], // alert
@@ -540,7 +801,114 @@ class SoundEngine {
     this.ambientIntervalRange = intervals[level];
   }
 
-  // ─── SEZÓNNÍ ZMĚNA ─────────────────────────────────────────────────────────
+  // ─── HERNÍ KONTEXT (sezóna / fáze / den / počasí) ──────────────────────────
+
+  /**
+   * Jediný vstup pro herní stav: přepočítá „hardship" (pozdní podzim tmavne,
+   * zima = 1), zimní drone, vítr při sněžení/mrazu a padový lowpass.
+   */
+  updateMusicContext(c: Partial<MusicContext>) {
+    if (c.season) this.season = c.season;
+    if (c.phase) this.phase = c.phase;
+    if (c.dayInSeason) this.dayInSeason = c.dayInSeason;
+
+    // hardship: jaro po zimě povoluje, podzim postupně přituhuje, zima = max
+    const t = Math.min(1, (this.dayInSeason - 1) / Math.max(1, DAYS_PER_SEASON - 1));
+    this.hardship =
+      this.season === "zima" ? 1
+      : this.season === "podzim" ? 0.15 + t * 0.7
+      : this.season === "jaro" ? Math.max(0, 0.35 - t * 0.35)
+      : 0;
+
+    if (this.ctx && this.padFilter) {
+      const now = this.ctx.currentTime;
+      this.padFilter.frequency.cancelScheduledValues(now);
+      this.padFilter.frequency.setValueAtTime(this.padFilter.frequency.value, now);
+      this.padFilter.frequency.linearRampToValueAtTime(800 + (1 - this.hardship) * 2200, now + 2);
+    }
+    this.updateWinterDrone();
+    const windy = c.weather === "snezeni" || c.weather === "mraz" || (c.weather === "destivo" && this.season === "podzim");
+    if (c.weather) this.setWind(windy);
+    // hardship se promítá i do mixu melodie
+    this.applyTensionMix(this.tensionLevel);
+  }
+
+  private updateWinterDrone() {
+    if (!this.ctx || !this.musicBus) return;
+    const target = this.hardship > 0.45 ? 0.02 * this.hardship : 0;
+    if (target > 0 && !this.winterGain) {
+      this.winterGain = this.ctx.createGain();
+      this.winterGain.gain.value = 0.0001;
+      this.winterGain.connect(this.musicBus);
+      for (const f of [55, 55.4]) {
+        const o = this.ctx.createOscillator();
+        o.type = "sine";
+        o.frequency.value = f;
+        o.connect(this.winterGain);
+        o.start();
+        this.winterOsc.push(o);
+      }
+    }
+    if (this.winterGain) {
+      const now = this.ctx.currentTime;
+      this.winterGain.gain.cancelScheduledValues(now);
+      this.winterGain.gain.setValueAtTime(this.winterGain.gain.value, now);
+      this.winterGain.gain.linearRampToValueAtTime(Math.max(target, 0.0001), now + 3);
+      if (target === 0) {
+        const oscs = this.winterOsc;
+        const wg = this.winterGain;
+        this.winterOsc = [];
+        this.winterGain = null;
+        window.setTimeout(() => {
+          for (const o of oscs) { try { o.stop(); } catch { /* už zastaven */ } }
+          wg.disconnect();
+        }, 3500);
+      }
+    }
+  }
+
+  private setWind(on: boolean) {
+    if (!this.ctx || !this.musicBus || !this.noiseBuf) return;
+    const now = this.ctx.currentTime;
+    if (on && !this.windSrc) {
+      this.windSrc = this.ctx.createBufferSource();
+      this.windSrc.buffer = this.noiseBuf;
+      this.windSrc.loop = true;
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = 400;
+      bp.Q.value = 0.7;
+      // pomalé LFO houpe středem pásma — kvílení větru
+      this.windLfo = this.ctx.createOscillator();
+      this.windLfo.frequency.value = 0.1;
+      const lfoGain = this.ctx.createGain();
+      lfoGain.gain.value = 180;
+      this.windLfo.connect(lfoGain);
+      lfoGain.connect(bp.frequency);
+      this.windGain = this.ctx.createGain();
+      this.windGain.gain.setValueAtTime(0.0001, now);
+      this.windGain.gain.linearRampToValueAtTime(0.014, now + 3);
+      this.windSrc.connect(bp);
+      bp.connect(this.windGain);
+      this.windGain.connect(this.musicBus);
+      this.windSrc.start(now, Math.random());
+      this.windLfo.start(now);
+    } else if (!on && this.windSrc && this.windGain) {
+      const src = this.windSrc;
+      const lfo = this.windLfo;
+      const g = this.windGain;
+      this.windSrc = null;
+      this.windLfo = null;
+      this.windGain = null;
+      g.gain.linearRampToValueAtTime(0.0001, now + 3);
+      window.setTimeout(() => {
+        try { src.stop(); lfo?.stop(); } catch { /* už zastaveny */ }
+        g.disconnect();
+      }, 3500);
+    }
+  }
+
+  // ─── SEZÓNNÍ ZMĚNA — crossfade, hudba nikdy nezmlkne ───────────────────────
 
   seasonChange(season: Season) {
     this.ensure();
@@ -551,9 +919,19 @@ class SoundEngine {
       zima:   [{ f: 392, d: 0.20 }, { f: 330, d: 0.22 }, { f: 294, d: 0.26 }, { f: 220, d: 0.44, g: 0.08 }],
     };
     this.seq(stingers[season], 0.01);
-    this.setSeason(season);
-    this.stopMusic();
-    window.setTimeout(() => this.startMusic(), 800);
+    // melodické vrstvy se na vteřinu stáhnou, vymění se téma, a zase naběhnou
+    if (this.ctx && this.layers) {
+      const now = this.ctx.currentTime;
+      const m = MIX[this.tensionLevel];
+      for (const l of ["melody", "pad", "arp"] as const) {
+        const g = this.layers[l].gain;
+        g.cancelScheduledValues(now);
+        g.setValueAtTime(g.value, now);
+        g.linearRampToValueAtTime(0.0001, now + 0.8);
+        g.linearRampToValueAtTime(Math.max(m[l], 0.0001), now + 2.2);
+      }
+    }
+    this.updateMusicContext({ season, dayInSeason: 1 });
   }
 
   // ─── AMBIENT ───────────────────────────────────────────────────────────────
@@ -609,16 +987,20 @@ class SoundEngine {
     this.ambientTimer = window.setTimeout(() => this.ambientTick(), min + Math.random() * jit);
   }
 
-  setSeason(s: Season) { this.season = s; }
-  setMood(p: Phase) { this.phase = p; }
+  /** @deprecated — použij updateMusicContext. Zachováno pro kompatibilitu. */
+  setSeason(s: Season) { this.updateMusicContext({ season: s }); }
+  /** @deprecated — použij updateMusicContext. Zachováno pro kompatibilitu. */
+  setMood(p: Phase) { this.updateMusicContext({ phase: p }); }
 
   stopAmbient() {
     if (this.ambientTimer != null) { window.clearTimeout(this.ambientTimer); this.ambientTimer = null; }
   }
 
-  // ─── HUDBA — 12 kombinací sezóna × fáze ────────────────────────────────────
+  // ─── HUDBA — vrstvený lookahead scheduler ──────────────────────────────────
+  // Grid = osminy (půlka původního melodického kroku): melodie/bas hrají na
+  // sudých pozicích (původní tabulky beze změn), perkuse a arpeggio využívají
+  // celé rozlišení. „Tale of Two Clocks": interval 30 ms, lookahead 120 ms.
 
-  // 16-krokové melodické sekvence (0 = pauza)
   private THEMES: Record<string, number[]> = {
     // JARO
     "jaro_rano":      [523,   0, 659, 0,   784,   0,   880,   0, 784,   0, 659, 0, 523, 0,   0, 0],
@@ -638,7 +1020,6 @@ class SoundEngine {
     "zima_vecer":     [220,   0,   0,   0,   196,   0,   0,   0, 165,   0,   0,   0,   0,   0,  0, 0],
   };
 
-  // Basové tóny — 8-krokový cyklus
   private BASS: Record<Season, number[]> = {
     jaro:   [196, 0, 0, 0, 196, 0, 165, 0],
     leto:   [174, 0, 0, 0, 174, 0, 146, 0],
@@ -646,7 +1027,6 @@ class SoundEngine {
     zima:   [110, 0, 0, 0, 110, 0,  98, 0],
   };
 
-  // Tempo ms/krok per sezóna × fáze
   private TEMPO_TABLE: Record<string, number> = {
     "jaro_rano": 440,    "jaro_poledne": 480,   "jaro_vecer": 560,
     "leto_rano": 500,    "leto_poledne": 560,   "leto_vecer": 620,
@@ -661,49 +1041,130 @@ class SoundEngine {
     return phase === "rano" ? 0.034 : phase === "poledne" ? 0.032 : 0.022;
   }
 
+  /** Délka jednoho grid kroku (osmina) v sekundách. */
+  private gridDurSec(): number {
+    const tempo = this.TEMPO_TABLE[`${this.season}_${this.phase}`] ?? 500;
+    return ((tempo / 1000 / 2) / this.tempoMult) * (1 + this.hardship * 0.06);
+  }
+
   startMusic() {
-    if (this.musicTimer != null || !this.musicOn) return;
-    const tick = () => {
-      if (!this.muted && this.musicOn && this.ctx) {
-        const key = `${this.season}_${this.phase}`;
-        const mel = this.THEMES[key] ?? this.THEMES[`${this.season}_rano`];
-        const bass = this.BASS[this.season];
-        const tempo = this.TEMPO_TABLE[key] ?? 500;
-        const mg = this.getMelodyGain(this.phase);
-        const bg = this.getBassGain(this.phase);
-        const tensionMult = ([1.0, 0.7, 0.35, 0.9] as const)[this.tensionLevel];
+    if (this.schedTimer != null || !this.musicOn) return;
+    this.ensure();
+    if (!this.ctx) return;
+    if (this.musicBus) {
+      const now = this.ctx.currentTime;
+      this.musicBus.gain.cancelScheduledValues(now);
+      this.musicBus.gain.setValueAtTime(this.musicBus.gain.value, now);
+      this.musicBus.gain.linearRampToValueAtTime(1.0, now + 0.3);
+    }
+    this.nextStepTime = this.ctx.currentTime + 0.05;
+    this.schedTimer = window.setInterval(() => this.schedulerLoop(), 30);
+  }
 
-        const f = mel[this.musicStep % mel.length];
-        if (f > 0) {
-          this.tone(f, 1.0, "sine", mg * tensionMult);
-          this.tone(f * 1.004, 1.0, "sine", mg * 0.75 * tensionMult); // jemný chorus
-          if (this.phase === "vecer") this.tone(f * 0.5, 1.4, "sine", 0.018 * tensionMult); // pad 8va níže
-        }
+  private schedulerLoop() {
+    if (!this.ctx) return;
+    while (this.nextStepTime < this.ctx.currentTime + 0.12) {
+      if (!this.muted && this.musicOn) this.scheduleStep(this.gridStep, this.nextStepTime);
+      this.nextStepTime += this.gridDurSec();
+      this.gridStep++;
+    }
+  }
 
-        const bassF = bass[this.musicStep % bass.length];
-        if (bassF > 0) {
-          this.tone(bassF, 2.0, "sine", bg * tensionMult);
-          this.tone(bassF * 1.5, 1.8, "sine", bg * 0.5 * tensionMult); // kvinta
-        }
+  private scheduleStep(step: number, t: number) {
+    if (!this.ctx || !this.layers) return;
+    const key = `${this.season}_${this.phase}`;
+    const mel = this.THEMES[key] ?? this.THEMES[`${this.season}_rano`];
+    const grid32 = step % 32;
 
-        this.musicStep++;
-        this.musicTimer = window.setTimeout(tick, tempo);
-      } else {
-        this.musicTimer = window.setTimeout(tick, 500);
+    // melodie + bas: na sudých gridech (původní krok)
+    if (step % 2 === 0) {
+      const mstep = step / 2;
+      const mg = this.getMelodyGain(this.phase);
+      const f = mel[mstep % mel.length];
+      if (f > 0) {
+        this.toneAt(f, 1.0, t, "sine", mg, this.layers.melody, true);
+        this.toneAt(f * 1.004, 1.0, t, "sine", mg * 0.75, this.layers.melody, true); // chorus
+        if (this.phase === "vecer") this.toneAt(f * 0.5, 1.4, t, "sine", 0.018, this.layers.melody, true);
       }
-    };
-    tick();
+      const bass = this.BASS[this.season];
+      const bassF = bass[mstep % bass.length];
+      if (bassF > 0) {
+        const bg = this.getBassGain(this.phase);
+        this.toneAt(bassF, 2.0, t, "sine", bg, this.layers.bass);
+        this.toneAt(bassF * 1.5, 1.8, t, "sine", bg * 0.5, this.layers.bass);
+      }
+    }
+
+    // pad: nový akord na začátku každého taktu (16 grid kroků)
+    if (step % 16 === 0) {
+      const chords = PADS[this.season];
+      const chord = chords[Math.floor(step / 16) % chords.length];
+      for (const f of chord) {
+        // dva jemně rozladěné trianglee — šířka bez chorus efektu
+        this.padVoice(f * 0.998, t);
+        this.padVoice(f * 1.002, t);
+      }
+    }
+
+    // perkuse podle tension vzoru
+    const pat = PERC[this.tensionLevel];
+    const kick = pat.kick[grid32] ?? 0;
+    const hat = pat.hat[grid32] ?? 0;
+    const shk = pat.shaker[grid32] ?? 0;
+    const blk = pat.block[grid32] ?? 0;
+    if (kick) this.percKick(t, 0.16 * kick);
+    if (hat) this.percHat(t, 0.05 * hat, grid32 === 30);
+    if (shk) this.percShaker(t, 0.035 * shk);
+    if (blk) this.percBlock(t, 0.07 * blk);
+
+    // akční arpeggio — jede na každém gridu (slyšet jen při arp gain > 0)
+    if (this.tensionLevel >= 1) {
+      const arp = ARPS[this.season];
+      const f = arp[step % arp.length] * (this.tensionLevel === 2 ? 1.19 : 1); // danger o malou tercii výš
+      this.toneAt(f, 0.09, t, "triangle", 0.05, this.layers.arp);
+    }
+  }
+
+  // Jedna nota padu — triangle s pomalým náběhem a dozvukem přes lowpass.
+  private padVoice(freq: number, t: number) {
+    if (!this.ctx || !this.padFilter) return;
+    const barDur = this.gridDurSec() * 16;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.016, t + Math.min(1.5, barDur * 0.35));
+    g.gain.setValueAtTime(0.016, t + barDur);
+    g.gain.linearRampToValueAtTime(0.0001, t + barDur + 2);
+    osc.connect(g);
+    g.connect(this.padFilter);
+    if (this.verb) g.connect(this.verb);
+    osc.start(t);
+    osc.stop(t + barDur + 2.1);
   }
 
   stopMusic() {
-    if (this.musicTimer != null) { window.clearTimeout(this.musicTimer); this.musicTimer = null; }
+    if (this.schedTimer != null) { window.clearInterval(this.schedTimer); this.schedTimer = null; }
+    if (this.ctx && this.musicBus) {
+      const now = this.ctx.currentTime;
+      this.musicBus.gain.cancelScheduledValues(now);
+      this.musicBus.gain.setValueAtTime(this.musicBus.gain.value, now);
+      this.musicBus.gain.linearRampToValueAtTime(0.0001, now + 0.3);
+    }
   }
 
   // ─── OVLÁDÁNÍ ──────────────────────────────────────────────────────────────
 
   toggleMute() {
     this.muted = !this.muted;
-    if (this.master) this.master.gain.value = this.muted ? 0 : 0.3;
+    // Mute jde přes master, tension mix žije na musicBus/vrstvách — nehádají se.
+    if (this.master && this.ctx) {
+      const now = this.ctx.currentTime;
+      this.master.gain.cancelScheduledValues(now);
+      this.master.gain.setValueAtTime(this.master.gain.value, now);
+      this.master.gain.linearRampToValueAtTime(this.muted ? 0.0001 : BASE_MASTER, now + 0.1);
+    }
     return this.muted;
   }
   toggleMusic() {

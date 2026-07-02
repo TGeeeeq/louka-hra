@@ -11,7 +11,8 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "drubez",
     personality: "Malí a roztomilí obyvatelé naší Louky.",
     fact: "Slepice se dorozumívají více než 30 různými zvuky a se svými kuřaty si „povídají“ už když jsou ještě ve vejci.",
-    palette: { body: "#f0d06a", bodyDark: "#d0a838", belly: "#f7e6a8", detail: "#d96c3c", accent: "#b85c3c" },
+    // Bílé slepičky s červenými hřebínky (pár zrzavých mezi nimi) — podle fotky.
+    palette: { body: "#f2efe8", bodyDark: "#d5cfc2", belly: "#faf8f2", detail: "#d42a1e", accent: "#d8a028" },
   },
   {
     id: "husy",
@@ -29,8 +30,9 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "drubez",
     personality: "Rozšťebetané a věčně u vody.",
     fact: "Kachní peří je voděodolné — kachna si ho maže tukem z kostrční žlázy, proto z něj voda steče.",
-    palette: { body: "#8a7a5c", bodyDark: "#2d6a4f", belly: "#d8cbb0", detail: "#e8b84c", accent: "#3a5a8c" },
-    variant: "mallard",
+    // Bílé kachny s růžovooranžovým zobákem a tmavou čepičkou — podle fotky.
+    palette: { body: "#f4f0e0", bodyDark: "#d8d0b8", belly: "#fbf8ee", detail: "#e09a7a", accent: "#2b2620" },
+    variant: "cap",
   },
   {
     id: "holoubci",
@@ -39,7 +41,8 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "drubez",
     personality: "Krásní ptáci, kteří přinášejí klid a harmonii.",
     fact: "Holubi trefí domů i ze stovek kilometrů — vnímají magnetické pole Země a orientují se i podle slunce.",
-    palette: { body: "#b8bcc6", bodyDark: "#8a8e98", belly: "#e6e8ec", detail: "#d98c9c", accent: "#6a8cae" },
+    // Sněhobílí holoubci s růžovým zobáčkem a nohama — podle fotky.
+    palette: { body: "#f7f6f2", bodyDark: "#d8d5cc", belly: "#fdfcf9", detail: "#d9b0a6", accent: "#c4636e" },
   },
 
   // ---- PRASATA (vařené krmivo) --------------------------------------------
@@ -51,7 +54,8 @@ export const ANIMALS: AnimalDef[] = [
     personality:
       "Ušlechtilá černá kříženka divočáka, jejíž královská noblesa se při prvním zakručení v břiše promění v nezastavitelnou slintavou potopu.",
     fact: "Prasata patří mezi nejchytřejší zvířata — poznají se v zrcadle a v testech předčí i psy.",
-    palette: { body: "#3a3330", bodyDark: "#211c1a", belly: "#5a4f49", detail: "#d98c8c", accent: "#2a2422" },
+    // Černohnědá divočačí kříženka s prošedivělým rypákem a hřebenem štětin.
+    palette: { body: "#3a3129", bodyDark: "#211c16", belly: "#8a6a5e", detail: "#7a6a56", accent: "#2a2422" },
     variant: "boar",
   },
   {
@@ -61,8 +65,9 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "prasata",
     personality: "Prasík, co má rád drbání na bříšku.",
     fact: "Prasata se válí v bahně, protože nemají skoro žádné potní žlázy — bláto je chladí a chrání kůži před sluncem.",
-    palette: { body: "#f3b9bf", bodyDark: "#e08c98", belly: "#f8d4d8", detail: "#d96c7c", accent: "#b85c3c" },
-    variant: "spot",
+    // Šedorůžový pupkáč s velkými tmavými flíčky — podle fotky.
+    palette: { body: "#a89a94", bodyDark: "#6a5f5a", belly: "#d9958f", detail: "#d98b95", accent: "#4a4440" },
+    variant: "patches",
   },
 
   // ---- STÁDO (seno: krávy, ovce, berani, osel, muflon) --------------------
@@ -73,7 +78,8 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "stado",
     personality: "Hravý osel s velkým srdcem a lehce kousavou povahou.",
     fact: "Osli mají skvělou paměť a dožívají se 30–50 let. Nejsou tvrdohlaví — když se zastaví, obvykle zvažují nebezpečí.",
-    palette: { body: "#9a9a9f", bodyDark: "#6d6d72", belly: "#d8d6d0", detail: "#45454a", accent: "#e8a0a0" },
+    // Tmavě čokoládový osel se světlou tlamou a plavým vnitřkem uší — podle fotky.
+    palette: { body: "#453931", bodyDark: "#2e251e", belly: "#beb6ac", detail: "#8a7a6a", accent: "#a3663a" },
   },
   {
     id: "yakul",
@@ -92,7 +98,8 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "stado",
     personality: "Mazlivá kráva, která miluje běhání po louce.",
     fact: "Krávy mají nejlepší kamarádky a stresují se, když je od nich někdo oddělí. Pamatují si přes 50 tváří.",
-    palette: { body: "#f2efe9", bodyDark: "#2a2622", belly: "#f7f4ef", detail: "#f0b8a8", accent: "#2a2622" },
+    // Bílá kráva s kaštanově rezavými skvrnami a růžovou tlamou — podle fotky.
+    palette: { body: "#ece8e0", bodyDark: "#8a4a26", belly: "#f7f4ef", detail: "#cfa093", accent: "#8a4a26" },
     variant: "strakata",
   },
   {
@@ -102,8 +109,9 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "stado",
     personality: "Klidná kravka, co má ráda svůj klid a je věrnou společnicí Avaly.",
     fact: "Dojnice i kráva bez telete prožívají silné přátelské vazby — leží ráda vedle své oblíbené družky.",
-    palette: { body: "#b07a4e", bodyDark: "#7d5234", belly: "#e7cbac", detail: "#f0b8a8", accent: "#5a3a22" },
-    variant: "hneda",
+    // Kaštanová kravka s bílou lysinou přes celý obličej — podle fotky.
+    palette: { body: "#9a5a2e", bodyDark: "#6e3f1e", belly: "#efe9df", detail: "#cfa093", accent: "#5a3a22" },
+    variant: "hneda lysina",
   },
   {
     id: "pogo",
@@ -112,7 +120,8 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "stado",
     personality: "Energická ovčí kamarádka.",
     fact: "Ovce rozeznají až 50 obličejů — ovčích i lidských — a pamatují si je roky. Mají skoro kruhové vidění.",
-    palette: { body: "#f4f0e8", bodyDark: "#d8d0c0", belly: "#faf7ef", detail: "#3a3330", accent: "#2a2622" },
+    // Krémové rouno a uhlově černá hlava i nohy (suffolčí typ) — podle fotky.
+    palette: { body: "#ded0b4", bodyDark: "#c2b294", belly: "#f0e8d4", detail: "#211d1a", accent: "#211d1a" },
     variant: "ovce",
   },
   {
@@ -122,7 +131,8 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "stado",
     personality: "Veselá a přátelská ovčí babička.",
     fact: "Ovce jsou velmi družné — osamělá ovce strádá. Ve stádu se cítí bezpečně a navzájem se hlídají.",
-    palette: { body: "#e8e2d6", bodyDark: "#ccc4b4", belly: "#f3efe6", detail: "#8a8276", accent: "#6a6258" },
+    // Čerstvě ostříhaná krémová babička s narůžovělou tváří — podle fotky.
+    palette: { body: "#cfc0a8", bodyDark: "#b3a288", belly: "#e2d6c0", detail: "#c4ad94", accent: "#8a7a66" },
     variant: "stara",
   },
   {
@@ -132,8 +142,9 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "stado",
     personality: "Veselá a přátelská ovčí obyvatelka.",
     fact: "Ovčí vlna roste neustále — proto se ovce na jaře stříhá, aby jí v létě nebylo příliš horko.",
-    palette: { body: "#f0ece2", bodyDark: "#d4ccbc", belly: "#f7f3ea", detail: "#463c30", accent: "#2e261c" },
-    variant: "ovce",
+    // Šedoplavá rozčepýřená vlna a ofina do čela — podle fotky.
+    palette: { body: "#a3937c", bodyDark: "#857662", belly: "#c2b49c", detail: "#cdbfa9", accent: "#6a5c48" },
+    variant: "ovce ofina",
   },
   {
     id: "eduard",
@@ -142,7 +153,8 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "stado",
     personality: "Důstojný a klidný člen naší zvířecí rodiny.",
     fact: "Beran dává rohy k dobru hlavně na jaře v době námluv — jinak je to klidný strážce stáda.",
-    palette: { body: "#e8e0d0", bodyDark: "#cdc2ac", belly: "#f3eee2", detail: "#4a4036", accent: "#cdbf9c" },
+    // Rezavý kamerunský beran s mohutnými stočenými rohy a prošedivělou tlamou.
+    palette: { body: "#8f4f26", bodyDark: "#63351a", belly: "#b8ad9e", detail: "#4a3626", accent: "#b39a76" },
     variant: "beran",
   },
   {
@@ -152,8 +164,9 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "stado",
     personality: "Bezrohý (už) obyvatel Louky. Nehne se od Amálky.",
     fact: "Zvířata si tvoří nerozlučné páry. Emil a Amálka se drží spolu — odloučení by je oba stresovalo.",
-    palette: { body: "#e4dccb", bodyDark: "#c8bfa8", belly: "#f0ebe0", detail: "#463c30", accent: "#2e261c" },
-    variant: "bezrohy",
+    // Kamerunská ovce: sytě červenohnědé tělo, černá hlava, hříva i nohy.
+    palette: { body: "#7e4322", bodyDark: "#572d15", belly: "#9a6a42", detail: "#241f1c", accent: "#241f1c" },
+    variant: "bezrohy mane",
   },
   {
     id: "amalka",
@@ -162,8 +175,9 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "stado",
     personality: "Jemná a láskyplná obyvatelka Louky. Nehne se od Emila.",
     fact: "Ovce poznají náladu z výrazu tváře a raději se dívají na klidné, usměvavé obličeje než na rozzlobené.",
-    palette: { body: "#f2eee4", bodyDark: "#d8d0c0", belly: "#f8f4ec", detail: "#463c30", accent: "#2e261c" },
-    variant: "ovce",
+    // Kamerunská ovečka: plavé rouno, čokoládová hlava, drobné růžky — podle fotky.
+    palette: { body: "#b98d5c", bodyDark: "#96703f", belly: "#d8c09a", detail: "#33291f", accent: "#8a7458" },
+    variant: "ovce ruzky",
   },
   {
     id: "kulich",
@@ -172,8 +186,9 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "stado",
     personality: "Milý a přátelský obyvatel naší Louky.",
     fact: "Ovce se navzájem oslovují bečením a jehňata poznají hlas své matky v celém stádu.",
-    palette: { body: "#efe7d8", bodyDark: "#d3c9b6", belly: "#f5f0e6", detail: "#4a4036", accent: "#b8a888" },
-    variant: "ovce",
+    // Šedoplavý beran s velkými vroubkovanými rohy a růžovou tváří — podle fotky.
+    palette: { body: "#c9c2b4", bodyDark: "#a89f8c", belly: "#e0dbd0", detail: "#cfc0b0", accent: "#9c8874" },
+    variant: "beran",
   },
   {
     id: "konci",
@@ -182,8 +197,9 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "stado",
     personality: "Zvědavý a aktivní člen naší komunity.",
     fact: "Ovce dokážou řešit jednoduché bludiště a pamatují si cestu k jídlu i po měsících.",
-    palette: { body: "#ece4d4", bodyDark: "#d0c6b2", belly: "#f3eee2", detail: "#4a4036", accent: "#2e261c" },
-    variant: "ovce",
+    // Obrovské nestříhané krémové rouno, tvářička skoro utopená ve vlně — podle fotky.
+    palette: { body: "#d8c9a8", bodyDark: "#b8a887", belly: "#ecdfc2", detail: "#c9b295", accent: "#8a7a5e" },
+    variant: "ovce ofina",
   },
 
   // ---- MAZLÍCI (psi, kočky, králíci) --------------------------------------
@@ -194,8 +210,9 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "mazlici",
     personality: "Hravý pes, který hlídá celou Louku.",
     fact: "Psi vnímají svět hlavně čichem — mají až 300 milionů čichových buněk, člověk jen kolem šesti.",
-    palette: { body: "#c8884c", bodyDark: "#9a6233", belly: "#ecd6b8", detail: "#3a2a1c", accent: "#2a2018" },
-    variant: "guard",
+    // Malý rozcuchaný černohnědý pejsek s prošedivělou bradkou — podle fotky.
+    palette: { body: "#2e2824", bodyDark: "#1a1613", belly: "#9a938a", detail: "#9a938a", accent: "#6a635a" },
+    variant: "scruffy",
   },
   {
     id: "kesy",
@@ -205,8 +222,9 @@ export const ANIMALS: AnimalDef[] = [
     personality:
       "Vypadá jako obří chlupatý medvěd a má rozvážnost zenového mistra. Povely bere jen jako doporučení.",
     fact: "Velká pastevecká plemena jsou samostatná — byla šlechtěna, aby u stáda rozhodovala sama, i bez člověka.",
-    palette: { body: "#ece4d2", bodyDark: "#c4b89c", belly: "#f5efe0", detail: "#6a5a44", accent: "#8a7a5a" },
-    variant: "shaggy",
+    // Obří šedý pastevec s tmavou maskou a bílou náprsenkou — podle fotky.
+    palette: { body: "#6e675e", bodyDark: "#4a423a", belly: "#e8e4dc", detail: "#3a2f28", accent: "#8a7a64" },
+    variant: "shaggy bear",
   },
   {
     id: "atila",
@@ -215,17 +233,20 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "mazlici",
     personality: "Věrná kamarádka a velká milovnice jídla.",
     fact: "Psi rozumějí lidským gestům — sledují, kam ukazujeme, což kromě nich umí málokteré zvíře.",
-    palette: { body: "#2e2823", bodyDark: "#1a1712", belly: "#b07a4e", detail: "#0f0d0a", accent: "#8a5a30" },
-    variant: "blacktan",
+    // Leskle černá labradorka s věčným úsměvem a vyplazeným jazykem — podle fotky.
+    palette: { body: "#26221e", bodyDark: "#141210", belly: "#3a342e", detail: "#1c1a18", accent: "#d97f8a" },
+    variant: "tongue",
   },
   {
     id: "denis",
     name: "Denis",
-    species: "pes",
+    species: "kocka", // na fotce z webu je Denis zrzavobílý kocour, ne pes
     feedGroup: "mazlici",
     personality: "Velký průzkumník a velký mazel.",
-    fact: "Psí nos pracuje i odděleně — každá nosní dírka „čichá“ zvlášť, a tak pozná, odkud pach přichází.",
-    palette: { body: "#6a5a48", bodyDark: "#463a2c", belly: "#d8c6a8", detail: "#2a2018", accent: "#8a7458" },
+    fact: "Kočičí vousky jsou přesné antény — kocour jimi změří i šířku průlezu. Proto se Denis protáhne tam, kudy by to nikdo nečekal.",
+    // Bílý kocour se zrzavými plotnami na hlavě, hřbetě a ocase — podle fotky.
+    palette: { body: "#efe8e0", bodyDark: "#d0c4b4", belly: "#f8f3ea", detail: "#d98b3f", accent: "#d98b3f" },
+    variant: "patches",
   },
   {
     id: "list",
@@ -244,8 +265,9 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "mazlici",
     personality: "Nejsvalnatější kocour na celém světě.",
     fact: "Kočka má v každém uchu přes 20 svalů a otočí ušima skoro o 180°, aby zaměřila i tichý zvuk.",
-    palette: { body: "#d98b3c", bodyDark: "#b06a22", belly: "#f0d6a8", detail: "#7a4a18", accent: "#3a2a14" },
-    variant: "muscular",
+    // Statný zrzavý mourek s tmavším pruhováním a bílými tlapkami — podle fotky.
+    palette: { body: "#d08236", bodyDark: "#a35a22", belly: "#e8d9c2", detail: "#7a4a18", accent: "#3a2a14" },
+    variant: "muscular tabby",
   },
   {
     id: "safir",
@@ -254,8 +276,9 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "mazlici",
     personality: "Nejchundelatější kocour na celém světě.",
     fact: "Kočky prospí 12–16 hodin denně, aby šetřily síly na lov. Předení je uklidňuje a podle studií i hojí.",
-    palette: { body: "#6a7a8c", bodyDark: "#485668", belly: "#c2cdd8", detail: "#2a3038", accent: "#8a9aac" },
-    variant: "shaggy",
+    // Chundelatý bílý kocour s šedohnědými plotnami na hřbetě a uších — podle fotky.
+    palette: { body: "#f2ede4", bodyDark: "#d5cec2", belly: "#faf6ee", detail: "#71604c", accent: "#71604c" },
+    variant: "shaggy patches",
   },
   {
     id: "patricie",
@@ -264,8 +287,9 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "mazlici",
     personality: "Nejumňoukanější kočka na celém světě.",
     fact: "Dospělé kočky mňoukají skoro výhradně na lidi — mezi sebou se baví spíš pachem a řečí těla.",
-    palette: { body: "#e8e2d8", bodyDark: "#c0b6a6", belly: "#f5f0e8", detail: "#b85c3c", accent: "#3a3330" },
-    variant: "calico",
+    // Chlupatá hnědá mourovatá slečna s bílou bradou a chvostem nahoru — podle fotky.
+    palette: { body: "#6f5a3e", bodyDark: "#4a3c28", belly: "#e6ded0", detail: "#2c2620", accent: "#e6ded0" },
+    variant: "shaggy tabby",
   },
   {
     id: "hanicka",
@@ -274,8 +298,9 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "mazlici",
     personality: "Třínohá kočka samotářka.",
     fact: "Zvířata se zvládnou přizpůsobit i ztrátě nohy — Hanička běhá a šplhá po svém a nic jí nechybí.",
-    palette: { body: "#3a3330", bodyDark: "#211c1a", belly: "#d8d0c4", detail: "#f0b8a8", accent: "#8a8276" },
-    variant: "tripod",
+    // Želvovinová: černá s oranžovými plotnami a zrzavou půlkou tlamičky — podle fotky.
+    palette: { body: "#26211d", bodyDark: "#16120f", belly: "#c17032", detail: "#c17032", accent: "#8a8276" },
+    variant: "tripod tortie",
   },
   {
     id: "lotka",
@@ -284,8 +309,9 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "mazlici",
     personality: "Kočka samotářka.",
     fact: "Každý kočičí nos má jedinečný otisk — stejně jako otisk prstu u člověka.",
-    palette: { body: "#8a8276", bodyDark: "#5e574c", belly: "#c8c2b6", detail: "#3a3330", accent: "#46413a" },
-    variant: "tabby",
+    // Želvovinová v barvách černé a meruňkové, světlé přední tlapky — podle fotky.
+    palette: { body: "#2a241f", bodyDark: "#191512", belly: "#d9a05e", detail: "#d9a05e", accent: "#46413a" },
+    variant: "tortie",
   },
   {
     id: "masa",
@@ -294,8 +320,9 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "mazlici",
     personality: "Luční modrooká blondýna.",
     fact: "Modré oči mívají kočky se světlou srstí — barvu očím dává množství pigmentu, ne plemeno.",
-    palette: { body: "#ece0c4", bodyDark: "#d0c09c", belly: "#f7f0de", detail: "#6aa6c8", accent: "#b8a070" },
-    variant: "blueeyes",
+    // Stříbřitě krémová s šedým mourováním na nohách a ocase — podle fotky.
+    palette: { body: "#d6d2c8", bodyDark: "#b5b0a4", belly: "#f0ede4", detail: "#7d7a70", accent: "#7d7a70" },
+    variant: "blueeyes tabby",
   },
   {
     id: "kralici",
@@ -304,9 +331,17 @@ export const ANIMALS: AnimalDef[] = [
     feedGroup: "mazlici",
     personality: "Králíčci, co si užívají svobody.",
     fact: "Králíci dělají radostné výskoky zvané „binky“. Zuby jim rostou celý život, proto pořád něco okusují.",
-    palette: { body: "#b09a82", bodyDark: "#836f58", belly: "#f0e8da", detail: "#d98c8c", accent: "#5a4a38" },
+    // Hnědý ušák s bílou náprsenkou (a černý kamarád v pozadí) — podle fotky.
+    palette: { body: "#8a6a48", bodyDark: "#5e4630", belly: "#ece7db", detail: "#d98c8c", accent: "#24201d" },
   },
 ];
+
+// Skutečné fotky z nechmerust.org — public/animals/<id>.webp (stahuje `npm run photos`).
+// List fotku nemá: pohřešuje se a ve hře zůstává jako vzpomínka.
+const WITHOUT_PHOTO = new Set(["list"]);
+for (const a of ANIMALS) {
+  if (!WITHOUT_PHOTO.has(a.id)) a.photo = `${a.id}.webp`;
+}
 
 export const ANIMAL_BY_ID: Record<string, AnimalDef> = Object.fromEntries(
   ANIMALS.map((a) => [a.id, a]),
@@ -333,6 +368,11 @@ export const SPECIES_SCALE: Record<Species, number> = {
   kachna: 0.74,
   slepice: 0.64,
   holub: 0.52,
+  // Divocí sousedé
+  liska: 1.0,
+  kane: 0.8,
+  jezek: 0.45,
+  srnka: 1.35,
 };
 
 // Výjimky pro konkrétní zvířata (mimo druhový průměr).
@@ -343,6 +383,8 @@ const SCALE_OVERRIDE: Record<string, number> = {
   flicek: 1.2,
   lucinka: 1.08, // babička
   yakul: 1.2, // „mladý" muflon
+  riky: 0.9, // malý rozcuchaný pejsek (podle fotky)
+  konci: 1.28, // balvan z nestříhané vlny (podle fotky)
 };
 
 export function animalScale(a: AnimalDef): number {

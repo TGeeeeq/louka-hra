@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { AnimalSprite } from "../ui/sprites/AnimalSprite";
 import { PersonSprite, type Facing } from "../ui/sprites/PersonSprite";
 import { ANIMAL_BY_ID } from "../game/content/animals";
+import { WILD_BY_ID } from "../game/content/wild";
 import { PERSON_BY_ID } from "../game/content/people";
 
 const cache = new Map<string, HTMLImageElement>();
@@ -19,7 +20,7 @@ export function animalImg(id: string): HTMLImageElement | null {
   const key = "a:" + id;
   const hit = cache.get(key);
   if (hit) return hit;
-  const a = ANIMAL_BY_ID[id];
+  const a = ANIMAL_BY_ID[id] ?? WILD_BY_ID[id];
   if (!a) return null;
   const img = toImg(renderToStaticMarkup(<AnimalSprite animal={a} size={100} />));
   cache.set(key, img);

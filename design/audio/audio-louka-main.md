@@ -1,6 +1,19 @@
 # Louka — Audio Design Document
 
-**Verze:** 1.0 | **Datum:** 2026-06-18 | **Status:** Implementováno
+**Verze:** 2.0 | **Datum:** 2026-07-02 | **Status:** Implementováno
+
+> **v2 (vrstvená adaptivní hudba):** hudba přešla ze `setTimeout`-sekvenceru na
+> lookahead scheduler (30 ms / 120 ms, grid = osminy) s pěti vrstvami
+> (melody/bass/pad/perc/arp) na vlastní sběrnici `musicBus`. Tension teď mění
+> **mix vrstev a tempo** (calm = shaker; alert = heartbeat kick ×1,15; danger =
+> hnací kick/hat + akční arpeggio v tónině sezóny ×1,35), ne jen hlasitost —
+> a ducking už NEztlumuje SFX (přesun z masteru na musicBus). Nově: sezónní
+> akordové pady (zima = prázdné kvinty), parametr **hardship** (pozdní podzim
+> postupně ztmavuje — lowpass padu, řidší melodie, zimní drone 55 Hz, mírné
+> zpomalení), vítr při sněžení/mrazu, crossfade při změně sezóny (hudba nikdy
+> nezmlkne), `updateMusicContext()`, `lowEnergy()`, `foxTrustMotif()`,
+> `foxLullaby()`, `getTension()`. Poslechové QA: DevPanel → sekce 🔊 Audio.
+> Tabulky níže popisují v1 témata/SFX — melodie, basy a SFX recepty platí dál.
 
 ## Sonic Identity
 

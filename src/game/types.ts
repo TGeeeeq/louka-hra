@@ -7,6 +7,31 @@
 
 export type Season = "jaro" | "leto" | "podzim" | "zima";
 
+/** Placená rozšíření. Vlastnictví žije mimo save (louka-dlc-v1) — reset hry nákupy nemaže. */
+export type DlcId = "senne";
+
+/**
+ * Liščí příběh přátelství. Liška nikdy nikomu neublíží — je to plachá
+ * sousedka z lesa, kterou si hráč získává trpělivostí (žádné násilí).
+ */
+export type FoxStage =
+  | "les" // zatím jen tušení — někdo v noci obchází výběhy
+  | "stopy" // ráno se objevily stopy; prozkoumej je
+  | "pozorovani" // vyhlédni ji večer u kraje lesa (pomalu!)
+  | "krmeni" // nech jí misku u lesa a získávej důvěru
+  | "duvera" // jí, i když se díváš
+  | "kamarad"; // chodí na návštěvy a dá se pohladit
+
+export interface FoxState {
+  stage: FoxStage;
+  /** Důvěra 0–100. Roste krmením, nikdy neklesá — trpělivost, ne trest. */
+  trust: number;
+  /** Kolikrát v noci obešla výběhy (drobné stopy příběhu). */
+  sightings: number;
+  /** Kolikrát dostala večerní misku. */
+  bowlCount: number;
+}
+
 export type Phase = "rano" | "poledne" | "vecer";
 
 export type Weather =
@@ -31,7 +56,12 @@ export type Species =
   | "kachna"
   | "slepice"
   | "holub"
-  | "kralik";
+  | "kralik"
+  // Divocí sousedé — nekrmí se pravidelně, žijí v lese kolem Louky.
+  | "liska"
+  | "kane"
+  | "jezek"
+  | "srnka";
 
 /** Skupina krmení — jak a čím se zvíře krmí. */
 export type FeedGroup =
@@ -62,6 +92,8 @@ export interface AnimalDef {
   variant?: string;
   /** Příběhový příznak: "missing" (List se pohřešuje) apod. */
   special?: string;
+  /** Soubor v public/animals/ — skutečná fotka zvířete z nechmerust.org. */
+  photo?: string;
   /** Relativní velikost ve světě (násobí výchozí velikost druhu). */
   scale?: number;
   /** Kde na louce postavička stojí (procenta scény). */
@@ -84,6 +116,8 @@ export interface ItemDef {
   buyPrice?: number; // Kč; chybí = nelze koupit
   sellPrice?: number; // Kč; chybí = nelze prodat
   desc: string;
+  /** Patří k DLC — bez vlastnictví se neukazuje. */
+  dlc?: DlcId;
 }
 
 export interface Recipe {
@@ -97,6 +131,8 @@ export interface Recipe {
   requiresFire?: boolean;
   desc: string;
   fact?: string;
+  /** Patří k DLC — bez vlastnictví se neukazuje. */
+  dlc?: DlcId;
 }
 
 export interface BuildingDef {
@@ -106,6 +142,8 @@ export interface BuildingDef {
   cost: number;
   desc: string;
   benefit: string;
+  /** Patří k DLC — bez vlastnictví se neukazuje. */
+  dlc?: DlcId;
 }
 
 export type FactCategory =
@@ -120,6 +158,18 @@ export interface Fact {
   category: FactCategory;
   title: string;
   text: string;
+  /** Patří k DLC — bez vlastnictví se nepočítá do sbírky. */
+  dlc?: DlcId;
+}
+
+/** Senné DLC: rozdělané sušení sena na seništi. */
+export interface HayState {
+  /** Kolik pokosené trávy se právě suší. */
+  drying: number;
+  /** Kolik „dobrých dní" už seno schne (obracení = celý den, jinak půl). */
+  driedDays: number;
+  /** Dnes už obráceno? */
+  turnedToday: boolean;
 }
 
 export interface TaskDef {
@@ -146,6 +196,8 @@ export interface GameState {
   year: number;
   phase: Phase;
   weather: Weather;
+  /** Předpověď na zítřek — u sušení sena rozhoduje (Senné DLC), ale hodí se všem. */
+  weatherTomorrow: Weather;
 
   money: number;
   energy: number;
@@ -169,14 +221,27 @@ export interface GameState {
   tasksDone: Record<string, boolean>;
   knownFacts: string[];
   seenAnimals: string[];
+  /** Kolikrát hráč potkal divoké sousedy (liska, kane, jezek, srnka). */
+  wildSeen: Record<string, number>;
+  /** Liščí příběh přátelství. */
+  fox: FoxState;
+  /** Senné DLC: probíhající sušení sena (null = nic se nesuší). */
+  hay: HayState | null;
 
   totalEarned: number;
   daysSurvived: number;
   gameOver: string | null;
 
   // Questy a dialogy
-  questLine: number; // index v MAIN_QUESTS
+  /** @deprecated Zrcadlo `questProgress.main` — drženo kvůli starým uložením. */
+  questLine: number;
+  /** Postup v každé questové lince (id linky → index dalšího questu). */
+  questProgress: Record<string, number>;
   questCompleted: string[];
+  /** Vlastněná DLC — zrcadlo entitlements (zdroj pravdy je mimo save). */
+  dlcOwned: DlcId[];
+  /** Verze save formátu pro migrace. */
+  saveVersion: number;
   flags: Record<string, boolean>; // např. pet_flicek, made_mast, sold
   dialog: { speaker?: string; lines: string[] } | null;
 

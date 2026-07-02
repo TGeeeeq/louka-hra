@@ -1,12 +1,14 @@
 import { useGame } from "../store";
 import { RECIPES } from "../../game/content/recipes";
 import { ITEM_BY_ID } from "../../game/content/items";
+import { ownedOnly } from "../../game/dlc/gate";
 import { invCount } from "../../game/engine/util";
 
 export function Craft() {
   const { state, dispatch } = useGame();
   const inv = state.inventory;
   const hasSusarna = state.buildings.includes("susarna");
+  const recipes = ownedOnly(state, RECIPES);
 
   return (
     <div className="craft">
@@ -15,11 +17,11 @@ export function Craft() {
         <span className={state.fireLit ? "fire on" : "fire off"}>{state.fireLit ? "🔥 hoří" : "🔥 nehoří"}</span>.
         Rozdělej ho v záložce Práce (poledne).
       </p>
-      {RECIPES.map((r) => {
+      {recipes.map((r) => {
         const haveAll = r.inputs.every((i) => invCount(inv, i.item) >= i.qty);
         const fireOk = !r.requiresFire || state.fireLit;
         const energyOk = state.energy >= r.energy;
-        const usesHerbs = r.inputs.some((i) => i.item === "byliny");
+        const usesHerbs = r.inputs.some((i) => i.item === "byliny" || i.item === "kvety" || i.item === "sipek");
         return (
           <div className="recipe" key={r.id}>
             <div className="recipe-head">

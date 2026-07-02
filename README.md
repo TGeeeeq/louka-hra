@@ -16,6 +16,15 @@ Jeden **level = jeden den**. Den má tři fáze a střídají se roční období
 - **Ekonomika** — kupuj krmivo/materiál/nářadí, prodávej výrobky, stav **vychytávky** (studna, seník, automatické krmítko, sušárna bylin, permakulturní zahrada…), které ulehčí práci nebo zlevní provoz.
 - **Survival** — hlídej vlastní energii, sytost a žízeň; přežij **zimu** (víc krmení, topení dřevem, kratší dny).
 - **Poučení** — sběrem bylin, úklidem a péčí objevuješ ověřená **fakta o přírodě a zvířatech** (sbírají se do Deníku).
+- **Divocí sousedé, žádné násilí** — liška nikdy nikomu neublíží: trpělivostí a večerní miskou si ji můžeš
+  **skamarádit** (questová linka až po mazlení). Káně se řeší úkrytem, ne bojem; ježek hlídá slimáky,
+  srnka učí klidu. Každé setkání končí dobře a s ponaučením.
+- **Skutečné fotky** — v kartě zvířete a encyklopedii jsou opravdové fotky obyvatel z nechmerust.org
+  (stahuje `npm run photos`); sprity vycházejí z reálných předloh.
+- **Adaptivní hudba** — vrstvená syntéza (melodie/bas/pad/perkuse): útěk zvířete spustí „heartbeat",
+  poplach hnací rytmus, blížící se zima hudbu postupně ztmavuje. Vše Web Audio, žádné soubory.
+- **DLC** — 🌾 **Senné DLC**: kosení, sušení a svoz sena — závod s počasím podle skutečné sklizně
+  (a skutečné sbírky) Louky. Vlastnictví přežije i novou hru.
 
 Spokojená zvířata = dary od příznivců. Zanedbaná = veterinář a ztráty. Bankrot = konec.
 
@@ -76,14 +85,18 @@ src/
   game/
     types.ts            datové typy
     balance.ts          ladění obtížnosti (ceny, energie, období…)
-    content/            animals · items · recipes · buildings · facts · people
+    content/            animals · wild · items · recipes · buildings · facts · people · quests · dlc
     engine/             state · reducer (veškerá logika) · save · util
+    dlc/                entitlements (louka-dlc-v1) · purchase (PurchaseProvider) · gate
+  audio/sound.ts        vrstvená adaptivní hudba + SFX (Web Audio, bez souborů)
   ui/
     store.tsx           React stav + autosave (localStorage)
     labels.ts           ikonky a popisky
-    components/         TopBar, MeadowMap, TaskPanel, Shop, Craft, Journal, …
+    components/         Shop, Craft, Journal, AnimalCard, DlcStore, Intro, …
     sprites/            AnimalSprite, PersonSprite  (ručně kreslené SVG)
   App.tsx, main.tsx, styles/global.css
+scripts/fetch-photos.mjs  stažení a zmenšení fotek zvířat (npm run photos)
+public/animals/           skutečné fotky obyvatel (bundlují se do aplikace)
 ```
 
 ### Jak přidat zvíře / faktum / recept

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useGame } from "../store";
 import { BUYABLE, SELLABLE } from "../../game/content/items";
 import { BUILDINGS } from "../../game/content/buildings";
+import { ownedOnly } from "../../game/dlc/gate";
 import { invCount } from "../../game/engine/util";
 
 type Tab = "nakup" | "prodej" | "stavby";
@@ -11,6 +12,9 @@ export function Shop() {
   const [tab, setTab] = useState<Tab>("nakup");
 
   const senoDiscount = state.buildings.includes("senik");
+  const buyable = ownedOnly(state, BUYABLE);
+  const sellable = ownedOnly(state, SELLABLE);
+  const buildings = ownedOnly(state, BUILDINGS);
 
   return (
     <div className="shop">
@@ -22,7 +26,7 @@ export function Shop() {
 
       {tab === "nakup" && (
         <div className="shop-list">
-          {BUYABLE.map((it) => {
+          {buyable.map((it) => {
             const price =
               it.id === "seno" && senoDiscount ? Math.round(it.buyPrice! * 0.7) : it.buyPrice!;
             return (
@@ -49,7 +53,7 @@ export function Shop() {
 
       {tab === "prodej" && (
         <div className="shop-list">
-          {SELLABLE.map((it) => {
+          {sellable.map((it) => {
             const have = invCount(state.inventory, it.id);
             return (
               <div className={`shop-row ${have ? "" : "dim"}`} key={it.id}>
@@ -73,7 +77,7 @@ export function Shop() {
 
       {tab === "stavby" && (
         <div className="shop-list">
-          {BUILDINGS.map((b) => {
+          {buildings.map((b) => {
             const owned = state.buildings.includes(b.id);
             return (
               <div className={`shop-row build ${owned ? "owned" : ""}`} key={b.id}>

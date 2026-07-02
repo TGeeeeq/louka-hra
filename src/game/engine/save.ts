@@ -27,6 +27,11 @@ export function loadGame(): GameState | null {
       merged.built = [...TUTORIAL_BUILDING_IDS];
       merged.tutorialStep = TUTORIAL_STEPS.length;
     }
+    // Migrace v2 → v3: lineární questLine se stal linkou "main".
+    if (parsed.saveVersion === undefined) {
+      merged.questProgress = { main: Math.max(0, parsed.questLine ?? 0) };
+      merged.saveVersion = 3;
+    }
     return merged;
   } catch {
     return null;

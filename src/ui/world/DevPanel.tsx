@@ -1,5 +1,9 @@
+import { useState } from "react";
 import { useGame } from "../store";
 import { SEASON_ICON, SEASON_LABEL } from "../labels";
+import { sound, type TensionLevel } from "../../audio/sound";
+import { DLC_CATALOG } from "../../game/content/dlc";
+import { grantDlc, revokeDlc } from "../../game/dlc/entitlements";
 
 /**
  * Skrytý developerský panel pro rychlé testování hry.
@@ -9,6 +13,11 @@ import { SEASON_ICON, SEASON_LABEL } from "../labels";
 export function DevPanel({ onClose }: { onClose: () => void }) {
   const { state, dispatch } = useGame();
   const dev = state.dev;
+  const [tension, setTension] = useState<TensionLevel>(sound.getTension());
+  const forceTension = (t: TensionLevel) => {
+    sound.setTension(t);
+    setTension(t);
+  };
 
   return (
     <div className="dev-panel" onClick={(e) => e.stopPropagation()}>
@@ -51,8 +60,8 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <small className="dev-hint">
-          Skoky časem přeskočí noční dopady (liška, veterinář, mráz) — jsou čistě na
-          testování všech ročních období.
+          Skoky časem přeskočí noční vyhodnocení (vyplašení, veterinář, mráz) — jsou
+          čistě na testování všech ročních období.
         </small>
       </div>
 
@@ -62,6 +71,46 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
           <button onClick={() => dispatch({ type: "DEV_RESTOCK" })}>
             📦 Doplnit zásoby + 5000 Kč
           </button>
+          <button onClick={() => dispatch({ type: "DEV_FOX" })}>
+            🦊 Posunout liščí příběh ({state.fox.stage}, důvěra {state.fox.trust})
+          </button>
+        </div>
+      </div>
+
+      <div className="dev-section">
+        <div className="dev-label">🌾 DLC (testovací odemykání)</div>
+        {DLC_CATALOG.map((d) => {
+          const owned = state.dlcOwned.includes(d.id);
+          return (
+            <label className="dev-toggle" key={d.id}>
+              <input
+                type="checkbox"
+                checked={owned}
+                onChange={() =>
+                  dispatch({ type: "SET_DLC", owned: owned ? revokeDlc(d.id) : grantDlc(d.id) })
+                }
+              />
+              <span><b>{d.emoji} {d.name}</b> — {d.tagline}</span>
+            </label>
+          );
+        })}
+      </div>
+
+      <div className="dev-section">
+        <div className="dev-label">🔊 Audio — napětí a motivy (poslechové QA)</div>
+        <div className="dev-btn-row">
+          {([0, 1, 2, 3] as const).map((t) => (
+            <button key={t} className={tension === t ? "on" : ""} onClick={() => forceTension(t)}>
+              {["😌 klid", "⚠️ útěk", "🚨 poplach", "😮‍💨 úleva"][t]}
+            </button>
+          ))}
+        </div>
+        <div className="dev-btn-row">
+          <button onClick={() => sound.foxAlert()}>🦊 alert</button>
+          <button onClick={() => sound.foxTrustMotif(3)}>🦊 důvěra</button>
+          <button onClick={() => sound.foxLullaby()}>🦊 mazlení</button>
+          <button onClick={() => sound.lowEnergy()}>🥱 únava</button>
+          <button onClick={() => sound.questDone()}>🎉 quest</button>
         </div>
       </div>
 

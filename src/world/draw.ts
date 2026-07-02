@@ -700,6 +700,56 @@ function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: num
       }
       break;
     }
+    case "stopy": {
+      // řádek liščích stop v trávě (drobné otisky tlapek s drápky)
+      ctx.fillStyle = "rgba(90,70,50,0.75)";
+      for (let i = 0; i < 4; i++) {
+        const px = x + 6 + i * 8 + (i % 2) * 3;
+        const py = baseY - 6 - i * 5;
+        ctx.beginPath(); ctx.ellipse(px, py, 2.6, 3.4, -0.4, 0, 7); ctx.fill();
+        for (let t = 0; t < 3; t++) { ctx.beginPath(); ctx.arc(px - 2 + t * 2, py - 4, 0.9, 0, 7); ctx.fill(); }
+      }
+      break;
+    }
+    case "krmne_misto": {
+      // plochý kámen s miskou na kraji lesa
+      ctx.fillStyle = BC.stone; ctx.beginPath(); ctx.ellipse(cx, baseY - 4, 14, 6, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = shiftHex(BC.stone, -20); ctx.beginPath(); ctx.ellipse(cx, baseY - 3, 14, 5, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = "#8a5c30"; ctx.beginPath(); ctx.ellipse(cx, baseY - 8, 8, 3.6, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = "#5e3d1e"; ctx.beginPath(); ctx.ellipse(cx, baseY - 8.5, 6, 2.4, 0, 0, 7); ctx.fill();
+      break;
+    }
+    case "listi": {
+      // hromada podzimního listí (ježčí vila)
+      const cols = ["#cf7a2e", "#b85c3c", "#d9963c", "#a3691f"];
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI;
+        const r = 6 + (i % 3) * 4;
+        ctx.fillStyle = cols[i % cols.length];
+        ctx.save();
+        ctx.translate(cx + Math.cos(a + i) * r, baseY - 4 - Math.sin(a) * 8);
+        ctx.rotate(i * 0.7);
+        ctx.fillRect(-3, -2, 6, 4);
+        ctx.restore();
+      }
+      break;
+    }
+    case "seniste": {
+      // řádky posečené trávy + kopka sena
+      ctx.strokeStyle = "#b8a35c"; ctx.lineWidth = 2;
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(x + 4, y + 8 + i * 7);
+        ctx.quadraticCurveTo(cx, y + 5 + i * 7, x + w - 4, y + 8 + i * 7);
+        ctx.stroke();
+      }
+      ctx.fillStyle = BC.straw; ctx.beginPath(); ctx.ellipse(x + w - 14, baseY - 9, 11, 9, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = BC.strawD; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(x + w - 14, baseY - 9, 5, 9, 0, 0, 7); ctx.stroke();
+      ctx.strokeStyle = BC.trunk; ctx.lineWidth = 2.4; // opřené hrábě
+      ctx.beginPath(); ctx.moveTo(x + 8, baseY); ctx.lineTo(x + 14, y + 6); ctx.stroke();
+      break;
+    }
     case "zahrada": {
       ctx.fillStyle = "#7d5230"; roundRect(ctx, x + 5, y + h * 0.28, w - 10, h * 0.66, 4); ctx.fill();
       for (let r = 0; r < 3; r++) {

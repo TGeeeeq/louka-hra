@@ -1,4 +1,4 @@
-import type { FeedGroup, GameState, Season, Weather } from "../types";
+import type { DlcId, FeedGroup, GameState, Season, Weather } from "../types";
 import {
   DAYS_PER_SEASON,
   DONATION_RANGE,
@@ -35,7 +35,7 @@ import {
   WINTER_FACTS,
 } from "../content/facts";
 import { initialState } from "./state";
-import { MAIN_QUESTS } from "../content/quests";
+import { QUEST_LINES } from "../content/quests";
 import { TUTORIAL_STEPS, tutorialActive } from "../content/tutorial";
 import {
   addLog,
@@ -83,13 +83,24 @@ export type Action =
   | { type: "SET_FLAG"; key: string }
   | { type: "REWARD"; money?: number; energy?: number; items?: { item: string; qty: number }[]; flag?: string }
   | { type: "DISMISS_FLASH" }
+  // Liščí příběh přátelství + divocí sousedé (vše bez násilí)
+  | { type: "FOX_TRACKS" }
+  | { type: "FOX_BOWL" }
+  | { type: "FOX_SEEN"; spooked: boolean }
+  | { type: "FOX_PET" }
+  | { type: "LEAF_PILE" }
+  | { type: "WILD_SEEN"; which: "kane" | "jezek" | "srnka" }
+  // DLC
+  | { type: "SET_DLC"; owned: DlcId[] }
+  | { type: "HAY_WORK" } // Senné DLC — kosení / rozhoz / obracení podle situace
   // Developerský (testovací) mód
   | { type: "DEV_UNLOCK" }
   | { type: "DEV_TOGGLE"; key: "godMode" | "turbo" }
   | { type: "DEV_SKIP_PHASE" }
   | { type: "DEV_SKIP_DAY" }
   | { type: "DEV_SKIP_SEASON" }
-  | { type: "DEV_RESTOCK" };
+  | { type: "DEV_RESTOCK" }
+  | { type: "DEV_FOX" };
 
 const has = (s: GameState, id: string) => s.buildings.includes(id);
 
@@ -192,19 +203,27 @@ export function reducer(state: GameState, action: Action): GameState {
 }
 
 function advanceQuests(s: GameState) {
-  while (s.questLine < MAIN_QUESTS.length) {
-    const q = MAIN_QUESTS[s.questLine];
-    if (!q.done(s)) break;
-    s.questCompleted.push(q.id);
-    s.questLine += 1;
-    if (q.reward?.money) {
-      s.money += q.reward.money;
-      s.totalEarned += q.reward.money;
+  for (const line of QUEST_LINES) {
+    if (line.dlc && !s.dlcOwned.includes(line.dlc)) continue;
+    if (!line.unlocked(s)) continue;
+    let idx = s.questProgress[line.id] ?? 0;
+    while (idx < line.quests.length) {
+      const q = line.quests[idx];
+      if (!q.done(s)) break;
+      s.questCompleted.push(q.id);
+      idx += 1;
+      s.questProgress[line.id] = idx;
+      if (q.reward?.money) {
+        s.money += q.reward.money;
+        s.totalEarned += q.reward.money;
+      }
+      if (q.reward?.energy) s.energy = clamp(s.energy + q.reward.energy, 0, s.maxEnergy);
+      pushDialog(s, q.speaker ?? "Louka", [q.onComplete]);
+      addLog(s, `✓ Splněn úkol: ${q.title}`, "good");
     }
-    if (q.reward?.energy) s.energy = clamp(s.energy + q.reward.energy, 0, s.maxEnergy);
-    pushDialog(s, q.speaker ?? "Louka", [q.onComplete]);
-    addLog(s, `✓ Splněn úkol: ${q.title}`, "good");
   }
+  // Zrcadlo pro stará uložení a stávající UI.
+  s.questLine = s.questProgress.main ?? 0;
 }
 
 function core(state: GameState, action: Action): GameState {
@@ -280,7 +299,9 @@ function core(state: GameState, action: Action): GameState {
       s.tasksDone.release = true;
       addLog(
         s,
-        "Otevřel jsi kurník i výběhy — drůbež se hrne ven na louku.",
+        s.flags.night_scare
+          ? "Otevřel jsi kurník — a drůbež vystřelila ven jak z praku. Noc byla dlouhá."
+          : "Otevřel jsi kurník i výběhy — drůbež se hrne ven na louku.",
         "good",
       );
       flash(s, "Drůbež je venku! Teď ji nakrm. 🐔🦆🪿", "good");
@@ -357,10 +378,13 @@ function core(state: GameState, action: Action): GameState {
       let eggs = randInt(EGGS_PER_COLLECT.min, EGGS_PER_COLLECT.max);
       if (has(s, "kurnik")) eggs = Math.round(eggs * 1.5);
       if (s.welfare.drubez < 40) eggs = Math.max(1, Math.round(eggs * 0.5));
+      // Vyplašená noc (nezavřené výběhy) = poloviční snůška.
+      const scared = !!s.flags.night_scare;
+      if (scared) eggs = Math.max(1, Math.round(eggs * 0.5));
       give(s, "vejce", eggs);
       s.tasksDone.eggs = true;
       addLog(s, `Sesbíral jsi ${eggs}× vejce. 🥚`, "good");
-      flash(s, `Dnešní snůška: ${eggs} vajec.`, "good");
+      flash(s, scared ? `Vyplašené slepice dnes moc nesnesly — jen ${eggs} vajec. Večer zavírej!` : `Dnešní snůška: ${eggs} vajec.`, scared ? "warn" : "good");
       return s;
     }
 
@@ -479,10 +503,21 @@ function core(state: GameState, action: Action): GameState {
         return s;
       }
       give(s, "byliny", herbs);
-      addLog(s, `Nasbíral jsi ${herbs}× byliny v lese. 🌿`, "good");
+      // Sezónní bonus: v létě luční květy (na sirup), na podzim šípky (na čaj).
+      let bonus = "";
+      if (s.season === "leto" && chance(0.35)) {
+        const k = randInt(1, 2);
+        give(s, "kvety", k);
+        bonus = ` A k tomu ${k}× luční květy! 🌼`;
+      } else if (s.season === "podzim" && chance(0.35)) {
+        const k = randInt(1, 3);
+        give(s, "sipek", k);
+        bonus = ` A k tomu ${k}× šípky! 🍒`;
+      }
+      addLog(s, `Nasbíral jsi ${herbs}× byliny v lese. 🌿${bonus}`, "good");
       flash(
         s,
-        `Košík plný bylin (+${herbs}).`,
+        `Košík plný bylin (+${herbs}).${bonus}`,
         "good",
         learnFact(s, FACT_BY_ID[pick(FORAGE_FACTS)]),
       );
@@ -492,6 +527,7 @@ function core(state: GameState, action: Action): GameState {
     case "CRAFT": {
       const recipe = RECIPE_BY_ID[action.recipeId];
       if (!recipe) return state;
+      if (recipe.dlc && !state.dlcOwned.includes(recipe.dlc)) return state;
       if (recipe.requiresFire && !state.fireLit)
         return warnReturn(state, `Na "${recipe.name}" potřebuješ rozdělaný oheň.`);
       if (!hasItems(state.inventory, recipe.inputs))
@@ -500,7 +536,7 @@ function core(state: GameState, action: Action): GameState {
       if (notEnoughEnergy(s, recipe.energy)) return s;
       s.energy -= recipe.energy;
       take(s, recipe.inputs);
-      const usesHerbs = recipe.inputs.some((i) => i.item === "byliny");
+      const usesHerbs = recipe.inputs.some((i) => i.item === "byliny" || i.item === "kvety" || i.item === "sipek");
       const bonus = usesHerbs && has(s, "susarna") ? 1 : 0;
       for (const out of recipe.outputs) give(s, out.item, out.qty + bonus);
       if (recipe.id === "make_salve") s.flags.made_mast = true;
@@ -551,6 +587,7 @@ function core(state: GameState, action: Action): GameState {
     case "BUY": {
       const item = ITEM_BY_ID[action.itemId];
       if (!item || item.buyPrice == null) return state;
+      if (item.dlc && !state.dlcOwned.includes(item.dlc)) return state;
       const qty = Math.max(1, action.qty);
       let unit = item.buyPrice;
       if (action.itemId === "seno" && has(state, "senik"))
@@ -584,6 +621,7 @@ function core(state: GameState, action: Action): GameState {
     case "BUILD": {
       const b = BUILDING_BY_ID[action.buildingId];
       if (!b) return state;
+      if (b.dlc && !state.dlcOwned.includes(b.dlc)) return state;
       if (has(state, action.buildingId))
         return warnReturn(state, "Tohle už máš.");
       if (state.money < b.cost)
@@ -618,6 +656,7 @@ function core(state: GameState, action: Action): GameState {
         s.maxEnergy = SEASON_ENERGY[s.season];
         s.energy = SEASON_ENERGY[s.season];
         s.questLine = 0;
+        s.questProgress.main = 0;
         s.flags.tutorial_done = true;
         flash(s, "Louka je postavená! Teď začíná to hlavní — přežít. 🌱", "good");
       }
@@ -670,7 +709,7 @@ function core(state: GameState, action: Action): GameState {
       addLog(s, "Zavřel jsi drůbež i ostatní do bezpečí před nocí. 🚪", "good");
       flash(
         s,
-        "Všichni v suchu a bezpečí. Liška má smůlu.",
+        "Všichni v suchu a klidu — les může šustit, jak chce. 🌙",
         "good",
         learnFact(s, FACT_BY_ID[pick(NIGHT_FACTS)]),
       );
@@ -693,9 +732,34 @@ function core(state: GameState, action: Action): GameState {
           );
         s.phase = "poledne";
         addLog(s, "Nastalo poledne — čas na práci, vaření a les.", "info");
+        // Letní návštěva káněte: bez úkrytu drůbež zpanikaří (jen stres,
+        // nikdo nepřijde k úhoně) — s keři a sítí je z káněte klidný soused.
+        if (s.season === "leto" && !tutorialActive(s) && chance(0.3)) {
+          if (has(s, "kryty_vybeh")) {
+            s.tasksDone.kane_perch = true;
+            addLog(s, "Nad loukou krouží káně — drůbež jen zalezla pod keře a hrabe dál. Káně si sedlo na kůl u výběhu.", "info");
+          } else {
+            s.tasksDone.kane_circle = true;
+            s.flags.kane_seen = true;
+            s.welfare.drubez = clamp(s.welfare.drubez - 6, 0, 100);
+            flash(s, "Nad výběhem krouží káně — drůbež zpanikařila a schovává se! Chtělo by to úkryt: keře a síť.", "warn");
+          }
+        }
       } else {
         s.phase = "vecer";
         addLog(s, "Slunce zapadá. Čas na večerní krmení a zavření.", "info");
+        // Senné DLC: Tomáš večer hlásí předpověď, když je venku seno.
+        if (s.dlcOwned.includes("senne") && s.hay && s.hay.drying > 0 && s.weatherTomorrow === "destivo") {
+          pushDialog(s, "Tomáš", ["Cítím to v kolenou — zítra bude pršet! Seno na seništi zmokne. Jsi s tím smířený?"]);
+        }
+        // První podzimní večer: v listí u zahrádky někdo funí…
+        if (s.season === "podzim" && !s.flags.jezek_intro && !tutorialActive(s)) {
+          s.flags.jezek_intro = true;
+          pushDialog(s, "Louka", [
+            "V listí u zahrádky něco šustí a důležitě funí… Ježek!",
+            "Prohlédni si hromadu listí u zahrádky — třeba by se mu tam líbilo bydlet. 🦔",
+          ]);
+        }
       }
       s.hunger = clamp(s.hunger - PHASE_HUNGER_DRAIN, 0, 100);
       s.thirst = clamp(s.thirst - PHASE_THIRST_DRAIN, 0, 100);
@@ -705,6 +769,222 @@ function core(state: GameState, action: Action): GameState {
 
     case "SLEEP":
       return resolveSleep(state);
+
+    // -----------------------------------------------------------------------
+    // DLC
+
+    case "SET_DLC": {
+      const same =
+        state.dlcOwned.length === action.owned.length &&
+        state.dlcOwned.every((d) => action.owned.includes(d));
+      if (same) return state;
+      const s = cloneState(state);
+      s.dlcOwned = [...action.owned];
+      return s;
+    }
+
+    // Senné DLC: jedna akce na seništi — reducer sám pozná, co je na řadě
+    // (obracení → rozhoz → kosení), ať je ovládání jedním tlačítkem.
+    case "HAY_WORK": {
+      if (!state.dlcOwned.includes("senne")) return state;
+      const s = cloneState(state);
+      const kosa = has(s, "kosa");
+
+      // 1) obracení rozloženého sena (poledne)
+      if (s.hay && !s.hay.turnedToday && s.phase === "poledne") {
+        if (notEnoughEnergy(s, 5)) return s;
+        s.energy -= 5;
+        s.hay.turnedToday = true;
+        addLog(s, "Obrátil jsi seno — schne z obou stran. 🌾", "good");
+        flash(s, "Seno obráceno. Obrácené seno schne za den, neobrácené za dva.", "good", learnFact(s, FACT_BY_ID["f_kopky"]));
+        return s;
+      }
+
+      // 2) rozhoz trávy (nebo zavlhlého sena) na sušení
+      const trava = invCount(s.inventory, "pokosena_trava");
+      const mokre = invCount(s.inventory, "mokre_seno");
+      if (trava + mokre >= 4) {
+        if (notEnoughEnergy(s, 6)) return s;
+        s.energy -= 6;
+        if (trava) take(s, [{ item: "pokosena_trava", qty: trava }]);
+        if (mokre) take(s, [{ item: "mokre_seno", qty: mokre }]);
+        const total = trava + mokre;
+        s.hay = { drying: (s.hay?.drying ?? 0) + total, driedDays: s.hay?.driedDays ?? 0, turnedToday: s.hay?.turnedToday ?? false };
+        addLog(s, `Rozhodil jsi ${total}× trávy na sušení. Teď je to závod s nebem.`, "good");
+        const rainTomorrow = s.weatherTomorrow === "destivo";
+        flash(
+          s,
+          rainTomorrow
+            ? "Rozhozeno! Ale Tomáš větří déšť… zítra to může zmoknout. 🌧️"
+            : "Rozhozeno! Sluníčko, dělej svou práci. ☀️",
+          rainTomorrow ? "warn" : "good",
+        );
+        return s;
+      }
+
+      // 3) kosení (ráno/poledne, ne v dešti)
+      if (s.phase === "vecer")
+        return warnReturn(state, "Za rosy nebo přes den — večer se nekosí, večer se vypráví.");
+      if (s.weather === "destivo")
+        return warnReturn(state, "V dešti kosit nemá smysl — mokrá tráva by rovnou plesnivěla.");
+      if (s.season !== "leto")
+        return warnReturn(state, "Tráva na seno se kosí v létě. Teď by toho moc nenarostlo.");
+      const cost = kosa ? 9 : 14;
+      if (notEnoughEnergy(s, cost)) return s;
+      s.energy -= cost;
+      const cut = randInt(3, 5) + (kosa ? 2 : 0);
+      give(s, "pokosena_trava", cut);
+      addLog(s, `Pokosil jsi kus seniště — ${cut}× tráva. 🌱`, "good");
+      if (!s.flags.seno_prvni_kosa) {
+        s.flags.seno_prvni_kosa = true;
+        pushDialog(s, "Tomáš", [
+          "Kosa se drží takhle. Ne, takhle. … Dobře, hlavně si nekosej tkaničky.",
+          "Aspoň 4 hrsti trávy rozhoď na sušení. A modli se, ať neprší — mokré seno je zlo.",
+        ]);
+      } else {
+        flash(s, `+${cut}× pokosená tráva. Nasbírej aspoň 4 a rozhoď je na sušení.`, "good");
+      }
+      return s;
+    }
+
+    // -----------------------------------------------------------------------
+    // Liščí příběh přátelství — trpělivost a respekt, žádné násilí.
+
+    case "FOX_TRACKS": {
+      if (state.fox.stage !== "stopy")
+        return state.flags.fox_tracks_seen
+          ? warnReturn(state, "Stopy už znáš. Liška tudy chodí každou noc.")
+          : state;
+      const s = cloneState(state);
+      s.flags.fox_tracks_seen = true;
+      s.fox.stage = "pozorovani";
+      addLog(s, "Prohlédl sis liščí stopy u kraje lesa. 🦊", "info");
+      pushDialog(s, "Tomáš", [
+        "Jo, to je liška. Chodí sem každou noc na obhlídku — zvědavost, ne nebezpečí.",
+        "Jestli ji chceš vidět, zkus to večer u kraje lesa. Ale pomalu a potichu — když se poženeš, zmizí.",
+      ]);
+      return s;
+    }
+
+    case "FOX_SEEN": {
+      const s = cloneState(state);
+      if (action.spooked) {
+        if (s.flags.fox_spooked_today) return state;
+        s.flags.fox_spooked_today = true;
+        addLog(s, "Přiběhl jsi moc rychle — liška zmizela mezi stromy.", "warn");
+        pushDialog(s, "Louka", [
+          "Šmik — a je pryč. Divoké zvíře se nehoní.",
+          "Ponaučení na zítřek: přibliž se pomalu, zastav se a nech ji přijít blíž. 🦊",
+        ]);
+        return s;
+      }
+      if (s.fox.stage === "pozorovani") {
+        s.fox.stage = "krmeni";
+        s.flags.fox_seen = true;
+        addLog(s, "Vydržel jsi stát bez hnutí — a liška tě sledovala zpovzdálí. 🦊", "good");
+        pushDialog(s, "Louka", [
+          "Sedí na kraji lesa a pozoruje tě. Nezaútočí — jen zkoumá, kdo jsi.",
+          "Když se neženeš, přijde blíž. Zkus jí večer nechat misku s jídlem u krmného místa.",
+        ]);
+      } else {
+        s.flags.fox_seen = true;
+        pushDialog(s, "Louka", ["Liška tě pozoruje zpovzdálí. Každý večer o kousek blíž. 🦊"]);
+      }
+      return s;
+    }
+
+    case "FOX_BOWL": {
+      if (state.phase !== "vecer")
+        return warnReturn(state, "Liška chodí až za soumraku — misku jí nech večer.");
+      if (state.fox.stage === "les" || state.fox.stage === "stopy" || state.fox.stage === "pozorovani")
+        return warnReturn(state, "Nejdřív lišku vyhlédni — zatím by k misce nepřišla.");
+      if (state.tasksDone.fox_bowl)
+        return warnReturn(state, "Miska u lesa už je plná. Teď je to na lišce.");
+      const s = cloneState(state);
+      const food = invCount(s.inventory, "vareno") > 0 ? "vareno" : invCount(s.inventory, "krmna_smes") > 0 ? "krmna_smes" : null;
+      if (!food)
+        return warnReturn(state, "Nemáš, co bys do misky dal — hodí se vařené krmivo nebo krmná směs.");
+      if (notEnoughEnergy(s, 3)) return s;
+      s.energy -= 3;
+      take(s, [{ item: food, qty: 1 }]);
+      s.tasksDone.fox_bowl = true;
+      addLog(s, "Nechal jsi lišce misku na kraji lesa. Teď je to na ní.", "good");
+      flash(s, "Miska čeká u lesa. Divoké zvíře se krmí na jeho hranici — ne z ruky. 🦊", "good");
+      return s;
+    }
+
+    case "FOX_PET": {
+      if (state.fox.stage !== "kamarad")
+        return warnReturn(state, "Liška se zatím pohladit nenechá. Důvěra chce čas.");
+      if (state.tasksDone.fox_pet)
+        return warnReturn(state, "Dnes už se s tebou liška pomazlila — teď zase obchází svůj revír.");
+      const s = cloneState(state);
+      s.tasksDone.fox_pet = true;
+      s.flags.fox_petted = true;
+      s.energy = clamp(s.energy + 6, 0, s.maxEnergy);
+      if (chance(0.3)) {
+        give(s, "drevo", 1);
+        pushDialog(s, "Liška", [
+          "Liška se ti otřela o nohu, zavrněla — a položila ti k botě napůl ohlodanou šišku.",
+          "Dar je dar. (Do ohniště se počítá. +1 dřevo 🪵)",
+        ]);
+      } else {
+        pushDialog(s, "Liška", ["Liška se ti stočila u nohou a nechala se podrbat za ušima. Hřeje to víc než oheň. 🦊💚"]);
+      }
+      addLog(s, "Pomazlil ses s liškou. Trpělivost a respekt otevřou i liščí srdce.", "good");
+      learnFact(s, FACT_BY_ID["f_liska_duvera"]);
+      return s;
+    }
+
+    case "LEAF_PILE": {
+      if (state.flags.jezek_domek)
+        return warnReturn(state, "Ježčí palác z listí už stojí. Nájemník spokojeně funí.");
+      if (state.season !== "podzim")
+        return warnReturn(state, "Na ježčí domek je potřeba spadané listí — počkej na podzim.");
+      const s = cloneState(state);
+      if (notEnoughEnergy(s, 5)) return s;
+      s.energy -= 5;
+      s.flags.jezek_domek = true;
+      addLog(s, "Nahrabal jsi ježkovi palác z listí u zahrádky. 🍂", "good");
+      pushDialog(s, "Louka", [
+        "Hromada listí u zahrádky = ježčí vila se vším komfortem.",
+        "Ježek se nastěhoval hned — a slimáky ti teď hlídá jako profík. 🦔",
+      ]);
+      learnFact(s, FACT_BY_ID["f_jezek_mleko"]);
+      return s;
+    }
+
+    case "WILD_SEEN": {
+      if (state.tasksDone[`wild_${action.which}`]) return state;
+      const s = cloneState(state);
+      s.tasksDone[`wild_${action.which}`] = true;
+      s.wildSeen[action.which] = (s.wildSeen[action.which] ?? 0) + 1;
+      if (action.which === "kane") {
+        pushDialog(s, "Káně", [
+          "Káně sedí na kůlu a měří si tě žlutým okem. Drůbež v klidu hrabe pod keři.",
+          "Není to nepřítel — je to nejpilnější lovec hrabošů na louce. 🪶",
+        ]);
+        learnFact(s, FACT_BY_ID["f_kane"]);
+      } else if (action.which === "jezek") {
+        pushDialog(s, "Ježek", [
+          "Funí, šustí a tváří se strašně důležitě. Nesahej — bodá to.",
+          "Ale slimáky ze zahrádky luxuje spolehlivěji než cokoli jiného. 🦔",
+        ]);
+        learnFact(s, FACT_BY_ID["f_jezek_mleko"]);
+      } else {
+        const n = s.wildSeen.srnka ?? 1;
+        if (n === 1) {
+          pushDialog(s, "Srnka", ["Na kraji louky ztuhla srnka a dívá se přímo na tebe…", "Nehýbej se moc — testuje, jestli jsi nebezpečí. Pak zase v klidu spásá."]);
+          learnFact(s, FACT_BY_ID["f_srnec"]);
+        } else if (n >= 3) {
+          learnFact(s, FACT_BY_ID["f_srnka_krmeni"]);
+          addLog(s, "Srnka už tě zná — dnes se ani nelekla. 🦌", "good");
+        } else {
+          addLog(s, "Srnka tě chvíli pozorovala a pak klidně odběhla. 🦌", "info");
+        }
+      }
+      return s;
+    }
 
     // -----------------------------------------------------------------------
     // Developerský (testovací) mód — skrytý, aktivuje se z UI.
@@ -754,6 +1034,23 @@ function core(state: GameState, action: Action): GameState {
       // Kolik dní zbývá do prvního dne dalšího období.
       const toNext = DAYS_PER_SEASON - state.dayInSeason + 1;
       return devAdvanceDays(state, toNext);
+    }
+
+    case "DEV_FOX": {
+      if (!state.dev.enabled) return state;
+      const s = cloneState(state);
+      const f = s.fox;
+      if (f.stage === "les") { f.stage = "stopy"; }
+      else if (f.stage === "stopy") { f.stage = "pozorovani"; s.flags.fox_tracks_seen = true; }
+      else if (f.stage === "pozorovani") { f.stage = "krmeni"; s.flags.fox_seen = true; }
+      else {
+        f.trust = clamp(f.trust + 30, 0, 100);
+        f.bowlCount += 1;
+        if (f.stage === "krmeni" && f.trust >= 60) f.stage = "duvera";
+        else if (f.stage === "duvera" && f.trust >= 90) f.stage = "kamarad";
+      }
+      flash(s, `🛠️ [dev] Liška: ${f.stage}, důvěra ${f.trust}, misek ${f.bowlCount}.`, "info");
+      return s;
     }
 
     case "DEV_RESTOCK": {
@@ -829,7 +1126,8 @@ function devAdvanceDays(state: GameState, days: number): GameState {
   s.animalsClosed = true;
   s.fireLit = false;
   s.tasksDone = {};
-  s.weather = randomWeather(s.season);
+  s.weather = s.weatherTomorrow ?? randomWeather(s.season);
+  s.weatherTomorrow = randomWeather(s.season);
   addLog(s, `⏩ [dev] Přeskok na den ${s.day} — ${seasonName(s.season)}.`, "info");
   flash(s, `⏩ Den ${s.day} — ${seasonName(s.season)}, ${weatherName(s.weather)}.`, "good");
   return s;
@@ -879,16 +1177,46 @@ function resolveSleep(state: GameState): GameState {
     s.welfare[g] = clamp(s.welfare[g], 0, 100);
   }
 
-  // 2) Noc bez zavření = liška a stres.
+  // 2) Noc bez zavření = vyplašená zvířata. Nikdo nikdy nezmizí — liška tu
+  //    nikomu neubližuje. Ale drůbež z nočního šustění nespí, stresuje se
+  //    a ráno je z toho chaos (méně vajec). Postih je stres, ne ztráta.
   if (!s.tasksDone.closed) {
     for (const g of groups) s.welfare[g] = clamp(s.welfare[g] - WELFARE_NIGHT_OPEN_PENALTY, 0, 100);
-    if (chance(0.5) && s.population.drubez > 5) {
-      const lost = randInt(1, 3);
-      s.population.drubez -= lost;
-      addLog(s, `V noci dorazila liška — chybí ${lost} kusy drůbeže.`, "bad");
+    s.flags.night_scare = true;
+    if (chance(0.6)) {
+      s.fox.sightings += 1;
+      addLog(s, "V noci se kolem otevřených výběhů mihla liška. Nikomu neublížila — ale drůbež má peří naježené ještě teď.", "warn");
       learnFact(s, FACT_BY_ID["f_liska"]);
     } else {
-      addLog(s, "Nechal jsi otevřeno. Naštěstí se nic nestalo — risk se ale nevyplácí.", "warn");
+      addLog(s, "Nechal jsi otevřeno. Zvířata špatně spala — venku celou noc šustil les.", "warn");
+    }
+  } else {
+    delete s.flags.night_scare;
+  }
+
+  // 2b) Liščí příběh — miska, důvěra a posun přátelství.
+  advanceFoxStory(s);
+
+  // 2c) Senné DLC: co udělá noc (a dnešní počasí) se sušícím se senem.
+  if (s.hay && s.hay.drying > 0) {
+    if (s.weather === "destivo") {
+      give(s, "mokre_seno", s.hay.drying);
+      addLog(s, `Déšť! Sušící se seno zmoklo (${s.hay.drying}×). Rozhoď ho znovu, jinak zplesniví.`, "bad");
+      learnFact(s, FACT_BY_ID["f_mokre_seno"]);
+      s.hay = null;
+    } else {
+      s.hay.driedDays += s.hay.turnedToday ? 1 : 0.5;
+      s.hay.turnedToday = false;
+      if (s.hay.driedDays >= 2) {
+        const bales = Math.max(1, Math.floor(s.hay.drying / 4));
+        give(s, "seno", bales);
+        s.flags.seno_ususeno = true;
+        addLog(s, `Seno je suché a voní létem — ${bales}× balík! 🌾`, "good");
+        learnFact(s, FACT_BY_ID["f_otava"]);
+        s.hay = null;
+      } else {
+        addLog(s, "Seno na seništi schne… ještě to chce den. Nezapomeň ho v poledne obracet.", "info");
+      }
     }
   }
 
@@ -959,12 +1287,19 @@ function resolveSleep(state: GameState): GameState {
   s.animalsClosed = true;
   s.fireLit = false;
   s.tasksDone = {};
-  s.weather = randomWeather(s.season);
+  // Počasí: dnešek přebírá včerejší předpověď, nová předpověď na zítřek.
+  s.weather = s.weatherTomorrow ?? randomWeather(s.season);
+  s.weatherTomorrow = randomWeather(s.season);
 
   // 9) Permakulturní zahrada — ranní úroda zdarma.
   if (has(s, "zahrada")) {
     give(s, "zelenina", 2);
     give(s, "brambory", 2);
+    // Ježčí nájemník hlídá slimáky — občas bonus navíc.
+    if (s.flags.jezek_domek && chance(0.5)) {
+      give(s, "zelenina", 1);
+      addLog(s, "Ježek v noci vyluxoval slimáky — zahrádka je jak ze škatulky. +1 zelenina 🦔", "good");
+    }
   }
 
   // 10) Jaro — mláďata (víc krků k nakrmení = větší výzva).
@@ -988,6 +1323,44 @@ function resolveSleep(state: GameState): GameState {
   );
   addLog(s, `Ráno dne ${s.day}. ${seasonName(s.season)}, ${weatherName(s.weather)}.`, "info");
   return s;
+}
+
+/**
+ * Liščí příběh — vyhodnocuje se přes noc (před resetem tasksDone).
+ * Důvěra roste jen krmením a NIKDY neklesá: trpělivost, ne trest.
+ */
+function advanceFoxStory(s: GameState) {
+  const fox = s.fox;
+  if (s.tasksDone.fox_bowl) {
+    fox.bowlCount += 1;
+    const gain = s.flags.fox_spooked_today ? 4 : randInt(8, 12);
+    fox.trust = clamp(fox.trust + gain, 0, 100);
+    addLog(s, "Miska u lesa je ráno vylízaná dočista. Kolem — drobné liščí tlapky. 🦊", "good");
+    if (s.flags.fox_spooked_today)
+      addLog(s, "Po večerním úleku přišla liška až po půlnoci. Důvěra roste pomaleji — ale roste.", "info");
+  }
+  delete s.flags.fox_spooked_today;
+
+  if (fox.stage === "les" && s.day >= 3) {
+    fox.stage = "stopy";
+    addLog(s, "V rose u kraje lesa se objevil řádek drobných stop…", "info");
+    pushDialog(s, "Tomáš", [
+      "Vidíš ty stopy u lesa? Liška. Chodí sem každou noc na obhlídku.",
+      "Neboj — když večer zavíráš, nikomu nic neudělá. Jdi si ty stopy prohlédnout, ať víš, s kým máš tu čest.",
+    ]);
+  } else if (fox.stage === "krmeni" && fox.trust >= 60) {
+    fox.stage = "duvera";
+    pushDialog(s, "Louka", [
+      "Liška dnes večeřela, i když jsi stál kousek od misky. Dívala se ti do očí — a neutekla.",
+      "To je důvěra. U divokého zvířete vzácnější než zlato. 🦊",
+    ]);
+  } else if (fox.stage === "duvera" && fox.trust >= 90) {
+    fox.stage = "kamarad";
+    pushDialog(s, "Louka", [
+      "Ráno na tebe u pěšiny čeká zrzavá kamarádka. Ocas jako kartáč, oči jako knoflíky.",
+      "Louka má novou návštěvnici — a ty přítelkyni z lesa. Zajdi ji pohladit. 🦊💚",
+    ]);
+  }
 }
 
 export function weatherName(w: Weather): string {

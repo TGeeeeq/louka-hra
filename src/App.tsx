@@ -9,6 +9,7 @@ import { DevPanel } from "./ui/world/DevPanel";
 import { Shop } from "./ui/components/Shop";
 import { Craft } from "./ui/components/Craft";
 import { Journal } from "./ui/components/Journal";
+import { DlcStore } from "./ui/components/DlcStore";
 import { AnimalCard } from "./ui/components/AnimalCard";
 import { FlashToast } from "./ui/components/FlashToast";
 import { Intro } from "./ui/components/Intro";
@@ -30,7 +31,7 @@ import { invalidateGround } from "./world/draw";
 import { sound } from "./audio/sound";
 import type { NpcId } from "./audio/sound";
 
-type Overlay = "shop" | "craft" | "denik" | null;
+type Overlay = "shop" | "craft" | "denik" | "dlc" | null;
 type Minigame = "herb" | "chop" | "tech";
 
 type RewardPayload = { money?: number; energy?: number; items?: { item: string; qty: number }[] };
@@ -45,7 +46,7 @@ const MG_REWARD: Record<Minigame, { flag: string; first: RewardPayload; again: R
 const CEDULE_HELP = [
   "Vítej na Louce! 🌿 Chodíš šipkami / WASD (na mobilu křížem vlevo dole).",
   "Dojdi ke zvířeti nebo stavení a zmáčkni MEZERNÍK (nebo tlačítko A) — uděláš, co je třeba.",
-  "Ráno vypusť a nakrm, přes den vyráběj a sbírej byliny, večer zavři před liškou a jdi spát.",
+  "Ráno vypusť a nakrm, přes den vyráběj a sbírej byliny, večer zvířata zavři na klidnou noc a jdi spát.",
   "Sleduj úkoly nahoře. A ber to s klidem — zvířata na tebe počkají. (Většinou.)",
 ];
 
@@ -57,14 +58,38 @@ function useGameSounds() {
     quests: state.questCompleted.length,
     flashId: 0,
     season: state.season as string,
+    energy: state.energy,
+    foxTrust: state.fox.trust,
+    foxStage: state.fox.stage as string,
+    foxAlertDay: 0,
+    foxPet: false,
   });
   useEffect(() => {
     const p = prev.current;
     if (state.day > p.day) sound.newDay();
     if (state.questCompleted.length > p.quests) sound.questDone();
     else if (state.money > p.money) sound.coin();
-    if (state.season !== p.season) sound.setSeason(state.season);
-    sound.setMood(state.phase);
+    // sezónní přechod = stinger + crossfade témat (hudba nezmlkne)
+    if (state.season !== p.season) sound.seasonChange(state.season);
+    // hudební kontext: fáze dne, den v sezóně (blížící se zima tmavne), počasí (vítr)
+    sound.updateMusicContext({
+      season: state.season,
+      phase: state.phase,
+      dayInSeason: state.dayInSeason,
+      weather: state.weather,
+    });
+    // docházejí síly → tichý varovný motiv (uvnitř 30s cooldown)
+    if (state.energy < 15 && p.energy >= 15) sound.lowEnergy();
+    // liščí důvěra roste → hřejivý motiv; mazlení → ukolébavka
+    if (state.fox.trust > p.foxTrust)
+      sound.foxTrustMotif(state.fox.trust >= 90 ? 3 : state.fox.trust >= 60 ? 2 : 1);
+    if (state.fox.stage === "kamarad" && p.foxStage !== "kamarad") sound.foxTrustMotif(3);
+    if (!!state.tasksDone.fox_pet && !p.foxPet) sound.foxLullaby();
+    // večer s otevřenými výběhy: liška obchází — jemné napětí (1× za den)
+    if (state.phase === "vecer" && !state.tasksDone.closed && p.foxAlertDay !== state.day && !state.dialog) {
+      p.foxAlertDay = state.day;
+      sound.foxAlert();
+    }
     if (state.flash && state.flash.id !== p.flashId && (state.flash.tone === "bad" || state.flash.tone === "warn"))
       sound.error();
     prev.current = {
@@ -73,6 +98,11 @@ function useGameSounds() {
       quests: state.questCompleted.length,
       flashId: state.flash ? state.flash.id : p.flashId,
       season: state.season,
+      energy: state.energy,
+      foxTrust: state.fox.trust,
+      foxStage: state.fox.stage,
+      foxAlertDay: p.foxAlertDay,
+      foxPet: !!state.tasksDone.fox_pet,
     };
   }, [state]);
 }
@@ -134,7 +164,17 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.started]);
 
-  if (!state.started) return <Intro />;
+  if (!state.started)
+    return (
+      <>
+        <Intro onDlc={() => setOverlay("dlc")} />
+        {overlay === "dlc" && (
+          <Overlay title="🌾 Rozšíření" onClose={() => setOverlay(null)}>
+            <DlcStore />
+          </Overlay>
+        )}
+      </>
+    );
 
   const paused = !!state.dialog || overlay !== null || !!sel || !!npc || !!minigame || puzzle || !!clean || !!play || !!build || !!state.gameOver;
 
@@ -205,6 +245,14 @@ export default function App() {
   };
 
   const onWorldEvent = (e: WorldEvent) => {
+    if (e.type === "wildSpooked") {
+      if (e.which === "liska") dispatch({ type: "FOX_SEEN", spooked: true });
+      return;
+    }
+    if (e.type === "wildSeen") {
+      dispatch({ type: "WILD_SEEN", which: e.which as "kane" | "jezek" | "srnka" });
+      return;
+    }
     const name = ANIMAL_BY_ID[e.animalId]?.name ?? "Zvíře";
     if (e.type === "escape") {
       sound.animalEscape(ANIMAL_BY_ID[e.animalId]?.feedGroup ?? "stado");
@@ -216,10 +264,14 @@ export default function App() {
       if (!e.helped) lines.push("Tak honem — dožeň ho a zmáčkni akci, ať ho zaženeš zpátky! 🏃");
       dispatch({ type: "PUSH_DIALOG", speaker: "Pozor!", lines });
     } else if (e.type === "raid") {
+      // zvíře se dorvalo do zahrádky — hudba přejde do plného poplachu
+      sound.setTension(2);
       dispatch({ type: "REWARD", money: -15, items: [{ item: "zelenina", qty: -2 }, { item: "brambory", qty: -1 }] });
       dispatch({ type: "PUSH_DIALOG", speaker: name, lines: [`Mňam mňam! ${name} se cpe v zahrádce — ubyla zelenina i pár korun. Honem ho zažeň zpátky!`] });
     } else {
-      sound.animalCaught();
+      // chycen: při plném poplachu zahraje úlevová fanfára, jinak jen „mám tě"
+      if (sound.getTension() >= 2) sound.dangerRelief();
+      else sound.animalCaught();
       dispatch({ type: "PUSH_DIALOG", speaker: name, lines: [`Uf! ${name} je zpátky ve výběhu. Plot zase drží. 🐑`] });
     }
   };
@@ -228,6 +280,16 @@ export default function App() {
     if (t.kind === "npc") {
       sound.npcSpeak(t.npcId as NpcId, "neutral");
       setNpc(t.npcId);
+      return;
+    }
+    if (t.kind === "wild") {
+      if (t.id === "liska") {
+        sound.foxAlert();
+        if (state.fox.stage === "kamarad") dispatch({ type: "FOX_PET" });
+        else dispatch({ type: "FOX_SEEN", spooked: false });
+      } else {
+        dispatch({ type: "WILD_SEEN", which: t.id as "kane" | "jezek" | "srnka" });
+      }
       return;
     }
     if (t.kind === "animal") {
@@ -278,6 +340,13 @@ export default function App() {
         break;
       case "cedule": dispatch({ type: "PUSH_DIALOG", speaker: "Cedule", lines: CEDULE_HELP }); break;
       case "byliny": dispatch({ type: "FORAGE" }); break;
+      case "stopy": dispatch({ type: "FOX_TRACKS" }); break;
+      case "krmne_misto": dispatch({ type: "FOX_BOWL" }); break;
+      case "listi":
+        if (!state.flags.jezek_domek) dispatch({ type: "LEAF_PILE" });
+        else dispatch({ type: "PUSH_DIALOG", speaker: "Ježčí vila", lines: ["Uvnitř někdo spokojeně funí. Nerušit — nájemník spí. 🦔"] });
+        break;
+      case "seniste": dispatch({ type: "HAY_WORK" }); break;
       case "zahrada":
         dispatch({ type: "PUSH_DIALOG", speaker: "Zahrádka", lines: ["Permakulturní záhonky — zelí, mrkev, brambory. Ale pozor: uprchlíci z výběhů si tu rádi pochutnají!"] });
         break;
@@ -298,9 +367,26 @@ export default function App() {
     }
   };
 
+  // Viditelnost příběhových objektů (liščí stopy/miska, ježčí listí).
+  const foxStage = state.fox.stage;
+  const hiddenIds = [
+    ...(foxStage === "les" || foxStage === "krmeni" || foxStage === "duvera" || foxStage === "kamarad" ? ["fox_stopy"] : []),
+    ...(foxStage === "les" || foxStage === "stopy" || foxStage === "pozorovani" ? ["fox_misto"] : []),
+    ...(!state.flags.jezek_intro ? ["jezek_listi"] : []),
+    ...(!state.dlcOwned.includes("senne") ? ["seniste"] : []),
+  ];
+  const wildActive = {
+    kaneCircle: !!state.tasksDone.kane_circle,
+    kanePerch: !!state.tasksDone.kane_perch,
+    jezekOut: !!state.flags.jezek_domek && state.season === "podzim" && state.phase === "vecer",
+    srnkaOut: state.phase === "rano" && !tutorialActive(state) && state.day >= 4,
+  };
+
   return (
     <div className="game-world">
-      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo} onInteract={onInteract} onEvent={onWorldEvent} />
+      {/* měkké rozednění po startu hry (místo tvrdého střihu z intra) */}
+      <div className="game-fade-in" aria-hidden />
+      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo} foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} onInteract={onInteract} onEvent={onWorldEvent} />
       <Hud onOpen={(p) => setOverlay(p)} onDevUnlock={unlockDev} />
       <Controls />
       <DialogBox />
@@ -310,6 +396,11 @@ export default function App() {
       {overlay === "denik" && (
         <Overlay title="📖 Deník" onClose={() => setOverlay(null)}>
           <Journal onSelect={(a) => setSel(a)} />
+        </Overlay>
+      )}
+      {overlay === "dlc" && (
+        <Overlay title="🌾 Rozšíření" onClose={() => setOverlay(null)}>
+          <DlcStore />
         </Overlay>
       )}
 
