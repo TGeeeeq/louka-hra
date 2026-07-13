@@ -5,10 +5,12 @@ import { PersonSprite } from "../sprites/PersonSprite";
 import { ANIMAL_BY_ID } from "../../game/content/animals";
 import { AnimalSprite } from "../sprites/AnimalSprite";
 import AFLogo from "./AFLogo";
+import { CharacterCreator } from "./CharacterCreator";
 import { SEASON_LABEL } from "../labels";
 import { sound } from "../../audio/sound";
+import type { PlayerProfile } from "../../game/types";
 
-type Stage = "choice" | "logo" | "outro" | "menu";
+type Stage = "af" | "choice" | "logo" | "outro" | "menu" | "creator";
 type Orient = "landscape" | "portrait";
 
 // Zběsilá smečka úvodního přeběhu: dráha (bottom v %), velikost, tempo,
@@ -54,6 +56,10 @@ const MOTES: { x: number; s: number; dur: number; delay: number }[] = [
 const OUTRO_AT = 6800;
 const MENU_AT = OUTRO_AT + 1600;
 
+// Studiová znělka AF na úvod: monogram drží ~2 s, pak crossfade do loga azylu.
+const AF_HOLD = 2000;
+const AF_FADE = 800;
+
 // Dotykové zařízení na výšku → nabídnout volbu, jak hrát (hra umí obojí,
 // naležato je ale pohodlnější). Desktop jde rovnou na intro.
 const needsChoice = () =>
@@ -87,15 +93,29 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
   const reduced =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const [stage, setStage] = useState<Stage>(reduced ? "menu" : needsChoice() ? "choice" : "logo");
+  const [stage, setStage] = useState<Stage>(reduced ? "menu" : needsChoice() ? "choice" : "af");
   const [orient, setOrient] = useState<Orient>("landscape");
   const [leaving, setLeaving] = useState(false);
+  const [afLeaving, setAfLeaving] = useState(false);
   const [about, setAbout] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
 
-  // Intro: v čase OUTRO_AT se logo začne rozpouštět a scéna rozednívat,
-  // v MENU_AT nastoupí menu.
+  // Intro: nejdřív studiová znělka AF (crossfade do loga azylu), pak se v čase
+  // OUTRO_AT logo rozpouští a scéna rozednívá, v MENU_AT nastoupí menu.
   useEffect(() => {
+    if (stage === "af") {
+      sound.ensure();
+      sound.ident();
+      const t1 = window.setTimeout(() => setAfLeaving(true), AF_HOLD);
+      const t2 = window.setTimeout(() => {
+        setStage("logo");
+        setAfLeaving(false);
+      }, AF_HOLD + AF_FADE);
+      return () => {
+        window.clearTimeout(t1);
+        window.clearTimeout(t2);
+      };
+    }
     if (stage === "logo") {
       const t = window.setTimeout(() => setStage("outro"), OUTRO_AT);
       return () => window.clearTimeout(t);
@@ -110,7 +130,7 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
   // ne „pointerdown": menu by se jinak vykreslilo ještě před click fází a tentýž
   // ťuk by omylem zmáčkl tlačítko, které se objeví pod prstem.
   useEffect(() => {
-    if (stage !== "logo" && stage !== "outro") return;
+    if (stage !== "af" && stage !== "logo" && stage !== "outro") return;
     const skip = () => setStage("menu");
     window.addEventListener("click", skip);
     window.addEventListener("keydown", skip);
@@ -126,23 +146,29 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
     sound.ensure();
     sound.select();
     if (orient === "landscape") tryLockLandscape();
-    setStage("logo");
+    setStage("af");
   };
 
-  const start = (type: "START" | "RESET") => {
+  const start = (type: "START" | "RESET", profile?: PlayerProfile) => {
     sound.ensure();
     if (reduced) {
-      dispatch({ type });
+      dispatch(type === "RESET" ? { type, profile } : { type });
       return;
     }
     // krátký crossfade do hry místo tvrdého střihu
     setLeaving(true);
-    window.setTimeout(() => dispatch({ type }), 420);
+    window.setTimeout(() => dispatch(type === "RESET" ? { type, profile } : { type }), 420);
   };
 
   const newGame = () => {
     if (hasSave) setConfirmReset(true);
-    else start("RESET");
+    else setStage("creator");
+  };
+
+  // Tvůrce postavy potvrdil podobu → ulož profil a začni novou hru.
+  const finishCreator = (p: PlayerProfile) => {
+    dispatch({ type: "SET_PLAYER_PROFILE", profile: p });
+    start("RESET", p);
   };
 
   const inMenu = stage === "menu";
@@ -181,7 +207,17 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
         </div>
       )}
 
-      {stage === "choice" ? (
+      {/* studiová znělka AF — přes černou, plynule přejde do loga azylu */}
+      {(stage === "af" || afLeaving) && (
+        <div className={`af-splash${afLeaving ? " out" : ""}`}>
+          <AFLogo size={300} className="af-hero" />
+          <p className="af-splash-sub">Antonín Figueroa uvádí</p>
+        </div>
+      )}
+
+      {stage === "creator" ? (
+        <CharacterCreator initial={state.profile} onBack={() => setStage("menu")} onConfirm={finishCreator} />
+      ) : stage === "choice" ? (
         <div className="intro-splash orient-splash">
           <p className="orient-eyebrow">Nech mě růst uvádí</p>
           <h1 className="orient-title">Jak chceš hrát?</h1>
@@ -255,7 +291,7 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
                 </button>
               </>
             ) : (
-              <button className="menu-btn primary" style={{ animationDelay: "0.55s" }} onClick={() => start("RESET")}>
+              <button className="menu-btn primary" style={{ animationDelay: "0.55s" }} onClick={() => setStage("creator")}>
                 Začít hrát
               </button>
             )}
@@ -331,7 +367,7 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
               Uložený postup (Den {state.day} · {SEASON_LABEL[state.season]}) se smaže a Louka začne od prvního dne.
             </p>
             <div className="intro-actions">
-              <button className="big-btn" onClick={() => start("RESET")}>Ano, začít znovu</button>
+              <button className="big-btn" onClick={() => { setConfirmReset(false); setStage("creator"); }}>Ano, začít znovu</button>
               <button className="ghost-btn" onClick={() => setConfirmReset(false)}>Zpět</button>
             </div>
           </div>

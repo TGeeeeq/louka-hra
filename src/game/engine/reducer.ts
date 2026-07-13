@@ -1,4 +1,4 @@
-import type { DlcId, FeedGroup, GameState, Season, Weather } from "../types";
+import type { DlcId, FeedGroup, GameState, PlayerProfile, Season, Weather } from "../types";
 import {
   DAYS_PER_SEASON,
   DONATION_RANGE,
@@ -55,7 +55,8 @@ import {
 
 export type Action =
   | { type: "START" }
-  | { type: "RESET" }
+  | { type: "RESET"; profile?: PlayerProfile }
+  | { type: "SET_PLAYER_PROFILE"; profile: PlayerProfile }
   | { type: "LOAD"; state: GameState }
   | { type: "RELEASE_BIRDS" }
   | { type: "FEED"; group: FeedGroup }
@@ -190,6 +191,7 @@ export function reducer(state: GameState, action: Action): GameState {
     action.type === "PUSH_DIALOG" ||
     action.type === "START" ||
     action.type === "RESET" ||
+    action.type === "SET_PLAYER_PROFILE" ||
     action.type === "LOAD" ||
     action.type === "BUILD_STRUCTURE" ||
     action.type === "DEV_UNLOCK" ||
@@ -238,7 +240,14 @@ function core(state: GameState, action: Action): GameState {
 
     case "RESET": {
       const s = { ...initialState(), started: true };
+      if (action.profile) s.profile = action.profile;
       pushDialog(s, "Tomáš", TUTORIAL_STEPS[0].intro);
+      return s;
+    }
+
+    case "SET_PLAYER_PROFILE": {
+      const s = cloneState(state);
+      s.profile = action.profile;
       return s;
     }
 

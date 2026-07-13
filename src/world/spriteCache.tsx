@@ -5,7 +5,8 @@ import { AnimalSprite } from "../ui/sprites/AnimalSprite";
 import { PersonSprite, type Facing } from "../ui/sprites/PersonSprite";
 import { ANIMAL_BY_ID } from "../game/content/animals";
 import { WILD_BY_ID } from "../game/content/wild";
-import { PERSON_BY_ID } from "../game/content/people";
+import { PERSON_BY_ID, type PersonDef } from "../game/content/people";
+import type { PlayerAppearance } from "../game/types";
 
 const cache = new Map<string, HTMLImageElement>();
 
@@ -34,6 +35,24 @@ export function personImg(id: string, dir: Facing = "down", frame: 0 | 1 = 0): H
   const p = PERSON_BY_ID[id];
   if (!p) return null;
   const img = toImg(renderToStaticMarkup(<PersonSprite person={p} size={100} dir={dir} frame={frame} />));
+  cache.set(key, img);
+  return img;
+}
+
+/**
+ * Sprite hráče „ty" podle zvolené podoby (tvůrce postavy). Vzhled je součástí
+ * cache klíče, takže jiná podoba se přerasterizuje sama — bez invalidace.
+ */
+export function personImgFor(
+  app: PlayerAppearance,
+  dir: Facing = "down",
+  frame: 0 | 1 = 0,
+): HTMLImageElement {
+  const key = `p:ty:${app.skin}:${app.hair}:${app.shirt}:${app.variant ?? "-"}:${dir}:${frame}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const person: PersonDef = { id: "ty", name: "Ty", role: "", line: "", ...app };
+  const img = toImg(renderToStaticMarkup(<PersonSprite person={person} size={100} dir={dir} frame={frame} />));
   cache.set(key, img);
   return img;
 }

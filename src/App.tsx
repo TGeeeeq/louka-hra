@@ -386,7 +386,7 @@ export default function App() {
     <div className="game-world">
       {/* měkké rozednění po startu hry (místo tvrdého střihu z intra) */}
       <div className="game-fade-in" aria-hidden />
-      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo} foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} onInteract={onInteract} onEvent={onWorldEvent} />
+      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo} foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} appearance={state.profile.appearance} onInteract={onInteract} onEvent={onWorldEvent} />
       <Hud onOpen={(p) => setOverlay(p)} onDevUnlock={unlockDev} />
       <Controls />
       <DialogBox />

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { FeedGroup, FoxStage, Phase, Season, Weather } from "../../game/types";
+import type { FeedGroup, FoxStage, Phase, PlayerAppearance, Season, Weather } from "../../game/types";
 import { MAP_H, MAP_W, TS } from "../../world/tiles";
 import {
   ANIMAL_SPAWNS,
@@ -19,7 +19,7 @@ import { reactionFor, idleLine, ESCAPE_HELP, ESCAPE_SHRUG } from "../../game/con
 import { pick } from "../../game/engine/util";
 import { PERSON_BY_ID } from "../../game/content/people";
 import { drawBlueprint, drawBuilding, drawGround, drawPaddocks, drawSunlight, drawVignette, drawWaterShimmer, getMinimapBase, roundRect } from "../../world/draw";
-import { animalImg, personImg, preloadSprites, ready } from "../../world/spriteCache";
+import { animalImg, personImg, personImgFor, preloadSprites, ready } from "../../world/spriteCache";
 import { ANIMALS, ANIMAL_BY_ID, animalScale } from "../../game/content/animals";
 import type { Facing } from "../sprites/PersonSprite";
 import { PEOPLE } from "../../game/content/people";
@@ -70,6 +70,8 @@ interface Props {
   wildActive: WildActive;
   /** Příběhové objekty, které se zatím nemají ukazovat (stopy, miska, listí). */
   hiddenIds: string[];
+  /** Podoba hráče (tvůrce postavy) — kreslí se na Canvas. */
+  appearance: PlayerAppearance;
   onInteract: (t: InteractTarget) => void;
   onEvent: (e: WorldEvent) => void;
 }
@@ -168,13 +170,13 @@ const BUILDING_VERB: Record<string, string> = {
   seniste: "Seniště (kosit / sušit / obracet)",
 };
 
-export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, onInteract, onEvent }: Props) {
+export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, onInteract, onEvent }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // měnící se props čteme přes ref, ať smyčku nemusíme restartovat
-  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, onInteract, onEvent });
-  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, onInteract, onEvent };
+  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, onInteract, onEvent });
+  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, onInteract, onEvent };
 
   // Kolize staveb podle toho, co už stojí (blueprint je průchozí). Když hráč
   // dostavěl stavbu „zevnitř" plánu nebo těsně u jejího boku, vysuneme ho ven
@@ -256,6 +258,11 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
 
   useEffect(() => {
     preloadSprites([...ANIMALS.map((a) => a.id), "liska", "kane", "jezek", "srnka"], PEOPLE.map((p) => p.id));
+    // Přednačti hráče v jeho zvolené podobě (výchozí hodnota při startu stačí).
+    for (const d of ["down", "up", "side"] as Facing[]) {
+      personImgFor(appearance, d, 0);
+      personImgFor(appearance, d, 1);
+    }
 
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
@@ -816,7 +823,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       }
       items.push({
         y: player.current.y,
-        draw: () => drawPlayer(ctx, player.current, camX, camY),
+        draw: () => drawPlayer(ctx, player.current, camX, camY, propsRef.current.appearance),
       });
 
       items.sort((a, b) => a.y - b.y);
@@ -1085,11 +1092,12 @@ function drawPlayer(
   p: { x: number; y: number; dir: string; moving: boolean; anim: number },
   camX: number,
   camY: number,
+  appearance: PlayerAppearance,
 ) {
   const spriteDir: Facing = p.dir === "up" ? "up" : p.dir === "left" || p.dir === "right" ? "side" : "down";
   const flip = p.dir === "left";
   const frame: 0 | 1 = p.moving ? ((Math.floor(performance.now() / 170) % 2) as 0 | 1) : 0;
-  const img = personImg("ty", spriteDir, frame);
+  const img = personImgFor(appearance, spriteDir, frame);
   const sx = p.x - camX;
   const sy = p.y - camY;
   const size = TS * 1.7;
