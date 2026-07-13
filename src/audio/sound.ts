@@ -425,6 +425,13 @@ class SoundEngine {
     this.fm(560, 4.0, 0.3, 0.08, 0.07);
   }
 
+  /** Studiová znělka AF — teplá kvinta (G–D) s dozněním, zlato na sumi černi. */
+  ident() {
+    this.ensure();
+    this.fm(392, 4.0, 0.15, 0.9, 0.06, "sine", 0); // G
+    this.fm(587, 3.0, 0.12, 1.2, 0.05, "sine", 0.18); // D (kvinta), jemný rozkvět
+  }
+
   interact() {
     this.ensure();
     this.seq([{ f: 520, d: 0.09, t: "triangle" }, { f: 700, d: 0.13, t: "sine" }], 0.01);

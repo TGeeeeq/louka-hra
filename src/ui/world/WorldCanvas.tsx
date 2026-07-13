@@ -1,12 +1,16 @@
 import { useEffect, useRef } from "react";
-import type { FeedGroup, FoxStage, Phase, Season, Weather } from "../../game/types";
+import type { FeedGroup, FoxStage, Phase, PlayerAppearance, Season, Weather } from "../../game/types";
 import { MAP_H, MAP_W, TS } from "../../world/tiles";
 import {
   ANIMAL_SPAWNS,
   GARDEN,
   INTERACTABLES,
+  INTERACTABLE_BY_ID,
   PLAYER_START,
+  applyPlacements,
+  canPlaceFootprint,
   isBlocked,
+  isMovable,
   setConstructed,
   unstuckFromBuildings,
   type Bounds,
@@ -18,8 +22,8 @@ import { NPC_LIFE } from "../../game/content/npcLife";
 import { reactionFor, idleLine, ESCAPE_HELP, ESCAPE_SHRUG } from "../../game/content/npcReactions";
 import { pick } from "../../game/engine/util";
 import { PERSON_BY_ID } from "../../game/content/people";
-import { drawBlueprint, drawBuilding, drawGround, drawPaddocks, drawSunlight, drawVignette, drawWaterShimmer, getMinimapBase, roundRect } from "../../world/draw";
-import { animalImg, personImg, preloadSprites, ready } from "../../world/spriteCache";
+import { drawBlueprint, drawBuilding, drawGhost, drawGround, drawPaddocks, drawSunlight, drawVignette, drawWaterShimmer, getMinimapBase, roundRect } from "../../world/draw";
+import { animalImg, personImg, personImgFor, preloadSprites, ready } from "../../world/spriteCache";
 import { ANIMALS, ANIMAL_BY_ID, animalScale } from "../../game/content/animals";
 import type { Facing } from "../sprites/PersonSprite";
 import { PEOPLE } from "../../game/content/people";
@@ -70,6 +74,14 @@ interface Props {
   wildActive: WildActive;
   /** Příběhové objekty, které se zatím nemají ukazovat (stopy, miska, listí). */
   hiddenIds: string[];
+  /** Podoba hráče (tvůrce postavy) — kreslí se na Canvas. */
+  appearance: PlayerAppearance;
+  /** Override pozic staveb (volné rozmístění). */
+  placements: Record<string, { tx: number; ty: number }>;
+  /** Edit mód „zabydlování" — přetahování povolených staveb. */
+  editMode: boolean;
+  onMoveStructure: (id: string, tx: number, ty: number) => void;
+  onEditReject: () => void;
   onInteract: (t: InteractTarget) => void;
   onEvent: (e: WorldEvent) => void;
 }
@@ -168,27 +180,34 @@ const BUILDING_VERB: Record<string, string> = {
   seniste: "Seniště (kosit / sušit / obracet)",
 };
 
-export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, onInteract, onEvent }: Props) {
+export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, placements, editMode, onMoveStructure, onEditReject, onInteract, onEvent }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // měnící se props čteme přes ref, ať smyčku nemusíme restartovat
-  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, onInteract, onEvent });
-  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, onInteract, onEvent };
+  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, placements, editMode, onMoveStructure, onEditReject, onInteract, onEvent });
+  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, placements, editMode, onMoveStructure, onEditReject, onInteract, onEvent };
 
   // Kolize staveb podle toho, co už stojí (blueprint je průchozí). Když hráč
   // dostavěl stavbu „zevnitř" plánu nebo těsně u jejího boku, vysuneme ho ven
   // před ni, ať nezůstane zaseknutý ani schovaný za novou stavbou.
   const builtPrev = useRef<string[]>(built);
+  const placedPrev = useRef<Record<string, { tx: number; ty: number }>>(placements);
   useEffect(() => {
-    setConstructed(built);
+    applyPlacements(placements); // 1) přepiš pozice in-place (čte je vše ostatní)
+    setConstructed(built); // 2) přepočet solidních dlaždic z nových pozic
     const added = built.filter((id) => !builtPrev.current.includes(id));
+    const moved = Object.keys(placements).filter(
+      (id) => placedPrev.current[id]?.tx !== placements[id]?.tx || placedPrev.current[id]?.ty !== placements[id]?.ty,
+    );
     builtPrev.current = built;
-    if (added.length) {
-      const spot = unstuckFromBuildings(player.current.x, player.current.y, added);
+    placedPrev.current = placements;
+    const toUnstick = [...added, ...moved]; // stavba se mohla přesunout na hráče
+    if (toUnstick.length) {
+      const spot = unstuckFromBuildings(player.current.x, player.current.y, toUnstick);
       if (spot) { player.current.x = spot.x; player.current.y = spot.y; }
     }
-  }, [built]);
+  }, [built, placements]);
 
   const player = useRef({ x: PLAYER_START.x, y: PLAYER_START.y, dir: "down", moving: false, anim: 0, flip: false });
   const mobs = useRef<Mob[]>([]);
@@ -198,6 +217,9 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
   const wildKey = useRef("");
   const npcPhase = useRef<Phase>(phase);
   const cam = useRef({ x: 0, y: 0 });
+  // Edit mód: co se právě přetahuje + náhled cílové dlaždice (jen refy → bez re-renderu).
+  const dragId = useRef<string | null>(null);
+  const editGhost = useRef<{ id: string; tx: number; ty: number; valid: boolean } | null>(null);
   const stepAcc = useRef(0);
   const escapeAcc = useRef(0);
   const lastPhase = useRef<Phase>(phase);
@@ -256,6 +278,11 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
 
   useEffect(() => {
     preloadSprites([...ANIMALS.map((a) => a.id), "liska", "kane", "jezek", "srnka"], PEOPLE.map((p) => p.id));
+    // Přednačti hráče v jeho zvolené podobě (výchozí hodnota při startu stačí).
+    for (const d of ["down", "up", "side"] as Facing[]) {
+      personImgFor(appearance, d, 0);
+      personImgFor(appearance, d, 1);
+    }
 
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
@@ -311,6 +338,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
     let nearest: InteractTarget | null = null;
 
     const triggerAction = () => {
+      if (propsRef.current.editMode) return; // v edit módu se nestaví/neinteraguje
       if (!nearest) return;
       // chytání uprchlíka — zažene zpět do výběhu
       if (nearest.kind === "animal") {
@@ -331,12 +359,56 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       sound.interact();
     };
 
-    // klik/ťuk přímo do světa = interakce s nejbližším cílem
+    // Převod z obrazovky do world souřadnic (ctx transform je 1:1 v CSS px).
+    const toWorld = (e: PointerEvent) => {
+      const r = canvas.getBoundingClientRect();
+      return { wx: e.clientX - r.left + cam.current.x, wy: e.clientY - r.top + cam.current.y };
+    };
+    // Přemístitelná postavená stavba pod prstem (edit mód).
+    const hitMovable = (wx: number, wy: number): string | null => {
+      for (const it of INTERACTABLES) {
+        if (!isMovable(it.id) || !propsRef.current.built.includes(it.id)) continue;
+        const x0 = it.tx * TS, y0 = it.ty * TS, x1 = (it.tx + it.fw) * TS, y1 = (it.ty + it.fh) * TS;
+        if (wx >= x0 && wx <= x1 && wy >= y0 && wy <= y1) return it.id;
+      }
+      return null;
+    };
+    const updateGhost = (e: PointerEvent) => {
+      const id = dragId.current;
+      if (!id) return;
+      const it = INTERACTABLE_BY_ID[id];
+      const { wx, wy } = toWorld(e);
+      const tx = Math.round(wx / TS - it.fw / 2); // střed sprite pod prstem
+      const ty = Math.round(wy / TS - it.fh / 2);
+      editGhost.current = { id, tx, ty, valid: canPlaceFootprint(it, tx, ty, id) };
+    };
+
+    // klik/ťuk přímo do světa = interakce s nejbližším cílem; v edit módu = uchopení stavby
     const onCanvasPointer = (e: PointerEvent) => {
       e.preventDefault();
+      if (propsRef.current.editMode) {
+        const { wx, wy } = toWorld(e);
+        const id = hitMovable(wx, wy);
+        if (id) { dragId.current = id; canvas.setPointerCapture(e.pointerId); updateGhost(e); }
+        return;
+      }
       if (!propsRef.current.paused) triggerAction();
     };
+    const onCanvasMove = (e: PointerEvent) => {
+      if (dragId.current) { e.preventDefault(); updateGhost(e); }
+    };
+    const onCanvasUp = () => {
+      if (!dragId.current) return;
+      const g = editGhost.current;
+      if (g && g.valid) propsRef.current.onMoveStructure(g.id, g.tx, g.ty);
+      else propsRef.current.onEditReject();
+      dragId.current = null;
+      editGhost.current = null;
+    };
     canvas.addEventListener("pointerdown", onCanvasPointer);
+    canvas.addEventListener("pointermove", onCanvasMove);
+    canvas.addEventListener("pointerup", onCanvasUp);
+    canvas.addEventListener("pointercancel", onCanvasUp);
 
     // Malý kruhový-ish kolizní rámeček u nohou — průchozí mezery i přiblížení
     // ke stavbám jsou plynulé (keře už nejsou solid). Pohyb je po osách
@@ -816,11 +888,33 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       }
       items.push({
         y: player.current.y,
-        draw: () => drawPlayer(ctx, player.current, camX, camY),
+        draw: () => drawPlayer(ctx, player.current, camX, camY, propsRef.current.appearance),
       });
 
       items.sort((a, b) => a.y - b.y);
       for (const it of items) it.draw();
+
+      // edit mód „zabydlování": zvýrazni uchopitelné stavby + kresli ducha náhledu
+      if (P.editMode) {
+        for (const it of INTERACTABLES) {
+          if (!isMovable(it.id) || !P.built.includes(it.id) || dragId.current === it.id) continue;
+          const hx = it.tx * TS - camX, hy = it.ty * TS - camY, hw = it.fw * TS, hh = it.fh * TS;
+          ctx.save();
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 4]);
+          ctx.strokeStyle = "rgba(240,232,146,0.9)";
+          const wob = 2 + Math.sin(now * 0.005) * 1.5;
+          roundRect(ctx, hx - wob, hy - wob, hw + wob * 2, hh + wob * 2, 8);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.font = `18px ${EMOJI_FONT}`;
+          ctx.textAlign = "center";
+          ctx.fillText("✋", hx + hw / 2, hy - 6);
+          ctx.restore();
+        }
+        const g = editGhost.current;
+        if (g) drawGhost(ctx, INTERACTABLE_BY_ID[g.id], g.tx, g.ty, camX, camY, g.valid, now);
+      }
 
       // káně krouží nad drůbežím výběhem (jen stín a silueta — nikdy neútočí)
       if (P.wildActive.kaneCircle && P.phase === "poledne") drawKaneCircle(ctx, camX, camY, now);
@@ -848,6 +942,9 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       canvas.removeEventListener("pointerdown", onCanvasPointer);
+      canvas.removeEventListener("pointermove", onCanvasMove);
+      canvas.removeEventListener("pointerup", onCanvasUp);
+      canvas.removeEventListener("pointercancel", onCanvasUp);
     };
   }, []);
 
@@ -1085,11 +1182,12 @@ function drawPlayer(
   p: { x: number; y: number; dir: string; moving: boolean; anim: number },
   camX: number,
   camY: number,
+  appearance: PlayerAppearance,
 ) {
   const spriteDir: Facing = p.dir === "up" ? "up" : p.dir === "left" || p.dir === "right" ? "side" : "down";
   const flip = p.dir === "left";
   const frame: 0 | 1 = p.moving ? ((Math.floor(performance.now() / 170) % 2) as 0 | 1) : 0;
-  const img = personImg("ty", spriteDir, frame);
+  const img = personImgFor(appearance, spriteDir, frame);
   const sx = p.x - camX;
   const sy = p.y - camY;
   const size = TS * 1.7;

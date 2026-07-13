@@ -4,6 +4,18 @@ import { AnimalSprite } from "../sprites/AnimalSprite";
 import { GROUP_LABEL } from "../labels";
 import { PLAY_KIND, playKindFor } from "../../game/content/play";
 import { photoUrl } from "../photo";
+import { useGame } from "../store";
+import { MOOD_EMOJI, MOOD_LABEL, MOOD_TONE, bondTier } from "../../game/content/characters";
+
+/** Malý ukazatel potřeby (kopíruje styl HUD MiniBar). */
+function NeedBar({ icon, label, value, tone }: { icon: string; label: string; value: number; tone: string }) {
+  return (
+    <div className="need-bar" title={`${label}: ${Math.round(value)} %`}>
+      <span className="need-ico" aria-hidden>{icon}</span>
+      <div className="need-track"><div className={`mini-fill ${tone}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>
+    </div>
+  );
+}
 
 const SPECIES_LABEL: Record<Species, string> = {
   osel: "osel",
@@ -25,6 +37,8 @@ const SPECIES_LABEL: Record<Species, string> = {
 };
 
 export function AnimalCard({ animal, onClose, onPlay }: { animal: AnimalDef; onClose: () => void; onPlay?: () => void }) {
+  const { state } = useGame();
+  const st = state.animals[animal.id]; // jen postavy s charakterem; ostatní undefined
   const playKind = playKindFor(animal);
   const photo = photoUrl(animal);
   const [photoOk, setPhotoOk] = useState(true);
@@ -55,6 +69,19 @@ export function AnimalCard({ animal, onClose, onPlay }: { animal: AnimalDef; onC
             {animal.special === "missing" && <span className="missing-tag">pohřešuje se 🕊️</span>}
           </div>
         </div>
+        {st && (
+          <div className="animal-mood">
+            <span className={`zone-mood ${MOOD_TONE[st.mood]}`}>{MOOD_EMOJI[st.mood]} {MOOD_LABEL[st.mood]}</span>
+            <span className="bond-tier">❤️ {bondTier(st.bond)}</span>
+          </div>
+        )}
+        {st && (
+          <div className="need-bars">
+            <NeedBar icon="❤️" label="Přátelství" value={st.bond} tone="bond" />
+            <NeedBar icon="🫂" label="Společnost" value={st.social} tone="social" />
+            <NeedBar icon="🏠" label="Pohodlí" value={st.comfort} tone="comfort" />
+          </div>
+        )}
         <p className="animal-personality">„{animal.personality}“</p>
         <div className="animal-fact">
           <span className="fact-badge">🎓 Víš, že…</span>

@@ -5,6 +5,7 @@ import {
   START_MONEY,
   STARTING_POPULATION,
 } from "../balance";
+import { initialAnimalStates } from "../content/characters";
 
 export function initialState(): GameState {
   return {
@@ -60,6 +61,12 @@ export function initialState(): GameState {
     seenAnimals: [],
     wildSeen: {},
     fox: { stage: "les", trust: 0, sightings: 0, bowlCount: 0 },
+    animals: initialAnimalStates(),
+    placements: {},
+    profile: {
+      name: "Ty",
+      appearance: { skin: "#f0c49a", hair: "#6a4a2c", shirt: "#2d5a3d", variant: "hat" },
+    },
     hay: null,
 
     totalEarned: 0,
@@ -70,7 +77,7 @@ export function initialState(): GameState {
     questProgress: { main: 0 },
     questCompleted: [],
     dlcOwned: [],
-    saveVersion: 3,
+    saveVersion: 4,
     flags: {},
     dialog: null,
 

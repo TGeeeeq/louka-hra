@@ -822,6 +822,37 @@ export function drawBuilding(
   }
 }
 
+/** Poloprůhledný náhled („duch") přetahované stavby v edit módu.
+ *  Zelený rámeček = lze umístit, červený = nelze. */
+export function drawGhost(
+  ctx: CanvasRenderingContext2D,
+  it: Interactable,
+  tx: number,
+  ty: number,
+  camX: number,
+  camY: number,
+  valid: boolean,
+  time: number,
+) {
+  const x = tx * TS - camX;
+  const y = ty * TS - camY;
+  const w = it.fw * TS;
+  const h = it.fh * TS;
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  drawStructure(ctx, it.kind, x, y, w, h, time);
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = valid ? "rgba(120,210,120,0.95)" : "rgba(224,90,74,0.95)";
+  ctx.fillStyle = valid ? "rgba(120,210,120,0.18)" : "rgba(224,90,74,0.2)";
+  roundRect(ctx, x + 1, y + 1, w - 2, h - 2, 6);
+  ctx.fill();
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
 /** „Plán" nepostavené stavby v tutoriálu: přerušovaný půdorys + silueta + 🔨. */
 export function drawBlueprint(
   ctx: CanvasRenderingContext2D,

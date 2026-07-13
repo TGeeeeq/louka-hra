@@ -50,6 +50,8 @@ export const FACTS: Fact[] = [
   { id: "f_podestylka", category: "zvirata", title: "Suchá podestýlka = zdraví", text: "Vlhká podestýlka začne čpět čpavkem a dráždí dýchací cesty. Pravidelné vyhrabání a čerstvá sláma drží zvířata zdravá — a starý hnůj putuje na kompost." },
   { id: "f_klovaci", category: "zvirata", title: "Klovací pořádek", text: "Slepičí hejno má přesnou hierarchii — „klovací pořádek“. Každá slepice ví, před kým uhne a kdo uhne před ní. Nová slepice si své místo musí vyjednat." },
   { id: "f_prase_cistota", category: "zvirata", title: "Prasata jsou čistotná", text: "Navzdory pověsti si prase nikdy nezašpiní pelech — záchod má vždycky v opačném rohu. Bláto není špína, ale opalovací krém a klimatizace." },
+  { id: "f_drbani", category: "zvirata", title: "Prase a drbání na bříšku", text: "Podrbané prase se blahem svalí na bok a natáhne nožky. Mají rády kontakt a přesně si pamatují, kdo je hodný — inteligencí předčí i psy." },
+  { id: "f_pes_hra", category: "zvirata", title: "Psí řeč ocasu", text: "Vrtění ocasem není vždy radost — pes jím mluví. Volné, široké vrtění znamená pohodu, ztuhlý vysoký ocas napětí. A hra s člověkem je pro psa pouto na celý život." },
   { id: "f_husy_v", category: "zvirata", title: "Husí štafeta", text: "Husy letí ve „V“, protože každá šetří síly v úplavu té před sebou. Vedoucí pozici si spravedlivě střídají — a zadní na ty přední kejhají povzbuzení." },
 
   // --- Smysl azylu ---------------------------------------------------------

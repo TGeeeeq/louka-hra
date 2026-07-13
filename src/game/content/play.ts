@@ -2,7 +2,7 @@
 // Mechanika (timing/reflex) je v ui/minigames/PlayBar.tsx, tahle data ji řídí.
 import type { AnimalDef } from "../types";
 
-export type PlayKind = "okus" | "trk" | "mazleni";
+export type PlayKind = "okus" | "trk" | "mazleni" | "hlazeni" | "drbani";
 
 // Zvířata, co hravě trkají (sklopí hlavu a do tebe ťuknou rohy/čelem).
 const HEADBUTTERS = new Set(["yakul", "kulich"]);
@@ -12,6 +12,8 @@ export function playKindFor(a: AnimalDef): PlayKind | null {
   if (a.id === "karel") return "okus";
   if (HEADBUTTERS.has(a.id)) return "trk";
   if (a.species === "kocka") return "mazleni";
+  if (a.species === "pes") return "hlazeni";
+  if (a.species === "prase") return "drbani";
   return null;
 }
 
@@ -62,5 +64,27 @@ export const PLAY_KIND: Record<PlayKind, PlayKindDef> = {
     zone: [0.32, 0.68],
     speed: 0.68,
     win: (a) => `${a.name} blaženě přede a tře se ti o ruku. Předení kočku uklidňuje — a prý i hojí!`,
+  },
+  hlazeni: {
+    title: "🐶 Mazlení se psem",
+    cta: "🐶 Pomazlit",
+    verb: "hlazení",
+    factId: "f_pes_hra",
+    prompt: "Přiběhl a opřel se ti o nohy. Podrbej ho za uchem v pravou chvíli — užívá si to.",
+    hint: HINT,
+    zone: [0.3, 0.7],
+    speed: 0.7,
+    win: (a) => `${a.name} spokojeně zavrtěl ocasem a nechce se hnout od tebe. Hra a mazlení jsou pro psa pouto na celý život!`,
+  },
+  drbani: {
+    title: "🐷 Drbání na bříšku",
+    cta: "🐷 Podrbat",
+    verb: "drbání",
+    factId: "f_drbani",
+    prompt: "Nastavil ti bříško a čeká. Podrbej ho v pravou chvíli — svalí se blahem na bok.",
+    hint: HINT,
+    zone: [0.3, 0.7],
+    speed: 0.72,
+    win: (a) => `${a.name} se blahem svalil na bok a natáhl nožky. Prasata milují drbání a pamatují si, kdo je hodný!`,
   },
 };

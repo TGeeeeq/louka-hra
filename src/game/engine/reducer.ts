@@ -1,4 +1,4 @@
-import type { DlcId, FeedGroup, GameState, Season, Weather } from "../types";
+import type { DlcId, FeedGroup, GameState, PlayerProfile, Season, Weather } from "../types";
 import {
   DAYS_PER_SEASON,
   DONATION_RANGE,
@@ -21,6 +21,16 @@ import {
   WELFARE_SKIP_FEED_PENALTY,
   WINTER_WOOD_PER_NIGHT,
   WOOL_PER_SHEAR,
+  SOCIAL_PLAY_GAIN,
+  SOCIAL_PLAY_INSTANT,
+  SOCIAL_DECAY,
+  SOCIAL_FLOOR,
+  COMFORT_LERP,
+  BOND_PLAY_GAIN,
+  BOND_NEGLECT_DAYS,
+  BOND_GENTLE_DECAY,
+  BOND_FLOOR,
+  MOOD_THRESHOLDS,
 } from "../balance";
 import { ITEM_BY_ID } from "../content/items";
 import { RECIPE_BY_ID } from "../content/recipes";
@@ -36,6 +46,9 @@ import {
 } from "../content/facts";
 import { initialState } from "./state";
 import { QUEST_LINES } from "../content/quests";
+import { CHARACTER_SET, initialAnimalStates } from "../content/characters";
+import { layoutComfortFor } from "./comfort";
+import { INTERACTABLE_BY_ID, isMovable } from "../../world/entities";
 import { TUTORIAL_STEPS, tutorialActive } from "../content/tutorial";
 import {
   addLog,
@@ -55,7 +68,8 @@ import {
 
 export type Action =
   | { type: "START" }
-  | { type: "RESET" }
+  | { type: "RESET"; profile?: PlayerProfile }
+  | { type: "SET_PLAYER_PROFILE"; profile: PlayerProfile }
   | { type: "LOAD"; state: GameState }
   | { type: "RELEASE_BIRDS" }
   | { type: "FEED"; group: FeedGroup }
@@ -74,6 +88,7 @@ export type Action =
   | { type: "SELL"; itemId: string; qty: number }
   | { type: "BUILD"; buildingId: string }
   | { type: "BUILD_STRUCTURE"; id: string }
+  | { type: "MOVE_STRUCTURE"; id: string; tx: number; ty: number }
   | { type: "EVENING_FEED" }
   | { type: "CLOSE_ANIMALS" }
   | { type: "ADVANCE_PHASE" }
@@ -190,8 +205,10 @@ export function reducer(state: GameState, action: Action): GameState {
     action.type === "PUSH_DIALOG" ||
     action.type === "START" ||
     action.type === "RESET" ||
+    action.type === "SET_PLAYER_PROFILE" ||
     action.type === "LOAD" ||
     action.type === "BUILD_STRUCTURE" ||
+    action.type === "MOVE_STRUCTURE" ||
     action.type === "DEV_UNLOCK" ||
     action.type === "DEV_TOGGLE" ||
     action.type === "DEV_RESTOCK"
@@ -238,7 +255,14 @@ function core(state: GameState, action: Action): GameState {
 
     case "RESET": {
       const s = { ...initialState(), started: true };
+      if (action.profile) s.profile = action.profile;
       pushDialog(s, "Tomáš", TUTORIAL_STEPS[0].intro);
+      return s;
+    }
+
+    case "SET_PLAYER_PROFILE": {
+      const s = cloneState(state);
+      s.profile = action.profile;
       return s;
     }
 
@@ -446,6 +470,8 @@ function core(state: GameState, action: Action): GameState {
       const firstToday = !s.tasksDone[`play_${a.id}`];
       s.tasksDone[`play_${a.id}`] = true;
       if (firstToday) s.welfare[a.feedGroup] = clamp(s.welfare[a.feedGroup] + WELFARE_PLAY_GAIN, 0, 100);
+      // Charaktery: okamžitý pocitový skok (bond + finální social se doladí v noci).
+      if (s.animals[a.id]) s.animals[a.id].social = clamp(s.animals[a.id].social + SOCIAL_PLAY_INSTANT, 0, 100);
       addLog(s, `Pohrál sis s ${a.name} (${def.verb}).`, "good");
       flash(
         s,
@@ -660,6 +686,16 @@ function core(state: GameState, action: Action): GameState {
         s.flags.tutorial_done = true;
         flash(s, "Louka je postavená! Teď začíná to hlavní — přežít. 🌱", "good");
       }
+      return s;
+    }
+
+    case "MOVE_STRUCTURE": {
+      // Přemístit smíš jen po tutoriálu, jen povolené a už postavené stavby.
+      if (tutorialActive(state)) return state;
+      if (!isMovable(action.id) || !state.built.includes(action.id)) return state;
+      const s = cloneState(state);
+      s.placements = { ...s.placements, [action.id]: { tx: action.tx, ty: action.ty } };
+      addLog(s, `Přemístil jsi: ${INTERACTABLE_BY_ID[action.id]?.label ?? action.id}. 🪧`, "good");
       return s;
     }
 
@@ -1064,6 +1100,11 @@ function core(state: GameState, action: Action): GameState {
       for (const [id, qty] of Object.entries(DEV_RESTOCK_KIT)) {
         s.inventory[id] = Math.max(s.inventory[id] ?? 0, qty);
       }
+      // Charaktery na maximum — pro rychlou vizuální kontrolu nálady/přátelství.
+      for (const id of CHARACTER_SET) {
+        const st = s.animals[id];
+        if (st) { st.bond = 100; st.social = 100; st.comfort = 100; st.mood = "radostny"; }
+      }
       addLog(s, "🛠️ [dev] Doplněny zásoby, peníze a energie.", "info");
       flash(s, "🛠️ Zásoby, +5000 Kč a plná energie doplněny.", "good");
       return s;
@@ -1126,6 +1167,7 @@ function devAdvanceDays(state: GameState, days: number): GameState {
   s.animalsClosed = true;
   s.fireLit = false;
   s.tasksDone = {};
+  advanceAnimalMoods(s); // ať i rychlý přeskok postárne nálady (pozorování jemného úbytku)
   s.weather = s.weatherTomorrow ?? randomWeather(s.season);
   s.weatherTomorrow = randomWeather(s.season);
   addLog(s, `⏩ [dev] Přeskok na den ${s.day} — ${seasonName(s.season)}.`, "info");
@@ -1196,6 +1238,9 @@ function resolveSleep(state: GameState): GameState {
 
   // 2b) Liščí příběh — miska, důvěra a posun přátelství.
   advanceFoxStory(s);
+
+  // 2d) Charaktery Louky — nálada, potřeby a přátelství vybraných zvířat.
+  advanceAnimalMoods(s);
 
   // 2c) Senné DLC: co udělá noc (a dnešní počasí) se sušícím se senem.
   if (s.hay && s.hay.drying > 0) {
@@ -1360,6 +1405,60 @@ function advanceFoxStory(s: GameState) {
       "Ráno na tebe u pěšiny čeká zrzavá kamarádka. Ocas jako kartáč, oči jako knoflíky.",
       "Louka má novou návštěvnici — a ty přítelkyni z lesa. Zajdi ji pohladit. 🦊💚",
     ]);
+  }
+}
+
+// Laskavé pobídky, když se hráč s oblíbencem dlouho nemazlil (max 1 za noc).
+// Fakta souhlasí s webem: Denis je kocour, Flíček prase, Kesy pes.
+const NEGLECT_NUDGE: Record<string, string> = {
+  denis: "Denis se dnes otřel o dveře a mňoukl na tebe. Kočky mňoukají hlavně na lidi — chce tvou pozornost. Zajdi se pomazlit. 🐱",
+  flicek: "Flíček se ti připletl pod nohy a nastavil bříško. Ví moc dobře, že drbání na bříšku je to nejlepší na světě. 🐷",
+  kesy: "Kesy tě sledoval od plotu jako zenový mistr. Nic neřekl — ale kdybys zašel blíž, zavrtěl by ocasem. 🐶💚",
+};
+const NEGLECT_NUDGE_FALLBACK = (name: string) =>
+  `${name} se po tobě dnes ohlížel(a). Zajdi se pozdravit — malá chvilka pozornosti udělá velkou radost. 💚`;
+
+/**
+ * Charaktery Louky — vyhodnocuje se přes noc (před resetem tasksDone).
+ * Laskavé: přátelství roste péčí a klesá jen jemně po dlouhém zanedbání,
+ * nálada nikdy nespadne pod „stýská se mu". Trpělivost, ne trest.
+ */
+function advanceAnimalMoods(s: GameState) {
+  let nudged = false;
+  for (const id of CHARACTER_SET) {
+    const a = ANIMAL_BY_ID[id];
+    if (!a) continue;
+    const st = s.animals[id] ?? (s.animals[id] = initialAnimalStates()[id]); // líná inicializace
+    const played = !!s.tasksDone[`play_${id}`];
+
+    // Společnost: doplní hraní, jinak jemně klesá (nikdy pod SOCIAL_FLOOR).
+    st.social = clamp(st.social + (played ? SOCIAL_PLAY_GAIN : -SOCIAL_DECAY), SOCIAL_FLOOR, 100);
+
+    // Pohodlí: plynule se blíží hodnotě z rozmístění staveb (bezpečný default 70).
+    const target = layoutComfortFor(id, s);
+    st.comfort = clamp(st.comfort + (target - st.comfort) * COMFORT_LERP, 0, 100);
+
+    // Přátelství: roste hrou; slábne jen po delším zanedbání, s podlahou.
+    if (played) {
+      st.bond = clamp(st.bond + BOND_PLAY_GAIN, 0, 100);
+      st.lastPlayDay = s.day;
+    } else if (s.day - st.lastPlayDay > BOND_NEGLECT_DAYS) {
+      st.bond = clamp(st.bond - BOND_GENTLE_DECAY, BOND_FLOOR, 100);
+    }
+
+    // Nálada z welfare skupiny + společnosti + pohodlí + přátelství.
+    const score = s.welfare[a.feedGroup] * 0.4 + st.social * 0.3 + st.comfort * 0.2 + st.bond * 0.1;
+    st.mood =
+      score >= MOOD_THRESHOLDS.radostny ? "radostny" :
+      score >= MOOD_THRESHOLDS.spokojeny ? "spokojeny" :
+      score >= MOOD_THRESHOLDS.pohoda ? "pohoda" :
+      score >= MOOD_THRESHOLDS.posmutnely ? "posmutnely" : "styska";
+
+    // Jemná pobídka — jen u oblíbence a jen jednou za noc.
+    if (!nudged && !played && st.bond >= 45 && s.day - st.lastPlayDay === BOND_NEGLECT_DAYS + 1) {
+      pushDialog(s, a.name, [NEGLECT_NUDGE[id] ?? NEGLECT_NUDGE_FALLBACK(a.name)]);
+      nudged = true;
+    }
   }
 }
 
