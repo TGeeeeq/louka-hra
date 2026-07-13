@@ -446,6 +446,15 @@ button:disabled { cursor: not-allowed; }
 .species-tag { background: var(--sand); color: var(--moss-deep); }
 .group-tag { background: var(--moss-soft); color: #fff; }
 .missing-tag { background: #e7d3c8; color: var(--bad); }
+.animal-mood { display: flex; align-items: center; gap: 10px; margin: 12px 0 6px; flex-wrap: wrap; }
+.bond-tier { font-size: 0.85rem; font-weight: 600; color: var(--moss-deep); }
+.need-bars { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 2px; }
+.need-bar { display: flex; align-items: center; gap: 8px; }
+.need-ico { width: 20px; text-align: center; font-size: 0.9rem; flex-shrink: 0; }
+.need-track { flex: 1; height: 9px; background: rgba(0,0,0,0.08); border-radius: 999px; overflow: hidden; }
+.mini-fill.bond { background: linear-gradient(90deg, #f3b8c4, #e0728f); }
+.mini-fill.social { background: linear-gradient(90deg, #f0c99a, #e0a05c); }
+.mini-fill.comfort { background: linear-gradient(90deg, #bfe0b0, #7fb96a); }
 .animal-personality { font-family: var(--font-serif); font-size: 1.05rem; color: var(--moss-deep); margin: 14px 0; font-style: italic; }
 .animal-fact { background: #fff; border-radius: var(--r); padding: 12px; box-shadow: var(--shadow-sm); }
 .fact-badge { display: inline-block; font-size: 0.72rem; font-weight: 700; color: var(--terracotta); margin-bottom: 4px; }
