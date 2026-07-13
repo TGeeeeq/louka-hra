@@ -132,6 +132,7 @@ export default function App() {
   const [play, setPlay] = useState<AnimalDef | null>(null);
   const [build, setBuild] = useState<Interactable | null>(null);
   const [devOpen, setDevOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
   useGameSounds();
 
   // Skryté odemčení dev módu: napsat na klávesnici „louka".
@@ -386,9 +387,12 @@ export default function App() {
     <div className="game-world">
       {/* měkké rozednění po startu hry (místo tvrdého střihu z intra) */}
       <div className="game-fade-in" aria-hidden />
-      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo} foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} appearance={state.profile.appearance} onInteract={onInteract} onEvent={onWorldEvent} />
-      <Hud onOpen={(p) => setOverlay(p)} onDevUnlock={unlockDev} />
+      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo} foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} appearance={state.profile.appearance} placements={state.placements} editMode={editMode} onMoveStructure={(id, tx, ty) => { sound.build(); dispatch({ type: "MOVE_STRUCTURE", id, tx, ty }); }} onEditReject={() => dispatch({ type: "PUSH_DIALOG", speaker: "Zabydlování", lines: ["Sem se to nevejde — je tam les, voda nebo jiná stavba."] })} onInteract={onInteract} onEvent={onWorldEvent} />
+      <Hud onOpen={(p) => setOverlay(p)} onDevUnlock={unlockDev} editMode={editMode} onToggleEdit={() => setEditMode((v) => !v)} />
       <Controls />
+      {editMode && (
+        <button className="edit-done-fab" onClick={() => setEditMode(false)}>✓ Hotovo</button>
+      )}
       <DialogBox />
 
       {overlay === "shop" && <Overlay title="🏪 Stánek" onClose={() => setOverlay(null)}><Shop /></Overlay>}

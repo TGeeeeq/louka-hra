@@ -27,9 +27,13 @@ function MiniBar({ icon, value, max, tone }: { icon: string; value: number; max:
 export function Hud({
   onOpen,
   onDevUnlock,
+  editMode,
+  onToggleEdit,
 }: {
   onOpen: (panel: "denik" | "dlc") => void;
   onDevUnlock?: () => void;
+  editMode: boolean;
+  onToggleEdit: () => void;
 }) {
   const { state, dispatch } = useGame();
   const [bag, setBag] = useState(false);
@@ -87,6 +91,9 @@ export function Hud({
 
         <div className="hud-right">
           <span className="money">💰 {state.money}</span>
+          {!tut && (
+            <button className={`icon-btn${editMode ? " on" : ""}`} title="Zabydlit (přemístit stavby)" onClick={onToggleEdit}>🪑</button>
+          )}
           <button className="icon-btn" title="Batoh / najíst se" onClick={() => setBag((b) => !b)}>🎒</button>
           <button className="icon-btn" title="Deník" onClick={() => onOpen("denik")}>📖</button>
           <button className="icon-btn" title="Rozšíření (DLC)" onClick={() => onOpen("dlc")}>🌾</button>

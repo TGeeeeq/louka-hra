@@ -48,6 +48,7 @@ import { initialState } from "./state";
 import { QUEST_LINES } from "../content/quests";
 import { CHARACTER_SET, initialAnimalStates } from "../content/characters";
 import { layoutComfortFor } from "./comfort";
+import { INTERACTABLE_BY_ID, isMovable } from "../../world/entities";
 import { TUTORIAL_STEPS, tutorialActive } from "../content/tutorial";
 import {
   addLog,
@@ -87,6 +88,7 @@ export type Action =
   | { type: "SELL"; itemId: string; qty: number }
   | { type: "BUILD"; buildingId: string }
   | { type: "BUILD_STRUCTURE"; id: string }
+  | { type: "MOVE_STRUCTURE"; id: string; tx: number; ty: number }
   | { type: "EVENING_FEED" }
   | { type: "CLOSE_ANIMALS" }
   | { type: "ADVANCE_PHASE" }
@@ -206,6 +208,7 @@ export function reducer(state: GameState, action: Action): GameState {
     action.type === "SET_PLAYER_PROFILE" ||
     action.type === "LOAD" ||
     action.type === "BUILD_STRUCTURE" ||
+    action.type === "MOVE_STRUCTURE" ||
     action.type === "DEV_UNLOCK" ||
     action.type === "DEV_TOGGLE" ||
     action.type === "DEV_RESTOCK"
@@ -683,6 +686,16 @@ function core(state: GameState, action: Action): GameState {
         s.flags.tutorial_done = true;
         flash(s, "Louka je postavená! Teď začíná to hlavní — přežít. 🌱", "good");
       }
+      return s;
+    }
+
+    case "MOVE_STRUCTURE": {
+      // Přemístit smíš jen po tutoriálu, jen povolené a už postavené stavby.
+      if (tutorialActive(state)) return state;
+      if (!isMovable(action.id) || !state.built.includes(action.id)) return state;
+      const s = cloneState(state);
+      s.placements = { ...s.placements, [action.id]: { tx: action.tx, ty: action.ty } };
+      addLog(s, `Přemístil jsi: ${INTERACTABLE_BY_ID[action.id]?.label ?? action.id}. 🪧`, "good");
       return s;
     }
 
