@@ -32,6 +32,45 @@ export interface FoxState {
   bowlCount: number;
 }
 
+/** Podoba pečovatele — vybírá se v tvůrci postavy. Strukturní podmnožina PersonDef. */
+export type PlayerVariant = "beard" | "ponytail" | "hat";
+export interface PlayerAppearance {
+  skin: string;
+  hair: string;
+  shirt: string;
+  variant?: PlayerVariant;
+}
+export interface PlayerProfile {
+  /** Jméno pečovatele (výchozí „Ty"). */
+  name: string;
+  appearance: PlayerAppearance;
+}
+
+/**
+ * Nálada zvířete. Nejhorší stupeň je „stýská se mu" — nikdy utrpení.
+ * Trpělivost, ne trest (stejná filozofie jako u lišky).
+ */
+export type AnimalMood =
+  | "radostny"
+  | "spokojeny"
+  | "pohoda"
+  | "posmutnely"
+  | "styska";
+
+/** Runtime charakter vybraných zvířat — nálada, potřeby a přátelství. */
+export interface AnimalState {
+  /** Přátelství 0–100. Roste péčí; klesá jen jemně po dlouhém zanedbání, nikdy pod podlahu. */
+  bond: number;
+  /** Potřeba společnosti 0–100 — hraní/mazlení ji doplní. */
+  social: number;
+  /** Pohodlí 0–100 z rozmístění staveb (viz engine/comfort.ts). */
+  comfort: number;
+  /** Nálada — přepočítává se každou noc. */
+  mood: AnimalMood;
+  /** Den poslední interakce (hraní/mazlení). */
+  lastPlayDay: number;
+}
+
 export type Phase = "rano" | "poledne" | "vecer";
 
 export type Weather =
@@ -225,6 +264,12 @@ export interface GameState {
   wildSeen: Record<string, number>;
   /** Liščí příběh přátelství. */
   fox: FoxState;
+  /** Charaktery Louky — nálada, potřeby a přátelství vybraných zvířat. */
+  animals: Record<string, AnimalState>;
+  /** Volné rozmístění staveb — override autorských souřadnic (dlaždice). Chybějící = autorská pozice. */
+  placements: Record<string, { tx: number; ty: number }>;
+  /** Podoba a jméno pečovatele (tvůrce postavy). */
+  profile: PlayerProfile;
   /** Senné DLC: probíhající sušení sena (null = nic se nesuší). */
   hay: HayState | null;
 

@@ -28,6 +28,12 @@ export function cloneState(s: GameState): GameState {
     built: [...s.built],
     welfare: { ...s.welfare },
     population: { ...s.population },
+    // Charaktery: mutujeme s.animals[id] in-place → klonuj po položkách,
+    // ať se nepoškodí předchozí objekt React stavu.
+    animals: Object.fromEntries(
+      Object.entries(s.animals).map(([k, v]) => [k, { ...v }]),
+    ),
+    placements: { ...s.placements },
     tasksDone: { ...s.tasksDone },
     knownFacts: [...s.knownFacts],
     seenAnimals: [...s.seenAnimals],

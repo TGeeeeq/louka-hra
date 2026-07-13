@@ -85,6 +85,31 @@ export const INTERACTABLE_BY_ID: Record<string, Interactable> = Object.fromEntri
   INTERACTABLES.map((i) => [i.id, i]),
 );
 
+// --- Volné rozmístění staveb (edit mód) ---------------------------------
+// Autorské (výchozí) pozice — placement override sedí NAD nimi.
+const AUTHORED_POS: Record<string, { tx: number; ty: number }> = Object.fromEntries(
+  INTERACTABLES.map((it) => [it.id, { tx: it.tx, ty: it.ty }]),
+);
+
+// Které stavby smí hráč po tutoriálu volně přemístit (rozšiřitelné).
+export const MOVABLE_IDS = new Set<string>(["buda"]);
+export const isMovable = (id: string) => MOVABLE_IDS.has(id);
+
+/**
+ * Aplikuje override pozice na INTERACTABLES in-place (píše it.tx/it.ty).
+ * Všechna čtecí místa (kreslení, hledání cíle, minimapa, setConstructed,
+ * isBlocked) čtou it.tx/it.ty, takže po tomto volání vidí nové pozice bez
+ * jakékoli další změny. MUSÍ běžet PŘED setConstructed.
+ */
+export function applyPlacements(placements: Record<string, { tx: number; ty: number }>) {
+  for (const it of INTERACTABLES) {
+    const p = placements[it.id];
+    const a = AUTHORED_POS[it.id];
+    it.tx = p ? p.tx : a.tx;
+    it.ty = p ? p.ty : a.ty;
+  }
+}
+
 // Vyčistí mýtinku (les/keř/voda → tráva) pod stavbami i kolem nich a kolem
 // startu, aby byly stavby vždy v mýtině a dostupné — bez ohledu na náhodný les.
 function carveClearing(tx: number, ty: number, w: number, h: number, margin: number) {
@@ -157,6 +182,57 @@ export function isBlocked(px: number, py: number): boolean {
 export function isTileBlocked(tx: number, ty: number): boolean {
   if (isSolidTile(tx, ty)) return true;
   return solidBuildingTiles.has(`${tx},${ty}`);
+}
+
+const solidTileOccupied = (key: string) => solidBuildingTiles.has(key);
+
+/**
+ * Lze na (tx,ty) postavit půdorys `it`? Ignoruje vlastní současné dlaždice
+ * stavby `ignoreId` (aby se dala posunout o kousek přes sebe samu).
+ */
+export function canPlaceFootprint(
+  it: Interactable,
+  tx: number,
+  ty: number,
+  ignoreId?: string,
+): boolean {
+  const own = new Set<string>();
+  if (ignoreId) {
+    const o = INTERACTABLE_BY_ID[ignoreId];
+    if (o)
+      for (let dx = 0; dx < o.fw; dx++)
+        for (let dy = 0; dy < o.fh; dy++) own.add(`${o.tx + dx},${o.ty + dy}`);
+  }
+  for (let dx = 0; dx < it.fw; dx++)
+    for (let dy = 0; dy < it.fh; dy++) {
+      const x = tx + dx;
+      const y = ty + dy;
+      if (x < 1 || y < 1 || x >= MAP.w - 1 || y >= MAP.h - 1) return false; // okraj/mimo mapu
+      if (isSolidTile(x, y)) return false; // les/voda/plot
+      const key = `${x},${y}`;
+      if (!own.has(key) && solidTileOccupied(key)) return false; // jiná stavba
+    }
+  return true;
+}
+
+/** Střed zóny skupiny (px) — paddock, nebo statická zóna pro mazlíčky. */
+export function zoneCenterFor(group: FeedGroup): { x: number; y: number } {
+  const pad = PADDOCKS.find((p) => p.group === group);
+  if (pad) return { x: (pad.tx + pad.w / 2) * TS, y: (pad.ty + pad.h / 2) * TS };
+  const Z: Partial<Record<FeedGroup, [number, number]>> = { mazlici: [30, 14] }; // zrcadlí ZONES
+  const [cx, cy] = Z[group] ?? [SPAWN_TX, SPAWN_TY];
+  return { x: (cx + 0.5) * TS, y: (cy + 0.5) * TS };
+}
+
+/** Efektivní střed stavby (px) s ohledem na placement override. */
+export function structureCenter(
+  id: string,
+  placements: Record<string, { tx: number; ty: number }>,
+): { x: number; y: number } | null {
+  const it = INTERACTABLE_BY_ID[id];
+  if (!it) return null;
+  const p = placements[id] ?? AUTHORED_POS[id];
+  return { x: (p.tx + it.fw / 2) * TS, y: (p.ty + it.fh / 2) * TS };
 }
 
 /**

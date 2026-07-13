@@ -66,3 +66,16 @@ export const DONATION_RANGE = { min: 40, max: 130 };
 
 // Veterinář
 export const VET_BILL = { min: 280, max: 620 };
+
+// Charaktery Louky (per-animal nálada & přátelství) — laskavé hodnoty.
+export const SOCIAL_PLAY_GAIN = 22; // hraní/mazlení doplní společnost (noční konsolidace)
+export const SOCIAL_PLAY_INSTANT = 14; // okamžitý pocitový skok při hře (feedback na kartě)
+export const SOCIAL_DECAY = 6; // jemný úbytek za den bez pozornosti
+export const SOCIAL_FLOOR = 25; // společnost nikdy neklesne níž (žádné utrpení)
+export const COMFORT_LERP = 0.4; // jak rychle se pohodlí blíží hodnotě z rozmístění
+export const BOND_PLAY_GAIN = 6; // přátelství za den, kdy sis se zvířetem hrál
+export const BOND_NEGLECT_DAYS = 4; // až po tolika dnech bez pozornosti přátelství jemně slábne
+export const BOND_GENTLE_DECAY = 2; // a to jen o tohle (trpělivost, ne trest)
+export const BOND_FLOOR = 10; // přátelství nikdy nespadne úplně na nulu
+// Prahy nálady (vážený skór welfare/social/comfort/bond).
+export const MOOD_THRESHOLDS = { radostny: 85, spokojeny: 68, pohoda: 50, posmutnely: 32 };

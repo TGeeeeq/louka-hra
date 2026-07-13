@@ -1,6 +1,7 @@
 import type { GameState } from "../types";
 import { initialState } from "./state";
 import { TUTORIAL_BUILDING_IDS, TUTORIAL_STEPS } from "../content/tutorial";
+import { initialAnimalStates } from "../content/characters";
 
 const KEY = "louka-save-v2";
 
@@ -31,6 +32,13 @@ export function loadGame(): GameState | null {
     if (parsed.saveVersion === undefined) {
       merged.questProgress = { main: Math.max(0, parsed.questLine ?? 0) };
       merged.saveVersion = 3;
+    }
+    // Migrace v3 → v4: charaktery zvířat, volné rozmístění a profil pečovatele.
+    if (!merged.profile || !merged.profile.appearance) merged.profile = initialState().profile;
+    if ((parsed.saveVersion ?? 0) < 4) {
+      merged.animals = { ...initialAnimalStates(), ...(parsed.animals ?? {}) };
+      merged.placements = parsed.placements ?? {};
+      merged.saveVersion = 4;
     }
     return merged;
   } catch {
