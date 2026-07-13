@@ -12,7 +12,7 @@ function NeedBar({ icon, label, value, tone }: { icon: string; label: string; va
   return (
     <div className="need-bar" title={`${label}: ${Math.round(value)} %`}>
       <span className="need-ico" aria-hidden>{icon}</span>
-      <span className="need-track"><span className={`mini-fill ${tone}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></span>
+      <div className="need-track"><div className={`mini-fill ${tone}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>
     </div>
   );
 }
