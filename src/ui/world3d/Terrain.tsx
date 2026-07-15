@@ -3,14 +3,16 @@
 // šumu jako 2D verze — svět vypadá stejně, jen plasticky.
 import { useMemo } from "react";
 import * as THREE from "three";
+import { useGLTF } from "@react-three/drei";
 import { MAP, MAP_H, MAP_W, TILE } from "../../world/tiles";
 import type { Season } from "../../game/types";
 import { TILE_COLORS } from "./palette";
 
-// Stabilní šum na dlaždici — stejný hash jako v tiles.ts (deterministický svět).
+// Stabilní šum na dlaždici (deterministický svět). Pozor: mezivýsledek XOR je
+// nutné přetypovat >>> 0, jinak JS bitwise vrací signed int a šum je záporný.
 function noise(x: number, y: number) {
   const hh = ((x * 374761393) ^ (y * 668265263)) >>> 0;
-  return ((hh ^ (hh >>> 13)) % 1000) / 1000;
+  return (((hh ^ (hh >>> 13)) >>> 0) % 1000) / 1000;
 }
 
 /** Barevná podlaha: 1 quad na dlaždici, vertex colors, jediný draw call. */
@@ -117,29 +119,104 @@ function Instanced({
 
 // Sdílené geometrie (vytvoří se jednou na modul)
 const GEO = {
-  trunk: new THREE.CylinderGeometry(0.09, 0.13, 0.7, 5),
-  foliage: new THREE.ConeGeometry(0.55, 1.5, 6),
-  foliageTop: new THREE.ConeGeometry(0.38, 1.0, 6),
-  bush: new THREE.SphereGeometry(0.34, 6, 5),
-  flower: new THREE.SphereGeometry(0.09, 5, 4),
-  tall: new THREE.ConeGeometry(0.16, 0.5, 4),
   fencePost: new THREE.BoxGeometry(0.12, 0.9, 0.12),
 };
-GEO.trunk.translate(0, 0.35, 0);
-GEO.foliage.translate(0, 1.3, 0);
-GEO.foliageTop.translate(0, 2.1, 0);
-GEO.bush.translate(0, 0.26, 0);
-GEO.bush.scale(1, 0.75, 1);
-GEO.flower.translate(0, 0.14, 0);
-GEO.tall.translate(0, 0.25, 0);
 GEO.fencePost.translate(0, 0.45, 0);
 
-const FOLIAGE_COLOR: Record<Season, string> = {
-  jaro: "#2f7d3f",
-  leto: "#2a7038",
-  podzim: "#8a6a24",
-  zima: "#446a54",
+/** Sezónní tón vegetace (lerp barvy materiálu). */
+const SEASON_TINT: Record<Season, { color: string; amount: number }> = {
+  jaro: { color: "#4fae4f", amount: 0.0 },
+  leto: { color: "#3f9a3f", amount: 0.12 },
+  podzim: { color: "#c07a2e", amount: 0.4 },
+  zima: { color: "#cfdfe4", amount: 0.55 },
 };
+
+/**
+ * Rozseje varianty z GLTF packu (Quaternius) přes InstancedMesh — jeden draw
+ * call na (varianta × mesh). Varianty se mezi dlaždicemi střídají
+ * deterministicky, výška se normalizuje na targetH.
+ */
+function ScatterGLTF({
+  url,
+  names,
+  items,
+  targetH,
+  season,
+  tintStrength = 1,
+  castShadow = false,
+}: {
+  url: string;
+  names: string[];
+  items: Scatter[];
+  targetH: number;
+  season: Season;
+  /** 0..1 násobič sezónního tónování (kmeny/skály netónovat). */
+  tintStrength?: number;
+  castShadow?: boolean;
+}) {
+  const { scene } = useGLTF(url);
+  const group = useMemo(() => {
+    const g = new THREE.Group();
+    const tint = SEASON_TINT[season];
+    const variants = names
+      .map((n) => scene.getObjectByName(n))
+      .filter(Boolean) as THREE.Object3D[];
+    if (!variants.length) return g;
+
+    // rozdělení dlaždic mezi varianty (deterministicky podle šumu položky)
+    const buckets: Scatter[][] = variants.map(() => []);
+    items.forEach((it) => buckets[Math.floor(it.tint * 9973) % variants.length].push(it));
+
+    const mtx = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    scene.updateWorldMatrix(true, true);
+    variants.forEach((v, vi) => {
+      const mine = buckets[vi];
+      if (!mine.length) return;
+      // Meshe varianty v lokálním prostoru varianty (packy mají varianty
+      // rozestavěné vedle sebe — offsety je nutné odečíst a vycentrovat).
+      const invRoot = new THREE.Matrix4().copy(v.matrixWorld).invert();
+      const box = new THREE.Box3();
+      const tmpBox = new THREE.Box3();
+      const meshes: { mesh: THREE.Mesh; local: THREE.Matrix4 }[] = [];
+      v.traverse((o: THREE.Object3D) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const local = new THREE.Matrix4().multiplyMatrices(invRoot, mesh.matrixWorld);
+        mesh.geometry.computeBoundingBox();
+        tmpBox.copy(mesh.geometry.boundingBox!).applyMatrix4(local);
+        box.union(tmpBox);
+        meshes.push({ mesh, local });
+      });
+      const h = box.max.y - box.min.y || 1;
+      const s0 = targetH / h;
+      const center = box.getCenter(new THREE.Vector3());
+      const recenter = new THREE.Matrix4().makeTranslation(-center.x, -box.min.y, -center.z);
+
+      meshes.forEach(({ mesh, local }) => {
+        const src = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshStandardMaterial;
+        const mat = src.clone();
+        if (tint.amount * tintStrength > 0 && mat.color)
+          mat.color.lerp(new THREE.Color(tint.color), tint.amount * tintStrength);
+        const pre = new THREE.Matrix4().multiplyMatrices(recenter, local);
+        const im = new THREE.InstancedMesh(mesh.geometry, mat, mine.length);
+        mine.forEach((it, i) => {
+          q.setFromAxisAngle(up, it.r);
+          const s = s0 * it.s;
+          mtx.compose(new THREE.Vector3(it.x, 0, it.z), q, new THREE.Vector3(s, s, s));
+          mtx.multiply(pre);
+          im.setMatrixAt(i, mtx);
+        });
+        im.instanceMatrix.needsUpdate = true;
+        im.castShadow = castShadow;
+        g.add(im);
+      });
+    });
+    return g;
+  }, [scene, names, items, targetH, season, tintStrength, castShadow]);
+  return <primitive object={group} />;
+}
 
 /**
  * Kompletní terén. `mapVersion` vynutí přepočet, když se MAP změní za běhu
@@ -157,16 +234,35 @@ export function Terrain({ season, mapVersion }: { season: Season; mapVersion: nu
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fence = useMemo(() => collect(TILE.FENCE, 0), [mapVersion]);
 
+  // Vnitřek lesa prořídne — kraje (viditelné) zůstávají celé, uvnitř roste
+  // jen ~třetina stromů. Šetří to miliony vertexů na slabých telefonech.
+  const visibleTrees = useMemo(
+    () =>
+      trees.filter((t) => {
+        const tx = Math.floor(t.x);
+        const ty = Math.floor(t.z);
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++)
+            if (MAP.get(Math.max(0, Math.min(MAP.w - 1, tx + dx)), Math.max(0, Math.min(MAP.h - 1, ty + dy))) !== TILE.FOREST)
+              return true; // kraj lesa — vždy viditelný
+        return noise(tx * 3 + 5, ty * 7 + 11) < 0.34; // vnitřek — jen vzorek
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [trees],
+  );
+  // les: mix jehličnanů a listnáčů (deterministicky podle šumu dlaždice)
+  const pines = useMemo(() => visibleTrees.filter((t) => t.tint < 0.62), [visibleTrees]);
+  const leafy = useMemo(() => visibleTrees.filter((t) => t.tint >= 0.62), [visibleTrees]);
+
   // Ground závisí na sezóně; mapVersion změní klíč, ať se přegeneruje i podlaha.
   return (
     <group key={mapVersion}>
       <Ground season={season} />
-      <Instanced items={trees} geometry={GEO.trunk} color="#6a4a2c" colorVar={0.1} />
-      <Instanced items={trees} geometry={GEO.foliage} color={FOLIAGE_COLOR[season]} colorVar={0.2} castShadow />
-      <Instanced items={trees} geometry={GEO.foliageTop} color={FOLIAGE_COLOR[season]} colorVar={0.25} />
-      <Instanced items={bushes} geometry={GEO.bush} color={season === "zima" ? "#b9cdc6" : "#3f8c3c"} colorVar={0.2} />
-      <Instanced items={flowers} geometry={GEO.flower} color={season === "podzim" ? "#c98a3a" : "#e884b0"} colorVar={0.5} />
-      <Instanced items={tall} geometry={GEO.tall} color={FOLIAGE_COLOR[season]} colorVar={0.3} />
+      <ScatterGLTF url="/models/nature/Pine_Trees.glb" names={["PineTree_1", "PineTree_2", "PineTree_3", "PineTree_4", "PineTree_5"]} items={pines} targetH={2.7} season={season} tintStrength={0.7} castShadow />
+      <ScatterGLTF url="/models/nature/Trees.glb" names={["NormalTree_1", "NormalTree_2", "NormalTree_3", "NormalTree_4", "NormalTree_5"]} items={leafy} targetH={2.3} season={season} castShadow />
+      <ScatterGLTF url="/models/nature/Bushes.glb" names={["Bush", "Bush_Flowers", "Plant_1"]} items={bushes} targetH={0.55} season={season} />
+      <ScatterGLTF url="/models/nature/Flowers.glb" names={["Flower_1_Clump", "Flower_2_Clump", "Flower_3_Clump", "Flower_4_Clump", "Flower_5_Clump"]} items={flowers} targetH={0.38} season={season} tintStrength={0.3} />
+      <ScatterGLTF url="/models/nature/Grass.glb" names={["Grass_Large_Extruded", "Grass_Small"]} items={tall} targetH={0.42} season={season} />
       <Instanced items={fence} geometry={GEO.fencePost} color="#8a6a42" colorVar={0.1} />
     </group>
   );
