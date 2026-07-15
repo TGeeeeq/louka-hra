@@ -57,3 +57,18 @@ export function modelForAnimal(animalId: string, species: Species): AnimalModelD
   const key = ANIMAL_MODEL_OVERRIDE[animalId] ?? SPECIES_MODEL[species];
   return key ? ANIMAL_MODELS[key] : null;
 }
+
+// --- Postavy (Quaternius Ultimate Modular Men + Cube Woman, CC0) ------------
+
+export interface PersonModelDef {
+  url: string;
+  /** Cílová výška postavy v jednotkách (dlaždicích). */
+  height: number;
+}
+
+export const PERSON_MODELS: Record<string, PersonModelDef> = {
+  ty: { url: "/models/people/Adventurer.glb", height: 1.38 }, // hráč — batoh sedí k hospodáři
+  tomas: { url: "/models/people/Farmer.glb", height: 1.42 },
+  maruska: { url: "/models/people/Woman.glb", height: 1.34 },
+  tony: { url: "/models/people/Worker.glb", height: 1.4 },
+};

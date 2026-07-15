@@ -11,7 +11,8 @@ import { ANIMAL_BY_ID, animalScale } from "../../game/content/animals";
 import { PERSON_BY_ID } from "../../game/content/people";
 import type { Species } from "../../game/types";
 import { AnimalModel } from "./AnimalModel";
-import { modelForAnimal } from "./models";
+import { PersonModel } from "./PersonModel";
+import { modelForAnimal, PERSON_MODELS } from "./models";
 
 const U = 1 / TS; // world px → 3D jednotky (1 dlaždice = 1)
 
@@ -209,9 +210,9 @@ export function Actors({ sim }: { sim: WorldSim }) {
       })}
       {sim.npcs.map((npc: NpcAgent) => {
         const p = PERSON_BY_ID[npc.id];
-        return (
+        const pm = PERSON_MODELS[npc.id];
+        const fallback = (
           <PersonMesh
-            key={npc.id}
             skin={p.skin}
             shirt={p.shirt}
             hair={p.hair}
@@ -220,13 +221,40 @@ export function Actors({ sim }: { sim: WorldSim }) {
             getBubble={() => npc.bubble?.text ?? null}
           />
         );
+        return pm ? (
+          <Suspense key={npc.id} fallback={fallback}>
+            <PersonModel
+              def={pm}
+              label={p.name}
+              getState={() => ({ x: npc.x, y: npc.y, moving: npc.moving })}
+              getBubble={() => npc.bubble?.text ?? null}
+            />
+          </Suspense>
+        ) : (
+          <group key={npc.id}>{fallback}</group>
+        );
       })}
-      <PersonMesh
-        skin={ty.skin}
-        shirt={ty.shirt}
-        hair={ty.hair}
-        getState={() => ({ x: sim.player.x, y: sim.player.y, moving: sim.player.moving, anim: sim.player.anim, flip: sim.player.dir === "left" })}
-      />
+      {PERSON_MODELS.ty ? (
+        <Suspense
+          fallback={
+            <PersonMesh
+              skin={ty.skin}
+              shirt={ty.shirt}
+              hair={ty.hair}
+              getState={() => ({ x: sim.player.x, y: sim.player.y, moving: sim.player.moving, anim: sim.player.anim, flip: sim.player.dir === "left" })}
+            />
+          }
+        >
+          <PersonModel def={PERSON_MODELS.ty} getState={() => ({ x: sim.player.x, y: sim.player.y, moving: sim.player.moving })} />
+        </Suspense>
+      ) : (
+        <PersonMesh
+          skin={ty.skin}
+          shirt={ty.shirt}
+          hair={ty.hair}
+          getState={() => ({ x: sim.player.x, y: sim.player.y, moving: sim.player.moving, anim: sim.player.anim, flip: sim.player.dir === "left" })}
+        />
+      )}
       <HighlightRing sim={sim} />
     </group>
   );
