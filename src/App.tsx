@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AnimalDef, FeedGroup } from "./game/types";
 import { useGame } from "./ui/store";
-import { WorldCanvas, type InteractTarget, type WorldEvent } from "./ui/world/WorldCanvas";
+import { World3D, type InteractTarget, type WorldEvent } from "./ui/world3d/World3D";
 import { Hud } from "./ui/world/Hud";
 import { DialogBox } from "./ui/world/DialogBox";
 import { Controls } from "./ui/world/Controls";
@@ -277,7 +277,7 @@ export default function App() {
 
   return (
     <div className="game-world">
-      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} onInteract={onInteract} onEvent={onWorldEvent} />
+      <World3D season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} gateOpen={!!state.flags.gate_open} onInteract={onInteract} onEvent={onWorldEvent} />
       <Hud onOpen={(p) => setOverlay(p)} />
       <Controls />
       <DialogBox />
