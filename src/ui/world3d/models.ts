@@ -33,6 +33,10 @@ export const ANIMAL_MODELS: Record<string, AnimalModelDef> = {
   horse: M("Horse", 0.75, 0.3),
   fox: M("Fox", 0.6, 0.2),
   wolf: M("Wolf", 0.65, 0.2),
+  // AI generované z fotek skutečných zvířat (TRELLIS.2, MIT) — vlastní textura,
+  // bez tintu; zatím bez rigu (hopsají procedurálně), rig přijde přes UniRig.
+  muflon: { url: "/models/animals/Muflon.glb", baseHeight: 0.68, yaw: -Math.PI / 2, tint: 0 },
+  slepice: { url: "/models/animals/Slepice.glb", baseHeight: 0.42, yaw: -Math.PI / 2, tint: 0 },
 };
 
 /** Výchozí model pro druh (chybějící druhy = placeholder primitiva). */
@@ -42,7 +46,8 @@ export const SPECIES_MODEL: Partial<Record<Species, string>> = {
   krava: "cow",
   osel: "donkey",
   pes: "shiba",
-  muflon: "deer", // dočasně — rohatý divoch; věrný muflon přijde z AI generace
+  muflon: "muflon", // AI generovaný z fotky Yakula (nechmerust.org galerie)
+  slepice: "slepice", // AI generovaná z fotky z galerie
 };
 
 /** Individuální výjimky (konkrétní zvíře → jiný model, než má druh). */

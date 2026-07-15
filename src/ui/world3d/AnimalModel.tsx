@@ -76,12 +76,17 @@ export function AnimalModel({ mob, def }: { mob: Mob; def: AnimalModelDef }) {
 
   useEffect(() => () => { mixer.stopAllAction(); }, [mixer]);
 
+  const hasClips = animations.length > 0;
+
   useFrame((_, rawDt) => {
     const dt = Math.min(0.05, rawDt);
     const g = group.current;
     if (!g) return;
-    g.position.set(mob.x * U, 0, mob.y * U);
+    // modely bez rigu (AI generované, zatím neriggnuté) aspoň hopsají jako dřív
+    const bobY = hasClips ? 0 : Math.max(0, Math.sin(mob.bob)) * 0.06;
+    g.position.set(mob.x * U, bobY, mob.y * U);
     g.rotation.y = def.yaw + (mob.flip ? Math.PI : 0);
+    if (!hasClips) g.rotation.z = Math.sin(mob.bob) * 0.04;
     if (alertRef.current) alertRef.current.visible = mob.escaped;
 
     // stav: pohyb → walk; klid s dlouhým odpočinkem → eat; jinak idle
