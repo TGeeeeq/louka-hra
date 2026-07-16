@@ -1,15 +1,32 @@
+import { Preferences } from "@capacitor/preferences";
 import type { GameState } from "../types";
 import { initialState } from "./state";
 import { TUTORIAL_BUILDING_IDS, TUTORIAL_STEPS } from "../content/tutorial";
 import { initialAnimalStates } from "../content/characters";
+import { isNative } from "../../platform";
 
 const KEY = "louka-save-v2";
 
 export function saveGame(s: GameState) {
+  let raw: string;
   try {
-    localStorage.setItem(KEY, JSON.stringify(s));
+    raw = JSON.stringify(s);
+  } catch {
+    return; // stav se nepodařilo serializovat — nic nezapisovat
+  }
+  try {
+    localStorage.setItem(KEY, raw);
   } catch {
     /* localStorage nemusí být dostupný (privátní režim) — hra běží dál v paměti */
+  }
+  // D6: na nativním shellu zrcadlíme uložení i do Capacitor Preferences —
+  // to (na rozdíl od WebView localStorage) přežije vyčištění dat aplikace
+  // uživatelem přes systémová nastavení. Fire-and-forget, chyba tu nesmí
+  // shodit hlavní uložení do localStorage výše.
+  if (isNative()) {
+    void Preferences.set({ key: KEY, value: raw }).catch(() => {
+      /* zrcadlení selhalo — localStorage už proběhlo, hra pokračuje dál */
+    });
   }
 }
 

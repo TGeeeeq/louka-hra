@@ -7,6 +7,9 @@
 // game/content/fullVersion.ts): kdo dřív vlastnil senné DLC (starý klíč
 // `louka-dlc-v1` obsahující "senne"), dostává plnou verzi zdarma. Starý
 // klíč se přitom nikdy nemaže — je to jen bezpečnostní záloha.
+import { Preferences } from "@capacitor/preferences";
+import { isNative } from "../../platform";
+
 const KEY = "louka-entitlements-v1";
 const OLD_DLC_KEY = "louka-dlc-v1";
 
@@ -28,10 +31,18 @@ function read(): Stored {
 }
 
 function write(s: Stored) {
+  const raw = JSON.stringify(s);
   try {
-    localStorage.setItem(KEY, JSON.stringify(s));
+    localStorage.setItem(KEY, raw);
   } catch {
     /* privátní režim — vlastnictví platí aspoň pro běžící session */
+  }
+  // D6: zrcadlo v Capacitor Preferences — nákup přežije i vyčištění dat
+  // WebView (na rozdíl od localStorage). Fire-and-forget.
+  if (isNative()) {
+    void Preferences.set({ key: KEY, value: raw }).catch(() => {
+      /* zrcadlení selhalo — localStorage už proběhlo */
+    });
   }
 }
 
