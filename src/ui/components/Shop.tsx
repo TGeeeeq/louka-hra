@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useGame } from "../store";
 import { BUYABLE, SELLABLE } from "../../game/content/items";
 import { BUILDINGS } from "../../game/content/buildings";
-import { ownedOnly } from "../../game/dlc/gate";
 import { invCount } from "../../game/engine/util";
 
 type Tab = "nakup" | "prodej" | "stavby";
@@ -12,9 +11,9 @@ export function Shop() {
   const [tab, setTab] = useState<Tab>("nakup");
 
   const senoDiscount = state.buildings.includes("senik");
-  const buyable = ownedOnly(state, BUYABLE);
-  const sellable = ownedOnly(state, SELLABLE);
-  const buildings = ownedOnly(state, BUILDINGS);
+  const buyable = BUYABLE;
+  const sellable = SELLABLE;
+  const buildings = BUILDINGS;
 
   return (
     <div className="shop">

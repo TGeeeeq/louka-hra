@@ -90,7 +90,6 @@ export const BUILDINGS: BuildingDef[] = [
     cost: 220,
     desc: "Poctivá nabroušená kosa. Tomáš tvrdí, že se drží „takhle. Ne, takhle.“",
     benefit: "Kosení −5 energie a +2 trávy",
-    dlc: "senne",
   },
 ];
 

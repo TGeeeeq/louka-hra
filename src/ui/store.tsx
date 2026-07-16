@@ -9,7 +9,7 @@ import {
 import { reducer, type Action } from "../game/engine/reducer";
 import { initialState } from "../game/engine/state";
 import { loadGame, saveGame } from "../game/engine/save";
-import { getOwnedDlc } from "../game/dlc/entitlements";
+import { hasFullVersion } from "../game/entitlement/entitlements";
 import type { GameState } from "../game/types";
 
 interface Store {
@@ -26,10 +26,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     () => loadGame() ?? initialState(),
   );
 
-  // Vlastnictví DLC žije mimo save (louka-dlc-v1) — po načtení (i po RESETu)
-  // se do stavu vždy zrcadlí odtud. Save není zdrojem pravdy o nákupech.
+  // Vlastnictví plné verze žije mimo save (louka-entitlements-v1) — po
+  // načtení (i po RESETu) se do stavu vždy zrcadlí odtud. Save není zdrojem
+  // pravdy o nákupu.
   useEffect(() => {
-    dispatch({ type: "SET_DLC", owned: getOwnedDlc() });
+    dispatch({ type: "SET_FULL_VERSION", full: hasFullVersion() });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.started]);
 

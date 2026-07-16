@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useGame } from "../store";
 import { SEASON_ICON, SEASON_LABEL } from "../labels";
 import { sound, type TensionLevel } from "../../audio/sound";
-import { DLC_CATALOG } from "../../game/content/dlc";
-import { grantDlc, revokeDlc } from "../../game/dlc/entitlements";
+import { FULL_VERSION } from "../../game/content/fullVersion";
+import { grantFull, revokeFull } from "../../game/entitlement/entitlements";
 import {
   enableAutoTier,
   getPerfStats,
@@ -129,22 +129,20 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="dev-section">
-        <div className="dev-label">🌾 DLC (testovací odemykání)</div>
-        {DLC_CATALOG.map((d) => {
-          const owned = state.dlcOwned.includes(d.id);
-          return (
-            <label className="dev-toggle" key={d.id}>
-              <input
-                type="checkbox"
-                checked={owned}
-                onChange={() =>
-                  dispatch({ type: "SET_DLC", owned: owned ? revokeDlc(d.id) : grantDlc(d.id) })
-                }
-              />
-              <span><b>{d.emoji} {d.name}</b> — {d.tagline}</span>
-            </label>
-          );
-        })}
+        <div className="dev-label">🌾 Plná verze (testovací odemykání)</div>
+        <label className="dev-toggle">
+          <input
+            type="checkbox"
+            checked={state.fullVersion}
+            onChange={() =>
+              dispatch({
+                type: "SET_FULL_VERSION",
+                full: state.fullVersion ? revokeFull() : grantFull(),
+              })
+            }
+          />
+          <span><b>{FULL_VERSION.emoji} {FULL_VERSION.name}</b> — {FULL_VERSION.tagline}</span>
+        </label>
       </div>
 
       <div className="dev-section">

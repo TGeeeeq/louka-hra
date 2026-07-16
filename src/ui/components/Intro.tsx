@@ -87,7 +87,7 @@ const tryLockLandscape = () => {
  * Klik/klávesa přeskočí, prefers-reduced-motion jde rovnou na menu.
  * Vše CSS/SVG + jeden webp — žádné knihovny, žádné velké assety.
  */
-export function Intro({ onDlc }: { onDlc?: () => void }) {
+export function Intro({ onFullVersion }: { onFullVersion?: () => void }) {
   const { state, dispatch } = useGame();
   const hasSave = state.day > 1 || Object.keys(state.tasksDone).length > 0;
   const reduced =
@@ -298,9 +298,9 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
             <button className="menu-btn" style={{ animationDelay: "0.75s" }} onClick={() => setAbout(true)}>
               O Louce
             </button>
-            {onDlc && (
-              <button className="menu-btn" style={{ animationDelay: "0.85s" }} onClick={onDlc}>
-                Rozšíření
+            {onFullVersion && (
+              <button className="menu-btn" style={{ animationDelay: "0.85s" }} onClick={onFullVersion}>
+                Plná verze
               </button>
             )}
           </nav>

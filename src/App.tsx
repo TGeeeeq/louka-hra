@@ -9,7 +9,7 @@ import { DevPanel } from "./ui/world/DevPanel";
 import { Shop } from "./ui/components/Shop";
 import { Craft } from "./ui/components/Craft";
 import { Journal } from "./ui/components/Journal";
-import { DlcStore } from "./ui/components/DlcStore";
+import { FullVersion } from "./ui/components/FullVersion";
 import { AnimalCard } from "./ui/components/AnimalCard";
 import { FlashToast } from "./ui/components/FlashToast";
 import { Intro } from "./ui/components/Intro";
@@ -31,7 +31,7 @@ import { invalidateGround } from "./world/draw";
 import { sound } from "./audio/sound";
 import type { NpcId } from "./audio/sound";
 
-type Overlay = "shop" | "craft" | "denik" | "dlc" | null;
+type Overlay = "shop" | "craft" | "denik" | "plna" | null;
 type Minigame = "herb" | "chop" | "tech";
 
 type RewardPayload = { money?: number; energy?: number; items?: { item: string; qty: number }[] };
@@ -168,10 +168,10 @@ export default function App() {
   if (!state.started)
     return (
       <>
-        <Intro onDlc={() => setOverlay("dlc")} />
-        {overlay === "dlc" && (
-          <Overlay title="🌾 Rozšíření" onClose={() => setOverlay(null)}>
-            <DlcStore />
+        <Intro onFullVersion={() => setOverlay("plna")} />
+        {overlay === "plna" && (
+          <Overlay title="🌾 Plná verze" onClose={() => setOverlay(null)}>
+            <FullVersion />
           </Overlay>
         )}
       </>
@@ -374,7 +374,6 @@ export default function App() {
     ...(foxStage === "les" || foxStage === "krmeni" || foxStage === "duvera" || foxStage === "kamarad" ? ["fox_stopy"] : []),
     ...(foxStage === "les" || foxStage === "stopy" || foxStage === "pozorovani" ? ["fox_misto"] : []),
     ...(!state.flags.jezek_intro ? ["jezek_listi"] : []),
-    ...(!state.dlcOwned.includes("senne") ? ["seniste"] : []),
   ];
   const wildActive = {
     kaneCircle: !!state.tasksDone.kane_circle,
@@ -402,9 +401,9 @@ export default function App() {
           <Journal onSelect={(a) => setSel(a)} />
         </Overlay>
       )}
-      {overlay === "dlc" && (
-        <Overlay title="🌾 Rozšíření" onClose={() => setOverlay(null)}>
-          <DlcStore />
+      {overlay === "plna" && (
+        <Overlay title="🌾 Plná verze" onClose={() => setOverlay(null)}>
+          <FullVersion />
         </Overlay>
       )}
 

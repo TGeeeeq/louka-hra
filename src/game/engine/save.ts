@@ -40,6 +40,13 @@ export function loadGame(): GameState | null {
       merged.placements = parsed.placements ?? {};
       merged.saveVersion = 4;
     }
+    // Migrace v4 → v5: DLC systém zrušen, nahrazen jedním entitlementem
+    // fullVersion (bez tagů dlc u obsahu). Staré pole `dlcOwned` už do
+    // GameState nepatří a prostě se ignoruje; fullVersion se stejně vždy
+    // dotahuje z entitlements v GameProvideru — tahle migrace je jen pro pořádek.
+    if ((parsed.saveVersion ?? 0) < 5) {
+      merged.saveVersion = 5;
+    }
     return merged;
   } catch {
     return null;

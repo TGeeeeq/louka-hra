@@ -376,22 +376,39 @@ button:disabled { cursor: not-allowed; }
 .about ul { padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .about .credit { margin-top: 12px; font-size: 0.78rem; color: var(--muted); font-style: italic; }
 
-/* ===== DLC obchod ======================================================== */
-.dlc-store { max-height: 62vh; overflow-y: auto; }
-.dlc-card {
+/* ===== Plná verze ======================================================== */
+.fullver { max-height: 62vh; overflow-y: auto; }
+.fullver-banner {
+  position: relative; height: 92px; border-radius: var(--r); overflow: hidden; margin-bottom: 14px;
+  background: linear-gradient(180deg, #bfe0e6 0%, #eaf4e0 60%, #eaf4e0 100%);
+}
+.fullver-sun {
+  position: absolute; top: 10px; right: 16px; width: 34px; height: 34px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 24px 6px rgba(240, 232, 146, 0.65);
+}
+.fullver-hill { position: absolute; left: -10%; width: 120%; height: 60px; border-radius: 50%; }
+.fullver-hill-back { bottom: -30px; background: var(--moss-soft); opacity: 0.55; }
+.fullver-hill-front { bottom: -38px; background: var(--moss); }
+.fullver-flower { position: absolute; bottom: 6px; font-size: 1.1rem; }
+.fullver-card {
   background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--r);
   padding: 14px; margin: 10px 0;
 }
-.dlc-card.owned { border-color: var(--good); background: #f2f7ee; }
-.dlc-head { display: flex; align-items: center; gap: 12px; }
-.dlc-head > div { flex: 1; }
-.dlc-head h3 { margin: 0; }
-.dlc-head em { font-size: 0.82rem; color: var(--muted); }
-.dlc-emoji { font-size: 2rem; }
-.dlc-buy { padding: 8px 18px; white-space: nowrap; }
-.dlc-desc { font-size: 0.85rem; margin: 10px 0 6px; }
-.dlc-features { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 0.8rem; }
-.dlc-note { font-weight: 600; color: var(--moss-deep); }
+.fullver-card.owned { border-color: var(--good); background: #f2f7ee; }
+.fullver-head { display: flex; align-items: center; gap: 12px; }
+.fullver-head > div { flex: 1; }
+.fullver-head h3 { margin: 0; }
+.fullver-head em { font-size: 0.82rem; color: var(--muted); }
+.fullver-emoji { font-size: 2rem; }
+.fullver-buy { padding: 8px 18px; white-space: nowrap; }
+.fullver-desc { font-size: 0.85rem; margin: 10px 0 6px; }
+.fullver-features { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 0.8rem; }
+.fullver-note { font-weight: 600; color: var(--moss-deep); }
+.fullver-restore {
+  background: none; border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px;
+  font-size: 0.78rem; color: var(--muted); cursor: pointer; margin-top: 4px;
+}
+.fullver-restore:hover { border-color: var(--moss-soft); color: var(--moss-deep); }
 
 /* ===== Log =============================================================== */
 .log {
@@ -863,7 +880,7 @@ button:disabled { cursor: not-allowed; }
 .hud-quest b { font-family: var(--font-serif); color: var(--moss-deep); font-size: 0.96rem; }
 .hud-quest small { font-size: 0.78rem; color: var(--text); }
 .hud-quest.done { border-left-color: var(--good); }
-/* Vedlejší linka (liška, divocí sousedé, DLC) — menší a zelená. */
+/* Vedlejší linka (liška, divocí sousedé, seno) — menší a zelená. */
 .hud-quest.side { border-left-color: var(--moss-soft); padding: 5px 12px; }
 .hud-quest.side b { font-size: 0.84rem; }
 .hud-quest.side small { font-size: 0.7rem; }

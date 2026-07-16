@@ -1,4 +1,4 @@
-import type { DlcId, FeedGroup, GameState } from "../types";
+import type { FeedGroup, GameState } from "../types";
 import { invCount } from "../engine/util";
 
 export interface Quest {
@@ -12,15 +12,13 @@ export interface Quest {
 }
 
 /**
- * Questová linka — hlavní příběh + vedlejší (liška, divocí sousedé, DLC mise).
+ * Questová linka — hlavní příběh + vedlejší (liška, divocí sousedé, seno na zimu…).
  * Každá linka běží nezávisle; postup drží `state.questProgress[line.id]`.
  */
 export interface QuestLine {
   id: string;
   icon: string;
   title: string;
-  /** Linka patří k DLC — bez vlastnictví se neukazuje ani nepostupuje. */
-  dlc?: DlcId;
   /** Kdy se linka hráči objeví (po tutoriálu, v létě…). */
   unlocked: (s: GameState) => boolean;
   quests: Quest[];
@@ -194,7 +192,7 @@ const SRNKA_QUESTS: Quest[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Senné DLC — zajisti Louce seno na zimu, jako doopravdy. Kosení, závod
+// Seno pro Louku — zajisti Louce seno na zimu, jako doopravdy. Kosení, závod
 // s deštěm, svoz do seníku. Skutečná Louka na seno pořádá sbírku.
 const SENNE_QUESTS: Quest[] = [
   {
@@ -242,7 +240,7 @@ export const QUEST_LINES: QuestLine[] = [
   { id: "kane", icon: "🪶", title: "Stín nad výběhem", unlocked: (s) => !!s.flags.kane_seen, quests: KANE_QUESTS },
   { id: "jezek", icon: "🦔", title: "Bodlinatý nájemník", unlocked: (s) => !!s.flags.jezek_intro, quests: JEZEK_QUESTS },
   { id: "srnka", icon: "🦌", title: "Tichý soused", unlocked: (s) => (s.wildSeen.srnka ?? 0) >= 1, quests: SRNKA_QUESTS },
-  { id: "senne", icon: "🌾", title: "Seno pro Louku", dlc: "senne", unlocked: (s) => s.season === "leto" || !!s.flags.seno_prvni_kosa || !!s.flags.seno_ususeno, quests: SENNE_QUESTS },
+  { id: "senne", icon: "🌾", title: "Seno pro Louku", unlocked: (s) => s.season === "leto" || !!s.flags.seno_prvni_kosa || !!s.flags.seno_ususeno, quests: SENNE_QUESTS },
 ];
 
 export const QUEST_LINE_BY_ID: Record<string, QuestLine> = Object.fromEntries(

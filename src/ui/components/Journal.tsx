@@ -4,7 +4,6 @@ import { ANIMALS } from "../../game/content/animals";
 import { WILD_ANIMALS } from "../../game/content/wild";
 import { FACTS } from "../../game/content/facts";
 import { QUEST_LINES } from "../../game/content/quests";
-import { ownedOnly } from "../../game/dlc/gate";
 import { AnimalSprite } from "../sprites/AnimalSprite";
 import { useGame } from "../store";
 import { photoUrl } from "../photo";
@@ -24,7 +23,7 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
   const [tab, setTab] = useState<Tab>("zvirata");
 
   const known = new Set(state.knownFacts);
-  const ownedFacts = ownedOnly(state, FACTS);
+  const ownedFacts = FACTS;
   const cats: FactCategory[] = ["byliny", "priroda", "obdobi", "azyl"];
 
   return (
@@ -38,9 +37,7 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
 
       {tab === "ukoly" && (
         <div className="facts">
-          {QUEST_LINES.filter(
-            (l) => (!l.dlc || state.dlcOwned.includes(l.dlc)) && l.unlocked(state),
-          ).map((l) => {
+          {QUEST_LINES.filter((l) => l.unlocked(state)).map((l) => {
             const idx = state.questProgress[l.id] ?? 0;
             const current = l.quests[idx];
             return (
