@@ -1,13 +1,10 @@
-// Vrstva nákupů — připravená na Google Play / App Store (Capacitor billing),
-// dnes běží webový náhled bez platební brány.
-//
-// Budoucí napojení (produkce v obchodech):
-//   1. zabalit hru Capacitorem (https://capacitorjs.com)
-//   2. přidat CapacitorBillingProvider (RevenueCat nebo
-//      @capacitor-community/in-app-purchases); SKU je ve FULL_VERSION.storeIds
-//   3. v getPurchaseProvider() vrátit billing provider, když běžíme nativně
-//      (Capacitor.isNativePlatform()); restore() volat při startu aplikace
+// Vrstva nákupů — na webu běží jen náhled bez platební brány, na Androidu
+// (D7) skutečné Google Play Billing přes CapacitorBillingProvider (viz
+// ./billing.ts — cordova-plugin-purchase v13, produkt cz.nechmerust.louka.full
+// z FULL_VERSION.storeIds.googlePlay).
 import { grantFull, hasFullVersion, revokeFull } from "./entitlements";
+import { isNative } from "../../platform";
+import { CapacitorBillingProvider } from "./billing";
 
 export interface PurchaseResult {
   ok: boolean;
@@ -61,6 +58,13 @@ export class DevProvider implements PurchaseProvider {
 }
 
 export function getPurchaseProvider(dev: boolean): PurchaseProvider {
-  // TODO (produkce): if (Capacitor.isNativePlatform()) return new CapacitorBillingProvider();
-  return dev ? new DevProvider() : new WebPreviewProvider();
+  // Dev přepínač má vždy přednost (rychlé testování i na nativním buildu).
+  if (dev) return new DevProvider();
+  // Nativní shell (Capacitor Android) → skutečné Google Play Billing.
+  // CapacitorBillingProvider si sám ověří, že CdvPurchase globál existuje —
+  // pokud ne (např. plugin ještě nenaběhl), chová se jako WebPreviewProvider.
+  if (isNative()) {
+    return new CapacitorBillingProvider();
+  }
+  return new WebPreviewProvider();
 }
