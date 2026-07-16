@@ -709,7 +709,101 @@ const RENDERERS: Record<Species, (p: P) => JSX.Element> = {
 
 // Jednorázové postavy, jejichž skutečná předloha se liší od druhové šablony
 // natolik, že si zaslouží vlastní kresbu (doplňuje se podle fotek z webu).
-const OVERRIDES: Record<string, (p: P) => JSX.Element> = {};
+const OVERRIDES: Record<string, (p: P) => JSX.Element> = {
+  // Karel — osel: mula pruh přes hřbet a tmavší uši
+  karel: (p) => {
+    const dark = p.pal.bodyDark ?? shade(p.pal.body, -34);
+    return (
+      <g>
+        <Donkey {...p} />
+        {/* Mula cross stripes on back */}
+        <path d="M26 52 Q46 44 64 48" stroke={dark} strokeWidth={4} fill="none" opacity={0.8} />
+        <path d="M44 40 Q44 54 44 66" stroke={dark} strokeWidth={3.2} fill="none" opacity={0.75} />
+        {/* Darker ear overlay */}
+        <ellipse cx={62} cy={24} rx={4.2} ry={13} fill={dark} transform="rotate(-12 62 24)" opacity={0.4} />
+        <ellipse cx={76} cy={26} rx={4.2} ry={13} fill={dark} transform="rotate(10 76 26)" opacity={0.4} />
+      </g>
+    );
+  },
+
+  // Princezna — prase: růžovější rypák + skvrna ve tvaru srdíčka
+  princezna: (p) => {
+    const belly = p.pal.belly ?? shade(p.pal.body, 24);
+    return (
+      <g>
+        <Pig {...p} />
+        {/* Pinkish snout tint */}
+        <ellipse cx={80} cy={60} rx={8.5} ry={7} fill={shade(belly, 8)} opacity={0.5} />
+        {/* Heart-shaped spot on shoulder */}
+        <path d="M48 50 Q44 44 38 47 Q34 52 40 58 Q48 62 56 58 Q62 52 58 47 Q52 44 48 50 Z" fill={shade(belly, -28)} opacity={0.6} />
+      </g>
+    );
+  },
+
+  // Flíček — prase: velká nepravidelná skvrna přes oko
+  flicek: (p) => {
+    const dark = p.pal.bodyDark ?? shade(p.pal.body, -34);
+    return (
+      <g>
+        <Pig {...p} />
+        {/* Velká nepravidelná skvrna kolem oka — oko se překreslí navrch, ať zůstane vidět */}
+        <ellipse cx={64} cy={48} rx={8.5} ry={6.5} fill={dark} opacity={0.7} />
+        <ellipse cx={71} cy={46} rx={6} ry={5.5} fill={dark} opacity={0.65} />
+        <Eye x={68} y={50} r={3.2} />
+      </g>
+    );
+  },
+
+  // Avala — krava: bílá lysina + zvoneček na krku
+  avala: (p) => {
+    const belly = p.pal.belly ?? shade(p.pal.body, 24);
+    const detail = p.pal.detail ?? p.pal.body;
+    return (
+      <g>
+        <Cow {...p} />
+        {/* White forehead blaze */}
+        <path d="M70 42 Q73 38 78 40 Q80 46 76 52 Q71 50 70 46 Z" fill={belly} opacity={0.85} />
+        {/* Bell on neck */}
+        <ellipse cx={64} cy={54} rx={3.2} ry={3.8} fill={shade(detail, 20)} />
+        {/* Bell clapper tiny line */}
+        <path d="M64 58 Q63 60 64 61" stroke={shade(detail, -16)} strokeWidth={0.8} fill="none" />
+      </g>
+    );
+  },
+
+  // Květa — krava: květinka za uchem
+  kveta: (p) => {
+    const accent = p.pal.accent ?? p.pal.detail ?? p.pal.body;
+    return (
+      <g>
+        <Cow {...p} />
+        {/* Small flower behind ear — petals + center */}
+        <g transform="translate(55, 40)">
+          {/* Flower center */}
+          <circle cx={0} cy={0} r={1.6} fill={accent} />
+          {/* Petals */}
+          <circle cx={3.2} cy={0} r={1.4} fill={shade(accent, 24)} opacity={0.9} />
+          <circle cx={-3.2} cy={0} r={1.4} fill={shade(accent, 24)} opacity={0.9} />
+          <circle cx={0} cy={3.2} r={1.4} fill={shade(accent, 24)} opacity={0.9} />
+          <circle cx={0} cy={-3.2} r={1.4} fill={shade(accent, 24)} opacity={0.9} />
+        </g>
+      </g>
+    );
+  },
+
+  // Eduard — ovce beran: důstojné rohy s vyšší korunou
+  eduard: (p) => {
+    const accent = p.pal.accent ?? p.pal.detail ?? p.pal.body;
+    return (
+      <g>
+        <Sheep {...p} />
+        {/* Additional horn definition - subtle crown effect with highlight */}
+        <path d="M62 44 Q52 40 52 50 Q52 56 56 58" stroke={shade(accent, 28)} strokeWidth={2} fill="none" opacity={0.5} strokeLinecap="round" />
+        <path d="M78 44 Q88 40 88 50 Q88 56 84 58" stroke={shade(accent, 28)} strokeWidth={2} fill="none" opacity={0.5} strokeLinecap="round" />
+      </g>
+    );
+  },
+};
 
 export function AnimalSprite({
   animal,
