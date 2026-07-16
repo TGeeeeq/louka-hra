@@ -23,8 +23,11 @@ Jeden **level = jeden den**. Den má tři fáze a střídají se roční období
   (stahuje `npm run photos`); sprity vycházejí z reálných předloh.
 - **Adaptivní hudba** — vrstvená syntéza (melodie/bas/pad/perkuse): útěk zvířete spustí „heartbeat",
   poplach hnací rytmus, blížící se zima hudbu postupně ztmavuje. Vše Web Audio, žádné soubory.
-- **DLC** — 🌾 **Senné DLC**: kosení, sušení a svoz sena — závod s počasím podle skutečné sklizně
-  (a skutečné sbírky) Louky. Vlastnictví přežije i novou hru.
+- **Seno na zimu** — 🌾 kosení, sušení a svoz sena je běžná questová linka: závod s počasím podle
+  skutečné sklizně (a skutečné sbírky) Louky.
+- **Demo + plná verze** — na Google Play vychází bezplatné demo (tutoriál a první dny). Jediný
+  nákup **Louka — plná hra** (299 Kč) odemkne zbytek natrvalo — celý rok i všechny questové linky
+  — a je zároveň skutečnou podporou azylu. Vlastnictví přežije i novou hru.
 
 Spokojená zvířata = dary od příznivců. Zanedbaná = veterinář a ztráty. Bankrot = konec.
 
@@ -78,6 +81,37 @@ vercel --prod     # produkce
 Nebo přes web Vercelu: *Add New → Project → import repo* — preset **Vite** se nastaví sám
 (build `npm run build`, output `dist`).
 
+## Android (Capacitor)
+
+Nativní shell pro Google Play je připravený přes [Capacitor](https://capacitorjs.com/):
+konfigurace je v `capacitor.config.ts` (`appId: cz.nechmerust.louka`), vygenerovaný
+projekt je ve složce `android/` (commitovaný do repa, kromě sestavovacích artefaktů —
+viz `android/.gitignore`). Orientace je natvrdo uzamčená na **landscape**
+(`android:screenOrientation="sensorLandscape"` v `android/app/src/main/AndroidManifest.xml`).
+
+**Předpoklady:** [Android Studio](https://developer.android.com/studio) (obsahuje Android SDK)
+a Java 17+ (JDK).
+
+**Build:**
+
+```bash
+npm run build          # web build → dist/
+npx cap sync android    # zkopíruje dist/ do android/app a sesynchronizuje pluginy
+```
+
+Pak buď otevři `android/` v Android Studiu (Open → vyber složku `android/`) a spusť/sestav
+odtud, nebo z příkazové řádky:
+
+```bash
+cd android
+./gradlew assembleDebug   # vyžaduje nastavené Android SDK (ANDROID_HOME) a JDK 17+
+```
+
+Výsledné APK najdeš v `android/app/build/outputs/apk/debug/`.
+
+Detekce nativní platformy je v `src/platform.ts` (`Capacitor.isNativePlatform()`) — na tom
+stojí demo brána (bezplatné demo vs. plná verze po nákupu).
+
 ## Struktura
 
 ```
@@ -85,14 +119,14 @@ src/
   game/
     types.ts            datové typy
     balance.ts          ladění obtížnosti (ceny, energie, období…)
-    content/            animals · wild · items · recipes · buildings · facts · people · quests · dlc
+    content/            animals · wild · items · recipes · buildings · facts · people · quests · fullVersion
     engine/             state · reducer (veškerá logika) · save · util
-    dlc/                entitlements (louka-dlc-v1) · purchase (PurchaseProvider) · gate
+    entitlement/        entitlements (louka-entitlements-v1) · purchase (PurchaseProvider)
   audio/sound.ts        vrstvená adaptivní hudba + SFX (Web Audio, bez souborů)
   ui/
     store.tsx           React stav + autosave (localStorage)
     labels.ts           ikonky a popisky
-    components/         Shop, Craft, Journal, AnimalCard, DlcStore, Intro, …
+    components/         Shop, Craft, Journal, AnimalCard, FullVersion, Intro, …
     sprites/            AnimalSprite, PersonSprite  (ručně kreslené SVG)
   App.tsx, main.tsx, styles/global.css
 scripts/fetch-photos.mjs  stažení a zmenšení fotek zvířat (npm run photos)

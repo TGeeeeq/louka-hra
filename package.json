@@ -1,7 +1,7 @@
 {
   "name": "louka-survival",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "description": "Louka – survival hra azylu Nech mě růst z.s. Péče o zachráněná zvířata uprostřed lesů.",
   "scripts": {
@@ -9,13 +9,20 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "photos": "node scripts/fetch-photos.mjs"
+    "photos": "node scripts/fetch-photos.mjs",
+    "assets:app": "node scripts/make-app-assets.mjs && npx -y @capacitor/assets generate --android"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/preferences": "^8.0.1",
+    "cordova-plugin-purchase": "^13.18.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/cli": "^8.4.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",

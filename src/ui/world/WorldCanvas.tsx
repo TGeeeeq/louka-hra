@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { FeedGroup, FoxStage, Phase, PlayerAppearance, Season, Weather } from "../../game/types";
 import { MAP_H, MAP_W, TS } from "../../world/tiles";
+import { QUALITY, getQualityTier, onTierChange, perfFrame, perfSetDrawn } from "../../world/perf";
 import {
   ANIMAL_SPAWNS,
   GARDEN,
@@ -295,7 +296,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       const wrap = wrapRef.current!;
       cssW = wrap.clientWidth;
       cssH = wrap.clientHeight;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, QUALITY[getQualityTier()].dprCap);
       canvas.width = Math.floor(cssW * dpr);
       canvas.height = Math.floor(cssH * dpr);
       canvas.style.width = cssW + "px";
@@ -306,6 +307,8 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(wrapRef.current!);
+    // po přepnutí kvality v dev panelu hned přepočítat DPR
+    const unsubTier = onTierChange(() => resize());
 
     // sleduj výšku horní HUD lišty (na mobilu na výšku se zalamuje a je vyšší)
     const hudTop = document.querySelector(".hud-top") as HTMLElement | null;
@@ -457,7 +460,13 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       ctx.globalAlpha = 1;
     };
 
+    // Znovupoužívaný seznam objektů k vykreslení (seřazený dle baseY) — alokován
+    // jednou pro celý běh efektu, aby nevznikalo GC tlaku každý snímek.
+    type Item = { y: number; draw: () => void };
+    const items: Item[] = [];
+
     const loop = (now: number) => {
+      perfFrame(now);
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const P = propsRef.current;
@@ -857,20 +866,43 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       drawGround(ctx, camX, camY, viewW, viewH, P.season);
       drawPaddocks(ctx, camX, camY, P.settledGroups);
 
-      // seznam objektů seřazený dle baseY
-      type Item = { y: number; draw: () => void };
-      const items: Item[] = [];
+      // seznam objektů seřazený dle baseY — pole je znovupoužité (viz deklarace
+      // před `loop`), pouze se vyprázdní, aby nevznikala alokace každý snímek.
+      // Off-screen culling: konzervativní okraje kolem viewportu (ve world
+      // souřadnicích), aby se nic viditelně neobjevovalo/nemizelo u okrajů
+      // obrazovky — stíny, glow efekty a vysoké sprity (budovy/stromy) sahají
+      // dost mimo svůj „bod" (baseY), proto je okraj nahoru výrazně větší.
+      const CULL_H = 3 * TS;
+      const CULL_DOWN = 3 * TS;
+      const CULL_UP = 6 * TS;
+      const viewLeft = camX - CULL_H;
+      const viewRight = camX + viewW + CULL_H;
+      const viewTop = camY - CULL_UP;
+      const viewBottom = camY + viewH + CULL_DOWN;
+      // bod (např. zvíře/NPC) je maličký ve srovnání s okraji výše, takže stačí
+      // porovnat samotnou pozici s takto rozšířeným obdélníkem viewportu
+      const pointInView = (x: number, y: number) =>
+        x >= viewLeft && x <= viewRight && y >= viewTop && y <= viewBottom;
+
+      items.length = 0;
 
       for (const it of INTERACTABLES) {
         if (P.hiddenIds.includes(it.id)) continue; // příběhem zatím skryté
         const bs = buildStateOf(it);
         if (!bs.isBuilt && !bs.isTarget) continue; // skrytý plán se nekreslí (zelená louka)
+        // budova/plán zabírá obdélník (tx,ty)-(tx+fw,ty+fh) v tile souřadnicích —
+        // testujeme celý obdélník proti rozšířenému viewportu, ne jen baseY bod
+        const bx0 = it.tx * TS;
+        const by0 = it.ty * TS;
+        const bx1 = (it.tx + it.fw) * TS;
         const baseY = (it.ty + it.fh) * TS;
+        if (bx1 < viewLeft || bx0 > viewRight || baseY < viewTop || by0 > viewBottom) continue;
         const near = nearest?.kind === "building" && nearest.it.id === it.id;
         if (bs.isBuilt) items.push({ y: baseY, draw: () => drawBuilding(ctx, it, camX, camY, near, now) });
         else items.push({ y: baseY, draw: () => drawBlueprint(ctx, it, camX, camY, near, now) });
       }
       for (const m of mobs.current) {
+        if (!pointInView(m.x, m.y)) continue;
         const near = nearest?.kind === "animal" && nearest.animalId === m.id;
         items.push({
           y: m.y,
@@ -879,13 +911,16 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       }
       for (const wm of wilds.current) {
         if (wm.mode === "gone") continue;
+        if (!pointInView(wm.x, wm.y)) continue;
         const near = nearest?.kind === "wild" && nearest.id === wm.id;
         items.push({ y: wm.y, draw: () => drawWild(ctx, wm, camX, camY, near, now) });
       }
       for (const a of npcs.current) {
+        if (!pointInView(a.x, a.y)) continue;
         const near = nearest?.kind === "npc" && nearest.npcId === a.id;
         items.push({ y: a.y, draw: () => drawNpc(ctx, a, camX, camY, near, now) });
       }
+      // hráč se nikdy neculluje — je vždy uprostřed viditelné oblasti (kamera ho sleduje)
       items.push({
         y: player.current.y,
         draw: () => drawPlayer(ctx, player.current, camX, camY, propsRef.current.appearance),
@@ -893,6 +928,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
 
       items.sort((a, b) => a.y - b.y);
       for (const it of items) it.draw();
+      perfSetDrawn(items.length);
 
       // edit mód „zabydlování": zvýrazni uchopitelné stavby + kresli ducha náhledu
       if (P.editMode) {
@@ -939,6 +975,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       cancelAnimationFrame(raf);
       ro.disconnect();
       hudRo?.disconnect();
+      unsubTier();
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       canvas.removeEventListener("pointerdown", onCanvasPointer);
@@ -978,14 +1015,18 @@ function getShadowBlob(): HTMLCanvasElement {
   return cv;
 }
 
-// Směrový měkký stín pod spritem: blob posunutý dolů-vpravo (světlo z L-H rohu),
-// plochá ellipse (ry ≈ rx*0.32). `lift` 0..1 = odlepení od země (vyšší bob →
-// menší a světlejší stín).
-function softShadow(ctx: CanvasRenderingContext2D, sx: number, sy: number, rx: number, lift: number) {
+// Směrový měkký stín pod spritem: blob posunutý dolů-vpravo (světlo z L-H rohu,
+// stejný směr jako u budov/stromů), plochá ellipse (ry ≈ rx*0.32). Posun je
+// ~6-8 % skutečné velikosti sprite (ne pevný počet px), takže sedí jak
+// drobným zvířatům, tak postavám. `lift` 0..1 = odlepení od země (vyšší bob →
+// menší, světlejší a víc posunutý stín — dál od těla ve směru světla, stejně
+// jako vržený stín skutečného nadzemního objektu).
+function softShadow(ctx: CanvasRenderingContext2D, sx: number, sy: number, size: number, rx: number, lift: number) {
   const k = 1 - lift * 0.28;
   const r = rx * k;
-  const cx = sx + 4;
-  const cy = sy + 2;
+  const off = size * 0.07 * (1 + lift * 0.7);
+  const cx = sx + off;
+  const cy = sy + off * 0.42;
   ctx.save();
   ctx.globalAlpha = 0.62 * (1 - lift * 0.4);
   ctx.drawImage(getShadowBlob(), cx - r, cy - r * 0.32, r * 2, r * 0.64);
@@ -1007,7 +1048,7 @@ function drawMob(
   const size = TS * 0.95 * (a ? animalScale(a) : 1);
   const bobN = Math.sin(m.bob); // -1..1
   const bob = bobN * 1.5;
-  softShadow(ctx, sx, sy, size * 0.34, Math.max(0, bobN));
+  softShadow(ctx, sx, sy, size, size * 0.34, Math.max(0, bobN));
   if (near) {
     ctx.save();
     ctx.shadowColor = "rgba(240,232,146,0.95)";
@@ -1055,7 +1096,7 @@ function drawWild(
   const scale = wm.id === "srnka" ? 1.35 : wm.id === "jezek" ? 0.45 : wm.id === "kane" ? 0.8 : 1.0;
   const size = TS * 0.95 * scale;
   const bobN = Math.sin(wm.bob);
-  softShadow(ctx, sx, sy, size * 0.34, Math.max(0, bobN));
+  softShadow(ctx, sx, sy, size, size * 0.34, Math.max(0, bobN));
   if (near) {
     ctx.save();
     ctx.shadowColor = "rgba(240,232,146,0.95)";
@@ -1111,6 +1152,17 @@ function drawKaneCircle(ctx: CanvasRenderingContext2D, camX: number, camY: numbe
   ctx.restore();
 }
 
+// 3-fázový cyklus chůze: kontakt → průchod → kontakt (zrcadlově) → průchod…
+// Stejná "rychlost kroku" jako dřív (jeden krok animační fáze pořád trvá
+// stejně dlouho) — jen teď má i mezikrok. Na tieru s walkFrames=2 (slabší
+// zařízení) se sníží na starou 2-snímkovou alternaci (jen kontaktní pózy).
+const WALK_PATTERN: readonly (0 | 1 | 2)[] = [0, 1, 2, 1];
+
+function walkFrame(animPhase: number, walkFrames: 2 | 3): 0 | 1 | 2 {
+  if (walkFrames === 2) return (Math.floor(animPhase) % 2) as 0 | 1;
+  return WALK_PATTERN[Math.floor(animPhase) % 4];
+}
+
 function drawNpc(
   ctx: CanvasRenderingContext2D,
   a: NpcAgent,
@@ -1119,7 +1171,7 @@ function drawNpc(
   near: boolean,
   time: number,
 ) {
-  const frame: 0 | 1 = a.moving ? ((Math.floor(a.anim) % 2) as 0 | 1) : 0;
+  const frame: 0 | 1 | 2 = a.moving ? walkFrame(a.anim, QUALITY[getQualityTier()].walkFrames) : 0;
   const img = personImg(a.id, a.dir, frame);
   const sx = a.x - camX;
   const sy = a.y - camY;
@@ -1127,7 +1179,7 @@ function drawNpc(
   const flip = a.dir === "side" && a.flip;
   const bobN = a.moving ? Math.abs(Math.sin(time * 0.012)) : Math.abs(Math.sin(a.workBob)); // 0..1
   const bob = a.moving ? bobN * 3 : Math.sin(a.workBob) * 1.6;
-  softShadow(ctx, sx, sy, size * 0.26, bobN);
+  softShadow(ctx, sx, sy, size, size * 0.26, bobN);
   if (near) {
     ctx.save();
     ctx.shadowColor = "rgba(240,232,146,0.95)";
@@ -1186,14 +1238,14 @@ function drawPlayer(
 ) {
   const spriteDir: Facing = p.dir === "up" ? "up" : p.dir === "left" || p.dir === "right" ? "side" : "down";
   const flip = p.dir === "left";
-  const frame: 0 | 1 = p.moving ? ((Math.floor(performance.now() / 170) % 2) as 0 | 1) : 0;
+  const frame: 0 | 1 | 2 = p.moving ? walkFrame(performance.now() / 170, QUALITY[getQualityTier()].walkFrames) : 0;
   const img = personImgFor(appearance, spriteDir, frame);
   const sx = p.x - camX;
   const sy = p.y - camY;
   const size = TS * 1.7;
   const bobN = p.moving ? Math.abs(Math.sin(performance.now() * 0.013)) : 0; // 0..1 (jen při chůzi)
   const bob = p.moving ? bobN * 3 : Math.sin(performance.now() * 0.002) * 1;
-  softShadow(ctx, sx, sy, size * 0.26, bobN);
+  softShadow(ctx, sx, sy, size, size * 0.26, bobN);
   if (ready(img)) {
     ctx.save();
     ctx.translate(sx, sy - size * 0.52 - bob);

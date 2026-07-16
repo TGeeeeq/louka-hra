@@ -8,6 +8,7 @@ import AFLogo from "./AFLogo";
 import { CharacterCreator } from "./CharacterCreator";
 import { SEASON_LABEL } from "../labels";
 import { sound } from "../../audio/sound";
+import { demoGateActive } from "../../platform";
 import type { PlayerProfile } from "../../game/types";
 
 type Stage = "af" | "choice" | "logo" | "outro" | "menu" | "creator";
@@ -87,7 +88,7 @@ const tryLockLandscape = () => {
  * Klik/klávesa přeskočí, prefers-reduced-motion jde rovnou na menu.
  * Vše CSS/SVG + jeden webp — žádné knihovny, žádné velké assety.
  */
-export function Intro({ onDlc }: { onDlc?: () => void }) {
+export function Intro({ onFullVersion }: { onFullVersion?: () => void }) {
   const { state, dispatch } = useGame();
   const hasSave = state.day > 1 || Object.keys(state.tasksDone).length > 0;
   const reduced =
@@ -277,6 +278,9 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
           <div className="menu-hero">
             <h1 className="menu-title">Louka</h1>
             <p className="menu-tag">survival azylu Nech mě růst</p>
+            {demoGateActive() && !state.fullVersion && (
+              <p className="menu-demo-note">Demo verze — plnou hru odemkneš ve hře</p>
+            )}
           </div>
 
           <nav className="menu-nav" aria-label="Hlavní menu">
@@ -298,9 +302,9 @@ export function Intro({ onDlc }: { onDlc?: () => void }) {
             <button className="menu-btn" style={{ animationDelay: "0.75s" }} onClick={() => setAbout(true)}>
               O Louce
             </button>
-            {onDlc && (
-              <button className="menu-btn" style={{ animationDelay: "0.85s" }} onClick={onDlc}>
-                Rozšíření
+            {onFullVersion && (
+              <button className="menu-btn" style={{ animationDelay: "0.85s" }} onClick={onFullVersion}>
+                Plná verze
               </button>
             )}
           </nav>

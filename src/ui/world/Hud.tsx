@@ -13,6 +13,7 @@ import { MAIN_QUESTS, QUEST_LINES } from "../../game/content/quests";
 import { CHAPTER_COUNT, currentStep, tutorialActive } from "../../game/content/tutorial";
 import { ITEM_BY_ID } from "../../game/content/items";
 import { invCount } from "../../game/engine/util";
+import { demoGateActive } from "../../platform";
 
 function MiniBar({ icon, value, max, tone }: { icon: string; value: number; max: number; tone: string }) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
@@ -30,7 +31,7 @@ export function Hud({
   editMode,
   onToggleEdit,
 }: {
-  onOpen: (panel: "denik" | "dlc") => void;
+  onOpen: (panel: "denik" | "plna") => void;
   onDevUnlock?: () => void;
   editMode: boolean;
   onToggleEdit: () => void;
@@ -60,7 +61,6 @@ export function Hud({
   const sideLine = QUEST_LINES.filter(
     (l) =>
       l.id !== "main" &&
-      (!l.dlc || state.dlcOwned.includes(l.dlc)) &&
       l.unlocked(state) &&
       (state.questProgress[l.id] ?? 0) < l.quests.length,
   )[0];
@@ -79,6 +79,7 @@ export function Hud({
       <div className="hud-top">
         <div className="hud-when">
           <span className="day-badge" onClick={onDayBadge}>Den {state.day}</span>
+          {demoGateActive() && !state.fullVersion && <span className="demo-chip">DEMO</span>}
           <span className="season-pill" data-season={state.season}>{SEASON_ICON[state.season]} {SEASON_LABEL[state.season]}</span>
           <span className="hud-weather">{PHASE_ICON[state.phase]} {PHASE_LABEL[state.phase]} · {WEATHER_ICON[state.weather]} {weatherName(state.weather)}</span>
         </div>
@@ -96,7 +97,7 @@ export function Hud({
           )}
           <button className="icon-btn" title="Batoh / najíst se" onClick={() => setBag((b) => !b)}>🎒</button>
           <button className="icon-btn" title="Deník" onClick={() => onOpen("denik")}>📖</button>
-          <button className="icon-btn" title="Rozšíření (DLC)" onClick={() => onOpen("dlc")}>🌾</button>
+          <button className="icon-btn" title="Plná verze" onClick={() => onOpen("plna")}>🌾</button>
           <button className="icon-btn" title="Zvuk" onClick={() => setMuted(sound.toggleMute())}>{muted ? "🔇" : "🔊"}</button>
           <button className="icon-btn" title="Hudba" onClick={() => setMusic(sound.toggleMusic())}>{music ? "🎵" : "🎵̶"}</button>
         </div>

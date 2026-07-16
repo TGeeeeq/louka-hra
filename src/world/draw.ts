@@ -519,6 +519,7 @@ function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: num
     ctx.fillStyle = "rgba(255,255,255,0.24)"; ctx.fillRect(x + 4, top, w - 7, 2.5); // horní hrana
     ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(x + 4, top, 2.5, hgt); // levá hrana
     ctx.fillStyle = "rgba(0,0,0,0.14)"; ctx.fillRect(x + w - 5, top, 2, hgt); // hrana k boku (AO)
+    ctx.fillStyle = "rgba(0,0,0,0.22)"; ctx.fillRect(x + 3, baseY - 3, w - 6, 3); // kontaktní AO u paty čelní stěny (sedí v zemi)
   };
   // 3D sedlová střecha: pravá plocha (tmavá) + čelní štít (světlý) — obě s gradientem
   const roof = (topY: number, col: string, dark: string, rh: number) => {
@@ -637,6 +638,7 @@ function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: num
       cg.addColorStop(0, shiftHex(BC.wood, 20)); cg.addColorStop(1, shiftHex(BC.wood, -16));
       ctx.fillStyle = cg;
       roundRect(ctx, x + 4, cTop, w - 8, baseY - cTop, 3); ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.22)"; ctx.fillRect(x + 4, baseY - 3, w - 8, 3); // kontaktní AO u paty pultu (sedí v zemi)
       ctx.strokeStyle = "rgba(0,0,0,0.12)"; ctx.lineWidth = 1; // prkenné spáry
       for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(x + 4 + i * (w - 8) / 4, cTop); ctx.lineTo(x + 4 + i * (w - 8) / 4, baseY); ctx.stroke(); }
       ctx.fillStyle = shiftHex(BC.wood, 28); // horní deska pultu do hloubky (světlá = horní plocha)

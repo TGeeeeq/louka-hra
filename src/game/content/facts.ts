@@ -61,11 +61,11 @@ export const FACTS: Fact[] = [
   { id: "f_dary", category: "azyl", title: "Z čeho azyl žije", text: "Provoz drží dary, virtuální adopce a prodej vlastních výrobků — mastí, bylin a ruční tvorby. Krmivo pro stovku zvířat není levné." },
   { id: "f_dobrovolnici", category: "azyl", title: "Dobrovolníci na Louce", text: "Na Louku jezdí pomáhat dobrovolníci — kydat, stavět, kosit i se mazlit. Odjíždějí špinaví, unavení a divně šťastní. Přidat se může každý." },
 
-  // --- Senné DLC -----------------------------------------------------------
-  { id: "f_otava", category: "obdobi", title: "Otava — druhá seč", text: "Tráva posekaná podruhé za léto se jmenuje otava. Je jemnější a zvířata ji milují — luční dezert.", dlc: "senne" },
-  { id: "f_mokre_seno", category: "obdobi", title: "Mokré seno umí hořet", text: "Vlhké seno ve stohu zapaří — bakterie ho zahřejí i přes 70 °C a stoh může sám vzplát. Proto se seno suší tak poctivě.", dlc: "senne" },
-  { id: "f_kopky", category: "obdobi", title: "Kopky nejsou dekorace", text: "Seno se na noc hrabe do kopek: menší povrch = míň rosy. Ráno se zase rozhodí. Dřina? Dřina. Ale funguje to staletí.", dlc: "senne" },
-  { id: "f_seno_sbirka", category: "azyl", title: "Sbírka na seno", text: "Skutečná Louka spotřebuje přes zimu desítky balíků sena. Azyl na ně pořádá sbírku — i malý příspěvek znamená plné jesle.", dlc: "senne" },
+  // --- Seno (seniště) --------------------------------------------------------
+  { id: "f_otava", category: "obdobi", title: "Otava — druhá seč", text: "Tráva posekaná podruhé za léto se jmenuje otava. Je jemnější a zvířata ji milují — luční dezert." },
+  { id: "f_mokre_seno", category: "obdobi", title: "Mokré seno umí hořet", text: "Vlhké seno ve stohu zapaří — bakterie ho zahřejí i přes 70 °C a stoh může sám vzplát. Proto se seno suší tak poctivě." },
+  { id: "f_kopky", category: "obdobi", title: "Kopky nejsou dekorace", text: "Seno se na noc hrabe do kopek: menší povrch = míň rosy. Ráno se zase rozhodí. Dřina? Dřina. Ale funguje to staletí." },
+  { id: "f_seno_sbirka", category: "azyl", title: "Sbírka na seno", text: "Skutečná Louka spotřebuje přes zimu desítky balíků sena. Azyl na ně pořádá sbírku — i malý příspěvek znamená plné jesle." },
 ];
 
 export const FACT_BY_ID: Record<string, Fact> = Object.fromEntries(

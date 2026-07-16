@@ -1,9 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useGame } from "../store";
 import { SEASON_ICON, SEASON_LABEL } from "../labels";
 import { sound, type TensionLevel } from "../../audio/sound";
-import { DLC_CATALOG } from "../../game/content/dlc";
-import { grantDlc, revokeDlc } from "../../game/dlc/entitlements";
+import { FULL_VERSION } from "../../game/content/fullVersion";
+import { grantFull, revokeFull } from "../../game/entitlement/entitlements";
+import {
+  enableAutoTier,
+  getPerfStats,
+  getQualityTier,
+  isAutoTier,
+  setQualityTier,
+  type PerfStats,
+  type QualityTier,
+} from "../../world/perf";
 
 /**
  * Skrytý developerský panel pro rychlé testování hry.
@@ -17,6 +26,28 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
   const forceTension = (t: TensionLevel) => {
     sound.setTension(t);
     setTension(t);
+  };
+
+  const [perf, setPerf] = useState<PerfStats>(() => getPerfStats());
+  const [tier, setTier] = useState<QualityTier>(() => getQualityTier());
+  const [auto, setAuto] = useState<boolean>(() => isAutoTier());
+  useEffect(() => {
+    const id = setInterval(() => {
+      setPerf(getPerfStats());
+      setTier(getQualityTier());
+      setAuto(isAutoTier());
+    }, 500);
+    return () => clearInterval(id);
+  }, []);
+  const pickTier = (t: QualityTier) => {
+    setQualityTier(t);
+    setTier(t);
+    setAuto(false);
+  };
+  const pickAuto = () => {
+    enableAutoTier();
+    setTier(getQualityTier());
+    setAuto(true);
   };
 
   return (
@@ -51,6 +82,26 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="dev-section">
+        <div className="dev-label">⚡ Výkon</div>
+        <small className="dev-hint">
+          {perf.fps.toFixed(0)} FPS · průměr {perf.avgMs.toFixed(1)} ms · p95{" "}
+          {perf.p95Ms.toFixed(1)} ms · vykresleno {perf.drawn} objektů
+        </small>
+        <div className="dev-btn-row">
+          <button className={auto ? "on" : ""} onClick={pickAuto}>Auto</button>
+          <button className={!auto && tier === "high" ? "on" : ""} onClick={() => pickTier("high")}>
+            Vysoká
+          </button>
+          <button className={!auto && tier === "medium" ? "on" : ""} onClick={() => pickTier("medium")}>
+            Střední
+          </button>
+          <button className={!auto && tier === "low" ? "on" : ""} onClick={() => pickTier("low")}>
+            Nízká
+          </button>
+        </div>
+      </div>
+
+      <div className="dev-section">
         <div className="dev-label">Rychlé procházení časem</div>
         <div className="dev-btn-row">
           <button onClick={() => dispatch({ type: "DEV_SKIP_PHASE" })}>▸ Další fáze</button>
@@ -78,22 +129,20 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="dev-section">
-        <div className="dev-label">🌾 DLC (testovací odemykání)</div>
-        {DLC_CATALOG.map((d) => {
-          const owned = state.dlcOwned.includes(d.id);
-          return (
-            <label className="dev-toggle" key={d.id}>
-              <input
-                type="checkbox"
-                checked={owned}
-                onChange={() =>
-                  dispatch({ type: "SET_DLC", owned: owned ? revokeDlc(d.id) : grantDlc(d.id) })
-                }
-              />
-              <span><b>{d.emoji} {d.name}</b> — {d.tagline}</span>
-            </label>
-          );
-        })}
+        <div className="dev-label">🌾 Plná verze (testovací odemykání)</div>
+        <label className="dev-toggle">
+          <input
+            type="checkbox"
+            checked={state.fullVersion}
+            onChange={() =>
+              dispatch({
+                type: "SET_FULL_VERSION",
+                full: state.fullVersion ? revokeFull() : grantFull(),
+              })
+            }
+          />
+          <span><b>{FULL_VERSION.emoji} {FULL_VERSION.name}</b> — {FULL_VERSION.tagline}</span>
+        </label>
       </div>
 
       <div className="dev-section">

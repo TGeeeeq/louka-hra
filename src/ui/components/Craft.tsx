@@ -1,14 +1,13 @@
 import { useGame } from "../store";
 import { RECIPES } from "../../game/content/recipes";
 import { ITEM_BY_ID } from "../../game/content/items";
-import { ownedOnly } from "../../game/dlc/gate";
 import { invCount } from "../../game/engine/util";
 
 export function Craft() {
   const { state, dispatch } = useGame();
   const inv = state.inventory;
   const hasSusarna = state.buildings.includes("susarna");
-  const recipes = ownedOnly(state, RECIPES);
+  const recipes = RECIPES;
 
   return (
     <div className="craft">

@@ -10,9 +10,16 @@ function shade(hex: string, amt: number): string {
   return "#" + c(r + amt) + c(g + amt) + c(b + amt);
 }
 
+/** Barva kalhot (nezávislá na paletě postavy — jednotná pro všechny). */
+const PANTS = "#5c4530";
+
 /** Roztomilá lidská postavička. `dir` = směr pohledu (z profilu se kreslí
- *  doprava, vlevo se zrcadlí na Canvasu), `frame` 0/1 = krok chůze.
- *  Objemové stínování přes gradienty — světlo z levého-horního rohu. */
+ *  doprava, vlevo se zrcadlí na Canvasu), `frame` 0|1|2 = fáze chůze
+ *  (0 a 2 = kontaktní póza s nohou/rukou vpřed/vzad, 1 = průchozí póza —
+ *  nohy u sebe, trup mírně nadzvednutý). Objemové stínování přes gradienty
+ *  (světlo z levého-horního rohu, GLOBÁLNÍ konvence pro celou hru) doplněné
+ *  jemným rim-lightem (pravá-dolní silueta) a ambient occlusion v rozích
+ *  siluety (pod bradou, v pase). */
 export function PersonSprite({
   person,
   size = 88,
@@ -24,15 +31,19 @@ export function PersonSprite({
   size?: number;
   className?: string;
   dir?: Facing;
-  frame?: 0 | 1;
+  frame?: 0 | 1 | 2;
 }) {
   const { skin, hair, shirt, variant } = person;
   // Prefix gradientů podle id osoby — víc postav v jednom DOM (intro) si
   // jinak krade barvy: url(#…) bere vždy první definici v dokumentu.
   const pfx = `pg-${person.id}-`;
   const u = (n: string) => `url(#${pfx}${n})`;
-  // krok: jedna noha/ruka dopředu, druhá dozadu
-  const swing = frame === 0 ? 1 : -1;
+  // krok: frame 0/2 = kontaktní póza (jedna noha/ruka vpřed, druhá vzad),
+  // frame 1 = průchozí póza (nohy u sebe, žádný švih)
+  const swing = frame === 0 ? 1 : frame === 2 ? -1 : 0;
+  // trup se v průchozí fázi nepatrně nadzvedne (těžiště kráčejícího těla stoupá,
+  // když se nohy míjejí) — jemný bob, ne alokace, jen posun celé skupiny
+  const bob = frame === 1 ? -1.3 : 0;
   const lL = 44 + (dir === "side" ? -swing * 3 : 0);
   const lR = 54 + (dir === "side" ? swing * 3 : 0);
   const legYL = 92 + swing * 2;
@@ -49,45 +60,58 @@ export function PersonSprite({
       aria-label={person.name}
     >
       <defs>
-        {/* hlava jako koule — světlo vlevo-nahoře (výrazný objem, ať je vidět i v malém) */}
+        {/* hlava jako koule — světlo vlevo-nahoře, výrazný 3-stop objem se
+            samostatným středním tónem (jinak by v malém rozlišení splynul
+            highlight se stínem) */}
         <radialGradient id={`${pfx}skin`} cx="34%" cy="26%" r="74%">
-          <stop offset="0" stopColor={shade(skin, 40)} />
-          <stop offset="0.5" stopColor={skin} />
-          <stop offset="1" stopColor={shade(skin, -34)} />
+          <stop offset="0" stopColor={shade(skin, 54)} />
+          <stop offset="0.42" stopColor={shade(skin, 6)} />
+          <stop offset="1" stopColor={shade(skin, -46)} />
         </radialGradient>
         {/* trup jako válec — světlo z levého-horního */}
         <linearGradient id={`${pfx}shirt`} x1="0.1" y1="0" x2="0.9" y2="1">
-          <stop offset="0" stopColor={shade(shirt, 40)} />
-          <stop offset="0.5" stopColor={shirt} />
-          <stop offset="1" stopColor={shade(shirt, -36)} />
+          <stop offset="0" stopColor={shade(shirt, 50)} />
+          <stop offset="0.45" stopColor={shade(shirt, 4)} />
+          <stop offset="1" stopColor={shade(shirt, -40)} />
         </linearGradient>
         {/* vlasy jako objem */}
         <radialGradient id={`${pfx}hair`} cx="32%" cy="22%" r="72%">
-          <stop offset="0" stopColor={shade(hair, 46)} />
-          <stop offset="1" stopColor={shade(hair, -30)} />
+          <stop offset="0" stopColor={shade(hair, 54)} />
+          <stop offset="0.5" stopColor={hair} />
+          <stop offset="1" stopColor={shade(hair, -36)} />
         </radialGradient>
         {/* nohy (kalhoty) — válcový objem */}
         <linearGradient id={`${pfx}leg`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#6e5440" />
-          <stop offset="1" stopColor="#4a3828" />
+          <stop offset="0" stopColor={shade(PANTS, 26)} />
+          <stop offset="0.5" stopColor={PANTS} />
+          <stop offset="1" stopColor={shade(PANTS, -30)} />
         </linearGradient>
       </defs>
 
       <ellipse cx={50} cy={94} rx={18} ry={3} fill="#000" opacity={0.14} />
-      {/* nohy (animované) */}
-      <rect x={lL - 3} y={legYL - 6} width={6} height={10} rx={3} fill={u("leg")} />
-      <rect x={lR - 3} y={legYR - 6} width={6} height={10} rx={3} fill={u("leg")} />
-      {/* tělo / triko */}
-      <path d="M31 90 Q31 62 50 62 Q69 62 69 90 Z" fill={u("shirt")} />
-      {/* ruce (švih s krokem) */}
-      <circle cx={29 + (dir === "side" ? swing * 2 : 0)} cy={76 + swing} r={5} fill={dir === "up" ? u("shirt") : u("skin")} />
-      <circle cx={71 - (dir === "side" ? swing * 2 : 0)} cy={76 - swing} r={5} fill={dir === "up" ? u("shirt") : u("skin")} />
-      {/* krk */}
-      <rect x={45} y={52} width={10} height={10} fill={u("skin")} />
 
-      {dir === "down" && <HeadFront variant={variant} u={u} />}
-      {dir === "up" && <HeadBack variant={variant} u={u} />}
-      {dir === "side" && <HeadSide variant={variant} u={u} />}
+      <g transform={`translate(0 ${bob})`}>
+        {/* nohy (animované) */}
+        <rect x={lL - 3} y={legYL - 6} width={6} height={10} rx={3} fill={u("leg")} />
+        <rect x={lR - 3} y={legYR - 6} width={6} height={10} rx={3} fill={u("leg")} />
+        {/* AO: měkký stín tam, kde se nohy stýkají s trupem */}
+        <ellipse cx={50} cy={89.5} rx={14} ry={2.4} fill="#000" opacity={0.13} />
+        {/* tělo / triko */}
+        <path d="M31 90 Q31 62 50 62 Q69 62 69 90 Z" fill={u("shirt")} />
+        {/* rim light — tenký světlý pruh podél pravé-dolní siluety trupu */}
+        <path d="M67 68 Q69 78 68 88 Q65 90.5 60 90.5" stroke={shade(shirt, 60)} strokeWidth={1.4} strokeLinecap="round" fill="none" opacity={0.28} />
+        {/* ruce (švih s krokem) */}
+        <circle cx={29 + (dir === "side" ? swing * 2 : 0)} cy={76 + swing} r={5} fill={dir === "up" ? u("shirt") : u("skin")} />
+        <circle cx={71 - (dir === "side" ? swing * 2 : 0)} cy={76 - swing} r={5} fill={dir === "up" ? u("shirt") : u("skin")} />
+        {/* krk */}
+        <rect x={45} y={52} width={10} height={10} fill={u("skin")} />
+        {/* AO: měkký stín pod bradou / linií vlasů na krku */}
+        <ellipse cx={50} cy={54.5} rx={7} ry={2.2} fill="#000" opacity={0.16} />
+
+        {dir === "down" && <HeadFront variant={variant} u={u} />}
+        {dir === "up" && <HeadBack variant={variant} u={u} />}
+        {dir === "side" && <HeadSide variant={variant} u={u} />}
+      </g>
     </svg>
   );
 }
@@ -109,10 +133,15 @@ function HeadFront({ variant, u }: { variant?: string; u: (n: string) => string 
           <path d="M38 28 Q40 14 50 14 Q60 14 62 28 Z" fill="#b08a52" />
         </>
       )}
-      <circle cx={43} cy={43} r={2.3} fill="#241f1c" />
-      <circle cx={57} cy={43} r={2.3} fill="#241f1c" />
-      <circle cx={42.3} cy={42.3} r={0.7} fill="#fff" />
-      <circle cx={56.3} cy={42.3} r={0.7} fill="#fff" />
+      {/* rim light — pravá-dolní silueta hlavy */}
+      <path d="M65 48 Q67 54 61 58 Q56 60.5 52 59.5" stroke="#fff" strokeWidth={1.2} strokeLinecap="round" fill="none" opacity={0.22} />
+      {/* obočí */}
+      <path d="M39.5 38.5 Q43 36.5 46.5 38" stroke="#5a4636" strokeWidth={1.3} fill="none" strokeLinecap="round" />
+      <path d="M53.5 38 Q57 36.5 60.5 38.5" stroke="#5a4636" strokeWidth={1.3} fill="none" strokeLinecap="round" />
+      <circle cx={43} cy={43} r={2.4} fill="#241f1c" />
+      <circle cx={57} cy={43} r={2.4} fill="#241f1c" />
+      <circle cx={42.2} cy={42.1} r={0.85} fill="#fff" />
+      <circle cx={56.2} cy={42.1} r={0.85} fill="#fff" />
       <circle cx={40} cy={48} r={2.6} fill="#ef9a9a" opacity={0.5} />
       <circle cx={60} cy={48} r={2.6} fill="#ef9a9a" opacity={0.5} />
       <path d="M45 50 Q50 54 55 50" stroke="#7a4a3a" strokeWidth={1.6} fill="none" strokeLinecap="round" />
@@ -126,6 +155,8 @@ function HeadBack({ variant, u }: { variant?: string; u: (n: string) => string }
     <g>
       <circle cx={50} cy={42} r={17} fill={u("hair")} />
       <path d="M34 46 Q34 60 50 60 Q66 60 66 46" fill="none" stroke={u("hair")} strokeWidth={3} />
+      {/* rim light — pravá-dolní silueta vlasů */}
+      <path d="M64 46 Q65 52 60 56 Q56 58.5 52 58" stroke="#fff" strokeWidth={1.1} strokeLinecap="round" fill="none" opacity={0.16} />
       {variant === "ponytail" && <ellipse cx={50} cy={44} rx={6} ry={13} fill={u("hair")} stroke="#0002" strokeWidth={0.5} />}
       {variant === "hat" && (
         <>
@@ -150,10 +181,14 @@ function HeadSide({ variant, u }: { variant?: string; u: (n: string) => string }
         </>
       )}
       {variant === "ponytail" && <ellipse cx={34} cy={42} rx={5} ry={11} fill={u("hair")} />}
+      {/* rim light — pravá-dolní silueta hlavy (profil) */}
+      <path d="M64 46 Q65 52 60 56.5 Q57 58.5 54 58" stroke="#fff" strokeWidth={1.1} strokeLinecap="round" fill="none" opacity={0.2} />
+      {/* obočí */}
+      <path d="M56.5 38.5 Q59.5 37 62.5 38.5" stroke="#5a4636" strokeWidth={1.3} fill="none" strokeLinecap="round" />
       {/* nos a oko na pravé (čelní) straně */}
       <path d="M65 42 q4 2 0 5" stroke={u("skin")} strokeWidth={3} fill="none" strokeLinecap="round" />
-      <circle cx={60} cy={42} r={2.3} fill="#241f1c" />
-      <circle cx={59.3} cy={41.3} r={0.7} fill="#fff" />
+      <circle cx={60} cy={42} r={2.4} fill="#241f1c" />
+      <circle cx={59.2} cy={41.2} r={0.85} fill="#fff" />
       <circle cx={56} cy={48} r={2.4} fill="#ef9a9a" opacity={0.5} />
       <path d="M58 50 Q62 52 64 49" stroke="#7a4a3a" strokeWidth={1.5} fill="none" strokeLinecap="round" />
       {variant === "beard" && <path d="M52 48 Q54 60 62 56 Q64 50 62 47 Q58 52 52 48 Z" fill={u("hair")} />}

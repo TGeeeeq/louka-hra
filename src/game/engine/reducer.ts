@@ -1,4 +1,4 @@
-import type { DlcId, FeedGroup, GameState, PlayerProfile, Season, Weather } from "../types";
+import type { FeedGroup, GameState, PlayerProfile, Season, Weather } from "../types";
 import {
   DAYS_PER_SEASON,
   DONATION_RANGE,
@@ -105,9 +105,9 @@ export type Action =
   | { type: "FOX_PET" }
   | { type: "LEAF_PILE" }
   | { type: "WILD_SEEN"; which: "kane" | "jezek" | "srnka" }
-  // DLC
-  | { type: "SET_DLC"; owned: DlcId[] }
-  | { type: "HAY_WORK" } // Senné DLC — kosení / rozhoz / obracení podle situace
+  // Plná verze (entitlement)
+  | { type: "SET_FULL_VERSION"; full: boolean }
+  | { type: "HAY_WORK" } // Práce na seništi — kosení / rozhoz / obracení podle situace
   // Developerský (testovací) mód
   | { type: "DEV_UNLOCK" }
   | { type: "DEV_TOGGLE"; key: "godMode" | "turbo" }
@@ -221,7 +221,6 @@ export function reducer(state: GameState, action: Action): GameState {
 
 function advanceQuests(s: GameState) {
   for (const line of QUEST_LINES) {
-    if (line.dlc && !s.dlcOwned.includes(line.dlc)) continue;
     if (!line.unlocked(s)) continue;
     let idx = s.questProgress[line.id] ?? 0;
     while (idx < line.quests.length) {
@@ -553,7 +552,6 @@ function core(state: GameState, action: Action): GameState {
     case "CRAFT": {
       const recipe = RECIPE_BY_ID[action.recipeId];
       if (!recipe) return state;
-      if (recipe.dlc && !state.dlcOwned.includes(recipe.dlc)) return state;
       if (recipe.requiresFire && !state.fireLit)
         return warnReturn(state, `Na "${recipe.name}" potřebuješ rozdělaný oheň.`);
       if (!hasItems(state.inventory, recipe.inputs))
@@ -613,7 +611,6 @@ function core(state: GameState, action: Action): GameState {
     case "BUY": {
       const item = ITEM_BY_ID[action.itemId];
       if (!item || item.buyPrice == null) return state;
-      if (item.dlc && !state.dlcOwned.includes(item.dlc)) return state;
       const qty = Math.max(1, action.qty);
       let unit = item.buyPrice;
       if (action.itemId === "seno" && has(state, "senik"))
@@ -647,7 +644,6 @@ function core(state: GameState, action: Action): GameState {
     case "BUILD": {
       const b = BUILDING_BY_ID[action.buildingId];
       if (!b) return state;
-      if (b.dlc && !state.dlcOwned.includes(b.dlc)) return state;
       if (has(state, action.buildingId))
         return warnReturn(state, "Tohle už máš.");
       if (state.money < b.cost)
@@ -784,8 +780,8 @@ function core(state: GameState, action: Action): GameState {
       } else {
         s.phase = "vecer";
         addLog(s, "Slunce zapadá. Čas na večerní krmení a zavření.", "info");
-        // Senné DLC: Tomáš večer hlásí předpověď, když je venku seno.
-        if (s.dlcOwned.includes("senne") && s.hay && s.hay.drying > 0 && s.weatherTomorrow === "destivo") {
+        // Tomáš večer hlásí předpověď, když je venku seno.
+        if (s.hay && s.hay.drying > 0 && s.weatherTomorrow === "destivo") {
           pushDialog(s, "Tomáš", ["Cítím to v kolenou — zítra bude pršet! Seno na seništi zmokne. Jsi s tím smířený?"]);
         }
         // První podzimní večer: v listí u zahrádky někdo funí…
@@ -807,22 +803,18 @@ function core(state: GameState, action: Action): GameState {
       return resolveSleep(state);
 
     // -----------------------------------------------------------------------
-    // DLC
+    // Plná verze (entitlement)
 
-    case "SET_DLC": {
-      const same =
-        state.dlcOwned.length === action.owned.length &&
-        state.dlcOwned.every((d) => action.owned.includes(d));
-      if (same) return state;
+    case "SET_FULL_VERSION": {
+      if (state.fullVersion === action.full) return state;
       const s = cloneState(state);
-      s.dlcOwned = [...action.owned];
+      s.fullVersion = action.full;
       return s;
     }
 
-    // Senné DLC: jedna akce na seništi — reducer sám pozná, co je na řadě
+    // Jedna akce na seništi — reducer sám pozná, co je na řadě
     // (obracení → rozhoz → kosení), ať je ovládání jedním tlačítkem.
     case "HAY_WORK": {
-      if (!state.dlcOwned.includes("senne")) return state;
       const s = cloneState(state);
       const kosa = has(s, "kosa");
 
@@ -1242,7 +1234,7 @@ function resolveSleep(state: GameState): GameState {
   // 2d) Charaktery Louky — nálada, potřeby a přátelství vybraných zvířat.
   advanceAnimalMoods(s);
 
-  // 2c) Senné DLC: co udělá noc (a dnešní počasí) se sušícím se senem.
+  // 2c) Co udělá noc (a dnešní počasí) se sušícím se senem na seništi.
   if (s.hay && s.hay.drying > 0) {
     if (s.weather === "destivo") {
       give(s, "mokre_seno", s.hay.drying);

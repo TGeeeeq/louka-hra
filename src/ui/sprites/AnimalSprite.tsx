@@ -17,6 +17,16 @@ function shade(hex: string, amt: number): string {
   return "#" + c(r + amt) + c(g + amt) + c(b + amt);
 }
 
+// Jako shade(), ale posun je "teplý" — červený kanál couvá pomaleji, modrý
+// rychleji. Studený rovnoměrný stín (shade) vypadá u srsti/kůže na zemi
+// mrtvě; tenhle je pro dosed/kontaktní stíny (bříško u země, AO pod hlavou).
+function warm(hex: string, amt: number): string {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  const c = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+  return "#" + c(r + amt * 0.8) + c(g + amt) + c(b + amt * 1.2);
+}
+
 // Gradientové <defs> z palety — kulový objem pro tělo/hlavu, válcový pro tmavé části.
 // KAŽDÁ postava má vlastní prefix ID (podle id zvířete): víc spritů v jednom
 // DOM (Deník, karta) si jinak krade gradienty — url(#…) bere první v dokumentu.
@@ -28,20 +38,26 @@ function VolumeDefs({ pal, pfx }: { pal: SpritePalette; pfx: string }) {
   return (
     <defs>
       {/* Výraznější objem — sprity jsou ve světě malé (~36 px), jemný gradient
-          se ztrácí, takže kontrast highlight/stín je schválně silný. */}
-      <radialGradient id={`${pfx}body`} cx="34%" cy="26%" r="78%">
-        <stop offset="0" stopColor={shade(body, 50)} />
+          se ztrácí, takže kontrast highlight/stín je schválně silný. Tři
+          jasně oddělené zastávky (highlight / pravá střední barva / stín)
+          — amplitudy zmírněné oproti dřívějšku, ať to na kartě (100 px+)
+          nepůsobí jako pruhované koule, ale malý sprite pořád čte objem. */}
+      <radialGradient id={`${pfx}body`} cx="34%" cy="26%" r="80%">
+        <stop offset="0" stopColor={shade(body, 52)} />
         <stop offset="0.5" stopColor={body} />
-        <stop offset="1" stopColor={shade(body, -42)} />
-      </radialGradient>
-      <radialGradient id={`${pfx}head`} cx="30%" cy="24%" r="74%">
-        <stop offset="0" stopColor={shade(body, 60)} />
-        <stop offset="0.48" stopColor={body} />
         <stop offset="1" stopColor={shade(body, -38)} />
       </radialGradient>
+      <radialGradient id={`${pfx}head`} cx="30%" cy="24%" r="76%">
+        <stop offset="0" stopColor={shade(body, 58)} />
+        <stop offset="0.46" stopColor={body} />
+        <stop offset="1" stopColor={shade(body, -34)} />
+      </radialGradient>
+      {/* Bříško: teplejší a tmavší dopad směrem ke kontaktu se zemí —
+          čte se jako měkký spodní stín, ne plochá barva. */}
       <radialGradient id={`${pfx}belly`} cx="40%" cy="28%" r="82%">
         <stop offset="0" stopColor={shade(belly, 34)} />
-        <stop offset="1" stopColor={shade(belly, -26)} />
+        <stop offset="0.55" stopColor={belly} />
+        <stop offset="1" stopColor={warm(belly, -34)} />
       </radialGradient>
       <linearGradient id={`${pfx}dark`} x1="0.2" y1="0" x2="0.8" y2="1">
         <stop offset="0" stopColor={shade(dark, 30)} />
@@ -51,6 +67,14 @@ function VolumeDefs({ pal, pfx }: { pal: SpritePalette; pfx: string }) {
         <stop offset="0" stopColor={shade(detail, 40)} />
         <stop offset="1" stopColor={shade(detail, -28)} />
       </radialGradient>
+      {/* Sdílený rim-light — tenký polopropustný světlý okraj vpravo-dole
+          (protisvětlo/odlesk siluety), aby druhy s vlastní kresbou mohly
+          přidat u(pfx+"rim") jako stroke bez definování vlastního gradientu. */}
+      <linearGradient id={`${pfx}rim`} x1="0.15" y1="0" x2="0.9" y2="1">
+        <stop offset="0" stopColor="#fff" stopOpacity="0" />
+        <stop offset="0.55" stopColor="#fff" stopOpacity="0.28" />
+        <stop offset="1" stopColor="#fff" stopOpacity="0.5" />
+      </linearGradient>
     </defs>
   );
 }
@@ -189,9 +213,16 @@ function Pig({ pal, variant, u }: P) {
         <path d="M26 46 L30 40 L34 45 L39 39 L43 44 L48 38 L52 43 L57 38 L61 43"
           stroke={pal.bodyDark} strokeWidth={3} fill="none" strokeLinecap="round" />
       )}
+      {/* světlý hřbetní hřeben — hlavní světlo dopadá na temeno hřbetu */}
+      <path d="M28 46 Q42 36 55 39" stroke={shade(pal.body, 46)} strokeWidth={2.4}
+        fill="none" strokeLinecap="round" opacity={0.35} />
+      {/* rim-light na pravé-dolní siluetě těla */}
+      <path d="M74 50 Q80 66 68 80 Q60 84 52 83" stroke={u("rim")} strokeWidth={2.2} fill="none" />
       {/* uši */}
       <path d="M64 44 L72 30 L78 46 Z" fill={pal.bodyDark} />
       <path d="M40 44 L34 32 L48 40 Z" fill={pal.bodyDark} opacity={0.85} />
+      {/* AO: stín pod čelistí/hlavou v místě, kde nasedá na tělo */}
+      <ellipse cx={60} cy={46} rx={11} ry={7} fill="#000" opacity={0.16} />
       {/* hlava + rypák */}
       <circle cx={66} cy={56} r={18} fill={u("head")} />
       <ellipse cx={80} cy={60} rx={9} ry={8} fill={pal.detail} />
@@ -273,6 +304,13 @@ function Cow({ pal, variant, u }: P) {
       )}
       {has(variant, "hneda") && <ellipse cx={40} cy={54} rx={11} ry={9} fill={pal.bodyDark} opacity={0.5} />}
       <path d="M22 50 q-7 9 -3 18" stroke={pal.bodyDark} strokeWidth={3} fill="none" />
+      {/* světlejší hřbetní hřeben — hlavní světlo dopadá na temeno hřbetu */}
+      <path d="M26 44 Q42 34 56 38 Q66 36 76 42" stroke={shade(pal.body, 44)} strokeWidth={2.6}
+        fill="none" strokeLinecap="round" opacity={0.3} />
+      {/* rim-light na pravé-dolní siluetě těla */}
+      <path d="M70 48 Q78 64 66 78 Q56 82 46 80" stroke={u("rim")} strokeWidth={2.4} fill="none" />
+      {/* AO: stín na krku/plecích v místě, kde nasedá hlava */}
+      <ellipse cx={62} cy={44} rx={11} ry={7} fill="#000" opacity={0.15} />
       {/* hlava */}
       <ellipse cx={72} cy={50} rx={15} ry={14} fill={u("head")} />
       {/* bílá lysina přes celý obličej (Květa z fotky) */}
@@ -319,8 +357,15 @@ function Sheep({ pal, variant, u }: P) {
       <ellipse cx={48} cy={87} rx={26} ry={5} fill="#000" opacity={0.12} />
       {woolBumps(44, 58, 24, 18, u("body"))}
       <ellipse cx={44} cy={60} rx={12} ry={9} fill={u("belly")} opacity={0.5} />
+      {/* světlejší vlněný hřbet — kudrny nejblíž hlavnímu světlu */}
+      <path d="M24 48 Q34 38 44 40 Q54 38 62 46" stroke={shade(pal.body, 44)} strokeWidth={2.2}
+        fill="none" strokeLinecap="round" opacity={0.3} />
+      {/* rim-light na pravé-dolní siluetě vlněného těla */}
+      <path d="M64 54 Q70 66 62 78 Q54 82 46 80" stroke={u("rim")} strokeWidth={2.2} fill="none" />
       {/* tmavá hříva po krku a hrudi (Emil z fotky) */}
       {mane && <path d="M58 44 Q56 56 52 66 Q60 70 66 64 Q68 54 66 46 Z" fill={pal.detail} opacity={0.92} />}
+      {/* AO: stín na vlně pod hlavou, kde na tělo nasedá krk */}
+      <ellipse cx={62} cy={48} rx={9} ry={6} fill="#000" opacity={0.15} />
       {/* hlava */}
       <ellipse cx={70} cy={52} rx={12} ry={13} fill={u("detail")} />
       <ellipse cx={70} cy={46} rx={11} ry={8} fill={old ? pal.bodyDark : u("detail")} />
@@ -386,6 +431,11 @@ function Dog({ pal, variant, u }: P) {
       {has(variant, "blacktan") && <ellipse cx={50} cy={68} rx={15} ry={9} fill={pal.belly} />}
       {/* bílá náprsenka (Kesy) */}
       {bear && <ellipse cx={56} cy={66} rx={11} ry={9} fill={pal.belly} opacity={0.9} />}
+      {/* světlejší hřbetní hřeben — hlavní světlo dopadá na temeno hřbetu */}
+      <path d="M26 46 Q42 34 56 38 Q66 34 76 40" stroke={shade(pal.body, 46)} strokeWidth={2.4}
+        fill="none" strokeLinecap="round" opacity={0.32} />
+      {/* rim-light na pravé-dolní siluetě těla */}
+      <path d="M68 52 Q76 66 66 80 Q58 84 48 82" stroke={u("rim")} strokeWidth={2.2} fill="none" />
       {/* uši */}
       {guard ? (
         <>
@@ -405,6 +455,8 @@ function Dog({ pal, variant, u }: P) {
         </>
       )}
       {shaggy && <circle cx={72} cy={40} r={4} fill={pal.body} />}
+      {/* AO: stín pod čelistí/hlavou v místě, kde nasedá na tělo/krk */}
+      <ellipse cx={67} cy={45} rx={9} ry={6.5} fill="#000" opacity={0.16} />
       <circle cx={72} cy={52} r={headR} fill={u("head")} />
       {/* tmavá maska kolem očí a čenichu (Kesy) */}
       {bear && <ellipse cx={76} cy={56} rx={11} ry={9} fill={pal.detail} opacity={0.55} />}
@@ -657,7 +709,101 @@ const RENDERERS: Record<Species, (p: P) => JSX.Element> = {
 
 // Jednorázové postavy, jejichž skutečná předloha se liší od druhové šablony
 // natolik, že si zaslouží vlastní kresbu (doplňuje se podle fotek z webu).
-const OVERRIDES: Record<string, (p: P) => JSX.Element> = {};
+const OVERRIDES: Record<string, (p: P) => JSX.Element> = {
+  // Karel — osel: mula pruh přes hřbet a tmavší uši
+  karel: (p) => {
+    const dark = p.pal.bodyDark ?? shade(p.pal.body, -34);
+    return (
+      <g>
+        <Donkey {...p} />
+        {/* Mula cross stripes on back */}
+        <path d="M26 52 Q46 44 64 48" stroke={dark} strokeWidth={4} fill="none" opacity={0.8} />
+        <path d="M44 40 Q44 54 44 66" stroke={dark} strokeWidth={3.2} fill="none" opacity={0.75} />
+        {/* Darker ear overlay */}
+        <ellipse cx={62} cy={24} rx={4.2} ry={13} fill={dark} transform="rotate(-12 62 24)" opacity={0.4} />
+        <ellipse cx={76} cy={26} rx={4.2} ry={13} fill={dark} transform="rotate(10 76 26)" opacity={0.4} />
+      </g>
+    );
+  },
+
+  // Princezna — prase: růžovější rypák + skvrna ve tvaru srdíčka
+  princezna: (p) => {
+    const belly = p.pal.belly ?? shade(p.pal.body, 24);
+    return (
+      <g>
+        <Pig {...p} />
+        {/* Pinkish snout tint */}
+        <ellipse cx={80} cy={60} rx={8.5} ry={7} fill={shade(belly, 8)} opacity={0.5} />
+        {/* Heart-shaped spot on shoulder */}
+        <path d="M48 50 Q44 44 38 47 Q34 52 40 58 Q48 62 56 58 Q62 52 58 47 Q52 44 48 50 Z" fill={shade(belly, -28)} opacity={0.6} />
+      </g>
+    );
+  },
+
+  // Flíček — prase: velká nepravidelná skvrna přes oko
+  flicek: (p) => {
+    const dark = p.pal.bodyDark ?? shade(p.pal.body, -34);
+    return (
+      <g>
+        <Pig {...p} />
+        {/* Velká nepravidelná skvrna kolem oka — oko se překreslí navrch, ať zůstane vidět */}
+        <ellipse cx={64} cy={48} rx={8.5} ry={6.5} fill={dark} opacity={0.7} />
+        <ellipse cx={71} cy={46} rx={6} ry={5.5} fill={dark} opacity={0.65} />
+        <Eye x={68} y={50} r={3.2} />
+      </g>
+    );
+  },
+
+  // Avala — krava: bílá lysina + zvoneček na krku
+  avala: (p) => {
+    const belly = p.pal.belly ?? shade(p.pal.body, 24);
+    const detail = p.pal.detail ?? p.pal.body;
+    return (
+      <g>
+        <Cow {...p} />
+        {/* White forehead blaze */}
+        <path d="M70 42 Q73 38 78 40 Q80 46 76 52 Q71 50 70 46 Z" fill={belly} opacity={0.85} />
+        {/* Bell on neck */}
+        <ellipse cx={64} cy={54} rx={3.2} ry={3.8} fill={shade(detail, 20)} />
+        {/* Bell clapper tiny line */}
+        <path d="M64 58 Q63 60 64 61" stroke={shade(detail, -16)} strokeWidth={0.8} fill="none" />
+      </g>
+    );
+  },
+
+  // Květa — krava: květinka za uchem
+  kveta: (p) => {
+    const accent = p.pal.accent ?? p.pal.detail ?? p.pal.body;
+    return (
+      <g>
+        <Cow {...p} />
+        {/* Small flower behind ear — petals + center */}
+        <g transform="translate(55, 40)">
+          {/* Flower center */}
+          <circle cx={0} cy={0} r={1.6} fill={accent} />
+          {/* Petals */}
+          <circle cx={3.2} cy={0} r={1.4} fill={shade(accent, 24)} opacity={0.9} />
+          <circle cx={-3.2} cy={0} r={1.4} fill={shade(accent, 24)} opacity={0.9} />
+          <circle cx={0} cy={3.2} r={1.4} fill={shade(accent, 24)} opacity={0.9} />
+          <circle cx={0} cy={-3.2} r={1.4} fill={shade(accent, 24)} opacity={0.9} />
+        </g>
+      </g>
+    );
+  },
+
+  // Eduard — ovce beran: důstojné rohy s vyšší korunou
+  eduard: (p) => {
+    const accent = p.pal.accent ?? p.pal.detail ?? p.pal.body;
+    return (
+      <g>
+        <Sheep {...p} />
+        {/* Additional horn definition - subtle crown effect with highlight */}
+        <path d="M62 44 Q52 40 52 50 Q52 56 56 58" stroke={shade(accent, 28)} strokeWidth={2} fill="none" opacity={0.5} strokeLinecap="round" />
+        <path d="M78 44 Q88 40 88 50 Q88 56 84 58" stroke={shade(accent, 28)} strokeWidth={2} fill="none" opacity={0.5} strokeLinecap="round" />
+      </g>
+    );
+  },
+};
 
 export function AnimalSprite({
   animal,

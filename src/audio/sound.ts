@@ -1284,6 +1284,32 @@ class SoundEngine {
 
   // ─── OVLÁDÁNÍ ──────────────────────────────────────────────────────────────
 
+  // ─── D3: ŽIVOTNÍ CYKLUS APLIKACE (pauza/probuzení) ─────────────────────────
+
+  /**
+   * Aplikace jde na pozadí: zastaví hudební scheduler (existující stopMusic,
+   * beze změny uživatelského přepínače musicOn) a uspí AudioContext, ať
+   * appka na pozadí nežere baterii. Vrací, jestli hudba právě hrála — použij
+   * to při probuzení (resumeFromBackground) k rozhodnutí, jestli ji obnovit.
+   */
+  pauseForBackground(): boolean {
+    const wasPlaying = this.schedTimer != null;
+    if (wasPlaying) this.stopMusic();
+    if (this.ctx && this.ctx.state === "running") void this.ctx.suspend();
+    return wasPlaying;
+  }
+
+  /**
+   * Aplikace se probouzí na popředí: probudí AudioContext (existující
+   * ensure()) a — hrála-li hudba předtím a hráč ji mezitím ručně nevypnul —
+   * znovu nahodí scheduler přes startMusic() (čistý start, žádné dohánění
+   * zameškaných kroků).
+   */
+  resumeFromBackground(wasPlaying: boolean) {
+    this.ensure();
+    if (wasPlaying && this.musicOn) this.startMusic();
+  }
+
   toggleMute() {
     this.muted = !this.muted;
     // Mute jde přes master, tension mix žije na musicBus/vrstvách — nehádají se.

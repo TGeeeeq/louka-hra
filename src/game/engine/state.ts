@@ -76,8 +76,8 @@ export function initialState(): GameState {
     questLine: 0,
     questProgress: { main: 0 },
     questCompleted: [],
-    dlcOwned: [],
-    saveVersion: 4,
+    fullVersion: false,
+    saveVersion: 5,
     flags: {},
     dialog: null,
 
