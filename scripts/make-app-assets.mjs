@@ -19,6 +19,7 @@ import sharp from "sharp";
 
 const ROOT = process.cwd();
 const OUT_DIR = path.resolve(ROOT, "assets");
+const PUBLIC_DIR = path.resolve(ROOT, "public");
 const LOGO = path.resolve(ROOT, "public/logo.webp");
 
 const BG = "#2d5a3d"; // loukově zelená (theme-color z index.html)
@@ -111,6 +112,16 @@ async function main() {
     .toBuffer();
   await writeFile(path.join(OUT_DIR, "icon-background.png"), flatBg);
   console.log(`✓ assets/icon-background.png  (${(flatBg.length / 1024).toFixed(0)} kB)`);
+
+  // 5) favicon.png (64 px) a apple-touch-icon.png (180 px) do public/ —
+  //    přímo z výsledné ikony (stejné pozadí i logo jako assets/icon.png).
+  const favicon = await sharp(icon).resize(64, 64).png().toBuffer();
+  await writeFile(path.join(PUBLIC_DIR, "favicon.png"), favicon);
+  console.log(`✓ public/favicon.png  (${(favicon.length / 1024).toFixed(1)} kB)`);
+
+  const appleTouchIcon = await sharp(icon).resize(180, 180).png().toBuffer();
+  await writeFile(path.join(PUBLIC_DIR, "apple-touch-icon.png"), appleTouchIcon);
+  console.log(`✓ public/apple-touch-icon.png  (${(appleTouchIcon.length / 1024).toFixed(1)} kB)`);
 
   console.log("\nHotovo. Pro rozpočítání do android/app/src/main/res/** spusť:");
   console.log("  npx @capacitor/assets generate --android");

@@ -7,8 +7,11 @@ android {
         applicationId "cz.nechmerust.louka"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
+        // versionCode se musí zvýšit při každém nahrání do Play (i pro interní
+        // testování) — Play Console nedovolí nahrát dvakrát stejné číslo.
+        // versionName je pro lidi (zobrazuje se uživatelům), verzovat podle SemVer.
         versionCode 1
-        versionName "1.0"
+        versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
