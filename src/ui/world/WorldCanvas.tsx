@@ -460,6 +460,11 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       ctx.globalAlpha = 1;
     };
 
+    // Znovupoužívaný seznam objektů k vykreslení (seřazený dle baseY) — alokován
+    // jednou pro celý běh efektu, aby nevznikalo GC tlaku každý snímek.
+    type Item = { y: number; draw: () => void };
+    const items: Item[] = [];
+
     const loop = (now: number) => {
       perfFrame(now);
       const dt = Math.min(0.05, (now - last) / 1000);
@@ -861,20 +866,43 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       drawGround(ctx, camX, camY, viewW, viewH, P.season);
       drawPaddocks(ctx, camX, camY, P.settledGroups);
 
-      // seznam objektů seřazený dle baseY
-      type Item = { y: number; draw: () => void };
-      const items: Item[] = [];
+      // seznam objektů seřazený dle baseY — pole je znovupoužité (viz deklarace
+      // před `loop`), pouze se vyprázdní, aby nevznikala alokace každý snímek.
+      // Off-screen culling: konzervativní okraje kolem viewportu (ve world
+      // souřadnicích), aby se nic viditelně neobjevovalo/nemizelo u okrajů
+      // obrazovky — stíny, glow efekty a vysoké sprity (budovy/stromy) sahají
+      // dost mimo svůj „bod" (baseY), proto je okraj nahoru výrazně větší.
+      const CULL_H = 3 * TS;
+      const CULL_DOWN = 3 * TS;
+      const CULL_UP = 6 * TS;
+      const viewLeft = camX - CULL_H;
+      const viewRight = camX + viewW + CULL_H;
+      const viewTop = camY - CULL_UP;
+      const viewBottom = camY + viewH + CULL_DOWN;
+      // bod (např. zvíře/NPC) je maličký ve srovnání s okraji výše, takže stačí
+      // porovnat samotnou pozici s takto rozšířeným obdélníkem viewportu
+      const pointInView = (x: number, y: number) =>
+        x >= viewLeft && x <= viewRight && y >= viewTop && y <= viewBottom;
+
+      items.length = 0;
 
       for (const it of INTERACTABLES) {
         if (P.hiddenIds.includes(it.id)) continue; // příběhem zatím skryté
         const bs = buildStateOf(it);
         if (!bs.isBuilt && !bs.isTarget) continue; // skrytý plán se nekreslí (zelená louka)
+        // budova/plán zabírá obdélník (tx,ty)-(tx+fw,ty+fh) v tile souřadnicích —
+        // testujeme celý obdélník proti rozšířenému viewportu, ne jen baseY bod
+        const bx0 = it.tx * TS;
+        const by0 = it.ty * TS;
+        const bx1 = (it.tx + it.fw) * TS;
         const baseY = (it.ty + it.fh) * TS;
+        if (bx1 < viewLeft || bx0 > viewRight || baseY < viewTop || by0 > viewBottom) continue;
         const near = nearest?.kind === "building" && nearest.it.id === it.id;
         if (bs.isBuilt) items.push({ y: baseY, draw: () => drawBuilding(ctx, it, camX, camY, near, now) });
         else items.push({ y: baseY, draw: () => drawBlueprint(ctx, it, camX, camY, near, now) });
       }
       for (const m of mobs.current) {
+        if (!pointInView(m.x, m.y)) continue;
         const near = nearest?.kind === "animal" && nearest.animalId === m.id;
         items.push({
           y: m.y,
@@ -883,13 +911,16 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       }
       for (const wm of wilds.current) {
         if (wm.mode === "gone") continue;
+        if (!pointInView(wm.x, wm.y)) continue;
         const near = nearest?.kind === "wild" && nearest.id === wm.id;
         items.push({ y: wm.y, draw: () => drawWild(ctx, wm, camX, camY, near, now) });
       }
       for (const a of npcs.current) {
+        if (!pointInView(a.x, a.y)) continue;
         const near = nearest?.kind === "npc" && nearest.npcId === a.id;
         items.push({ y: a.y, draw: () => drawNpc(ctx, a, camX, camY, near, now) });
       }
+      // hráč se nikdy neculluje — je vždy uprostřed viditelné oblasti (kamera ho sleduje)
       items.push({
         y: player.current.y,
         draw: () => drawPlayer(ctx, player.current, camX, camY, propsRef.current.appearance),
