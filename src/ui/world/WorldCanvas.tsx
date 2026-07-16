@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { FeedGroup, FoxStage, Phase, PlayerAppearance, Season, Weather } from "../../game/types";
 import { MAP_H, MAP_W, TS } from "../../world/tiles";
+import { QUALITY, getQualityTier, onTierChange, perfFrame, perfSetDrawn } from "../../world/perf";
 import {
   ANIMAL_SPAWNS,
   GARDEN,
@@ -295,7 +296,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       const wrap = wrapRef.current!;
       cssW = wrap.clientWidth;
       cssH = wrap.clientHeight;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, QUALITY[getQualityTier()].dprCap);
       canvas.width = Math.floor(cssW * dpr);
       canvas.height = Math.floor(cssH * dpr);
       canvas.style.width = cssW + "px";
@@ -306,6 +307,8 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(wrapRef.current!);
+    // po přepnutí kvality v dev panelu hned přepočítat DPR
+    const unsubTier = onTierChange(() => resize());
 
     // sleduj výšku horní HUD lišty (na mobilu na výšku se zalamuje a je vyšší)
     const hudTop = document.querySelector(".hud-top") as HTMLElement | null;
@@ -458,6 +461,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
     };
 
     const loop = (now: number) => {
+      perfFrame(now);
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const P = propsRef.current;
@@ -893,6 +897,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
 
       items.sort((a, b) => a.y - b.y);
       for (const it of items) it.draw();
+      perfSetDrawn(items.length);
 
       // edit mód „zabydlování": zvýrazni uchopitelné stavby + kresli ducha náhledu
       if (P.editMode) {
@@ -939,6 +944,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       cancelAnimationFrame(raf);
       ro.disconnect();
       hudRo?.disconnect();
+      unsubTier();
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       canvas.removeEventListener("pointerdown", onCanvasPointer);
