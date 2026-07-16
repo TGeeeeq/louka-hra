@@ -1015,14 +1015,18 @@ function getShadowBlob(): HTMLCanvasElement {
   return cv;
 }
 
-// Směrový měkký stín pod spritem: blob posunutý dolů-vpravo (světlo z L-H rohu),
-// plochá ellipse (ry ≈ rx*0.32). `lift` 0..1 = odlepení od země (vyšší bob →
-// menší a světlejší stín).
-function softShadow(ctx: CanvasRenderingContext2D, sx: number, sy: number, rx: number, lift: number) {
+// Směrový měkký stín pod spritem: blob posunutý dolů-vpravo (světlo z L-H rohu,
+// stejný směr jako u budov/stromů), plochá ellipse (ry ≈ rx*0.32). Posun je
+// ~6-8 % skutečné velikosti sprite (ne pevný počet px), takže sedí jak
+// drobným zvířatům, tak postavám. `lift` 0..1 = odlepení od země (vyšší bob →
+// menší, světlejší a víc posunutý stín — dál od těla ve směru světla, stejně
+// jako vržený stín skutečného nadzemního objektu).
+function softShadow(ctx: CanvasRenderingContext2D, sx: number, sy: number, size: number, rx: number, lift: number) {
   const k = 1 - lift * 0.28;
   const r = rx * k;
-  const cx = sx + 4;
-  const cy = sy + 2;
+  const off = size * 0.07 * (1 + lift * 0.7);
+  const cx = sx + off;
+  const cy = sy + off * 0.42;
   ctx.save();
   ctx.globalAlpha = 0.62 * (1 - lift * 0.4);
   ctx.drawImage(getShadowBlob(), cx - r, cy - r * 0.32, r * 2, r * 0.64);
@@ -1044,7 +1048,7 @@ function drawMob(
   const size = TS * 0.95 * (a ? animalScale(a) : 1);
   const bobN = Math.sin(m.bob); // -1..1
   const bob = bobN * 1.5;
-  softShadow(ctx, sx, sy, size * 0.34, Math.max(0, bobN));
+  softShadow(ctx, sx, sy, size, size * 0.34, Math.max(0, bobN));
   if (near) {
     ctx.save();
     ctx.shadowColor = "rgba(240,232,146,0.95)";
@@ -1092,7 +1096,7 @@ function drawWild(
   const scale = wm.id === "srnka" ? 1.35 : wm.id === "jezek" ? 0.45 : wm.id === "kane" ? 0.8 : 1.0;
   const size = TS * 0.95 * scale;
   const bobN = Math.sin(wm.bob);
-  softShadow(ctx, sx, sy, size * 0.34, Math.max(0, bobN));
+  softShadow(ctx, sx, sy, size, size * 0.34, Math.max(0, bobN));
   if (near) {
     ctx.save();
     ctx.shadowColor = "rgba(240,232,146,0.95)";
@@ -1175,7 +1179,7 @@ function drawNpc(
   const flip = a.dir === "side" && a.flip;
   const bobN = a.moving ? Math.abs(Math.sin(time * 0.012)) : Math.abs(Math.sin(a.workBob)); // 0..1
   const bob = a.moving ? bobN * 3 : Math.sin(a.workBob) * 1.6;
-  softShadow(ctx, sx, sy, size * 0.26, bobN);
+  softShadow(ctx, sx, sy, size, size * 0.26, bobN);
   if (near) {
     ctx.save();
     ctx.shadowColor = "rgba(240,232,146,0.95)";
@@ -1241,7 +1245,7 @@ function drawPlayer(
   const size = TS * 1.7;
   const bobN = p.moving ? Math.abs(Math.sin(performance.now() * 0.013)) : 0; // 0..1 (jen při chůzi)
   const bob = p.moving ? bobN * 3 : Math.sin(performance.now() * 0.002) * 1;
-  softShadow(ctx, sx, sy, size * 0.26, bobN);
+  softShadow(ctx, sx, sy, size, size * 0.26, bobN);
   if (ready(img)) {
     ctx.save();
     ctx.translate(sx, sy - size * 0.52 - bob);
