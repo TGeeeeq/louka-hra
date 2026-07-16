@@ -1,10 +1,13 @@
 // Detekce běhového prostředí (web vs. nativní shell).
 //
-// Dnes je tohle vždy web (Vercel) — funkce je záměrně stub. Až přibude
-// Android shell (Capacitor), nahradí se tělo funkce voláním
-// `Capacitor.isNativePlatform()` a zbytek hry (demo brána, HUD odznak…)
-// se automaticky „probudí" beze změny.
+// Android shell (Capacitor) už existuje — `Capacitor.isNativePlatform()`
+// vrátí true uvnitř zabalené APK (viz android/, capacitor.config.ts),
+// na webu (Vercel) vrací bezpečně false, takže zbytek hry (demo brána,
+// HUD odznak…) funguje beze změny na obou platformách.
+import { Capacitor } from "@capacitor/core";
+
 export function isNative(): boolean {
+  if (Capacitor.isNativePlatform()) return true;
   // Jen pro testování demo brány na webu přes dev konzoli:
   // localStorage.setItem("louka-force-native", "1")
   try {

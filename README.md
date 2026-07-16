@@ -81,6 +81,37 @@ vercel --prod     # produkce
 Nebo přes web Vercelu: *Add New → Project → import repo* — preset **Vite** se nastaví sám
 (build `npm run build`, output `dist`).
 
+## Android (Capacitor)
+
+Nativní shell pro Google Play je připravený přes [Capacitor](https://capacitorjs.com/):
+konfigurace je v `capacitor.config.ts` (`appId: cz.nechmerust.louka`), vygenerovaný
+projekt je ve složce `android/` (commitovaný do repa, kromě sestavovacích artefaktů —
+viz `android/.gitignore`). Orientace je natvrdo uzamčená na **landscape**
+(`android:screenOrientation="sensorLandscape"` v `android/app/src/main/AndroidManifest.xml`).
+
+**Předpoklady:** [Android Studio](https://developer.android.com/studio) (obsahuje Android SDK)
+a Java 17+ (JDK).
+
+**Build:**
+
+```bash
+npm run build          # web build → dist/
+npx cap sync android    # zkopíruje dist/ do android/app a sesynchronizuje pluginy
+```
+
+Pak buď otevři `android/` v Android Studiu (Open → vyber složku `android/`) a spusť/sestav
+odtud, nebo z příkazové řádky:
+
+```bash
+cd android
+./gradlew assembleDebug   # vyžaduje nastavené Android SDK (ANDROID_HOME) a JDK 17+
+```
+
+Výsledné APK najdeš v `android/app/build/outputs/apk/debug/`.
+
+Detekce nativní platformy je v `src/platform.ts` (`Capacitor.isNativePlatform()`) — na tom
+stojí demo brána (bezplatné demo vs. plná verze po nákupu).
+
 ## Struktura
 
 ```
