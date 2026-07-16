@@ -8,6 +8,7 @@ import AFLogo from "./AFLogo";
 import { CharacterCreator } from "./CharacterCreator";
 import { SEASON_LABEL } from "../labels";
 import { sound } from "../../audio/sound";
+import { demoGateActive } from "../../platform";
 import type { PlayerProfile } from "../../game/types";
 
 type Stage = "af" | "choice" | "logo" | "outro" | "menu" | "creator";
@@ -277,6 +278,9 @@ export function Intro({ onFullVersion }: { onFullVersion?: () => void }) {
           <div className="menu-hero">
             <h1 className="menu-title">Louka</h1>
             <p className="menu-tag">survival azylu Nech mě růst</p>
+            {demoGateActive() && !state.fullVersion && (
+              <p className="menu-demo-note">Demo verze — plnou hru odemkneš ve hře</p>
+            )}
           </div>
 
           <nav className="menu-nav" aria-label="Hlavní menu">

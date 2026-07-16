@@ -7,8 +7,12 @@ import { sound } from "../../audio/sound";
 /**
  * Obrazovka plné verze. Na webu jen náhled (bez platební brány) — nákup
  * dorazí s mobilní verzí přes Capacitor billing. Dev mód umí odemknout hned.
+ *
+ * `demo`: obrazovka se otevřela přes demo bránu (C3 — hráč došel na konec
+ * demo úseku a zkusil jít spát) — zobrazí navíc vysvětlující nadpis. Po
+ * úspěšném nákupu (SET_FULL_VERSION) brána hned zmizí a spánek jde znovu.
  */
-export function FullVersion() {
+export function FullVersion({ demo = false }: { demo?: boolean }) {
   const { state, dispatch } = useGame();
   const [note, setNote] = useState<string | null>(null);
   const provider = getPurchaseProvider(state.dev.enabled);
@@ -33,6 +37,9 @@ export function FullVersion() {
 
   return (
     <div className="fullver">
+      {demo && !owned && (
+        <h3 className="fullver-demo-title">Demo končí — Louka pokračuje v plné verzi 💚</h3>
+      )}
       <div className="fullver-banner" aria-hidden>
         <span className="fullver-sun" />
         <span className="fullver-hill fullver-hill-back" />

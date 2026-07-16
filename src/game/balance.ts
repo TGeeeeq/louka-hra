@@ -7,6 +7,10 @@ export const SEASON_ORDER: Season[] = ["jaro", "leto", "podzim", "zima"];
 export const START_MONEY = 850;
 export const BASE_MAX_ENERGY = 100;
 
+// Demo brána (jen nativní shell — viz platform.ts): free verze = tutoriál
+// + první 3 dny. Demo končí po 3. dnu — hranice laditelná zde.
+export const DEMO_DAYS = 3;
+
 // Kolik energie/sytosti/žízně ubude přechodem do další fáze dne.
 export const PHASE_HUNGER_DRAIN = 14;
 export const PHASE_THIRST_DRAIN = 16;

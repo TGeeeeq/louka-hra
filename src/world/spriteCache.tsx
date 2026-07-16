@@ -99,7 +99,7 @@ export function animalImg(id: string): CanvasImageSource | null {
   return pick(entry);
 }
 
-export function personImg(id: string, dir: Facing = "down", frame: 0 | 1 = 0): CanvasImageSource | null {
+export function personImg(id: string, dir: Facing = "down", frame: 0 | 1 | 2 = 0): CanvasImageSource | null {
   const p = PERSON_BY_ID[id];
   if (!p) return null;
   const scale = rasterScale();
@@ -117,7 +117,7 @@ export function personImg(id: string, dir: Facing = "down", frame: 0 | 1 = 0): C
 export function personImgFor(
   app: PlayerAppearance,
   dir: Facing = "down",
-  frame: 0 | 1 = 0,
+  frame: 0 | 1 | 2 = 0,
 ): CanvasImageSource {
   const scale = rasterScale();
   const key = `p:ty:${app.skin}:${app.hair}:${app.shirt}:${app.variant ?? "-"}:${dir}:${frame}${scaleSuffix(scale)}`;
@@ -174,10 +174,13 @@ export function preloadSprites(animalIds: string[], personIds: string[]) {
   const tasks: Array<() => void> = [];
   for (const id of animalIds) tasks.push(() => animalImg(id));
   const dirs: Facing[] = ["down", "up", "side"];
+  // Vždy přednačte všechny 3 fáze chůze (i na tieru s 2 snímky) — je to jen
+  // hrstka bitmap navíc a odpadá tak podmiňování podle aktuálního tieru zde.
   for (const pid of personIds)
     for (const d of dirs) {
       tasks.push(() => personImg(pid, d, 0));
       tasks.push(() => personImg(pid, d, 1));
+      tasks.push(() => personImg(pid, d, 2));
     }
   runQueue(tasks);
 }

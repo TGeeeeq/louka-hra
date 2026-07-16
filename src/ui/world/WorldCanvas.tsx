@@ -1148,6 +1148,17 @@ function drawKaneCircle(ctx: CanvasRenderingContext2D, camX: number, camY: numbe
   ctx.restore();
 }
 
+// 3-fázový cyklus chůze: kontakt → průchod → kontakt (zrcadlově) → průchod…
+// Stejná "rychlost kroku" jako dřív (jeden krok animační fáze pořád trvá
+// stejně dlouho) — jen teď má i mezikrok. Na tieru s walkFrames=2 (slabší
+// zařízení) se sníží na starou 2-snímkovou alternaci (jen kontaktní pózy).
+const WALK_PATTERN: readonly (0 | 1 | 2)[] = [0, 1, 2, 1];
+
+function walkFrame(animPhase: number, walkFrames: 2 | 3): 0 | 1 | 2 {
+  if (walkFrames === 2) return (Math.floor(animPhase) % 2) as 0 | 1;
+  return WALK_PATTERN[Math.floor(animPhase) % 4];
+}
+
 function drawNpc(
   ctx: CanvasRenderingContext2D,
   a: NpcAgent,
@@ -1156,7 +1167,7 @@ function drawNpc(
   near: boolean,
   time: number,
 ) {
-  const frame: 0 | 1 = a.moving ? ((Math.floor(a.anim) % 2) as 0 | 1) : 0;
+  const frame: 0 | 1 | 2 = a.moving ? walkFrame(a.anim, QUALITY[getQualityTier()].walkFrames) : 0;
   const img = personImg(a.id, a.dir, frame);
   const sx = a.x - camX;
   const sy = a.y - camY;
@@ -1223,7 +1234,7 @@ function drawPlayer(
 ) {
   const spriteDir: Facing = p.dir === "up" ? "up" : p.dir === "left" || p.dir === "right" ? "side" : "down";
   const flip = p.dir === "left";
-  const frame: 0 | 1 = p.moving ? ((Math.floor(performance.now() / 170) % 2) as 0 | 1) : 0;
+  const frame: 0 | 1 | 2 = p.moving ? walkFrame(performance.now() / 170, QUALITY[getQualityTier()].walkFrames) : 0;
   const img = personImgFor(appearance, spriteDir, frame);
   const sx = p.x - camX;
   const sy = p.y - camY;

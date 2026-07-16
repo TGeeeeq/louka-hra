@@ -114,6 +114,12 @@ button:disabled { cursor: not-allowed; }
 .season-pill[data-season="podzim"] { background: #e8c79a; color: #6e3f1c; }
 .season-pill[data-season="zima"] { background: #dbe7ee; color: #2f4a5c; }
 .when-sub { font-size: 0.85rem; opacity: 0.86; }
+/* Demo brána (C3) — odznak se probudí, až poběží nativní shell (viz platform.ts). */
+.demo-chip {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em;
+  padding: 2px 9px; border-radius: 999px;
+  background: var(--terracotta); color: #fff;
+}
 
 .topbar-bars { display: flex; gap: 14px; flex: 1; min-width: 220px; flex-wrap: wrap; }
 .bar { display: flex; align-items: center; gap: 6px; min-width: 110px; flex: 1; }
@@ -409,6 +415,7 @@ button:disabled { cursor: not-allowed; }
   font-size: 0.78rem; color: var(--muted); cursor: pointer; margin-top: 4px;
 }
 .fullver-restore:hover { border-color: var(--moss-soft); color: var(--moss-deep); }
+.fullver-demo-title { color: var(--terracotta); font-family: var(--font-serif); margin-bottom: 6px; }
 
 /* ===== Log =============================================================== */
 .log {
@@ -725,6 +732,10 @@ button:disabled { cursor: not-allowed; }
   color: rgba(31, 61, 42, 0.72); white-space: nowrap;
 }
 .menu-tag::before, .menu-tag::after { content: ""; width: 34px; height: 1px; background: rgba(31, 61, 42, 0.35); flex-shrink: 0; }
+.menu-demo-note {
+  margin-top: 6px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em;
+  color: var(--terracotta); text-align: center;
+}
 
 .menu-nav { display: flex; flex-direction: column; gap: 11px; width: min(320px, 84vw); }
 .menu-btn {

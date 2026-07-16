@@ -122,8 +122,11 @@ function Overlay({ title, onClose, children }: { title: string; onClose: () => v
 }
 
 export default function App() {
-  const { state, dispatch } = useGame();
+  const { state, dispatch, demoGateHit } = useGame();
   const [overlay, setOverlay] = useState<Overlay>(null);
+  // Byla obrazovka „Plná verze" otevřená demo bránou (a ne ručně z HUD/menu)?
+  // Ovlivňuje jen nadpis ve FullVersion — samotná brána žije ve store.tsx.
+  const [demoGateOpen, setDemoGateOpen] = useState(false);
   const [sel, setSel] = useState<AnimalDef | null>(null);
   const [npc, setNpc] = useState<string | null>(null);
   const [minigame, setMinigame] = useState<Minigame | null>(null);
@@ -164,6 +167,16 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.started]);
+
+  // Demo brána (C3): store.tsx zablokoval SLEEP a signalizuje to přes
+  // demoGateHit (transientní čítač mimo GameState). Otevři Plnou verzi.
+  useEffect(() => {
+    if (demoGateHit > 0) {
+      setDemoGateOpen(true);
+      setOverlay("plna");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demoGateHit]);
 
   if (!state.started)
     return (
@@ -387,7 +400,7 @@ export default function App() {
       {/* měkké rozednění po startu hry (místo tvrdého střihu z intra) */}
       <div className="game-fade-in" aria-hidden />
       <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo} foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} appearance={state.profile.appearance} placements={state.placements} editMode={editMode} onMoveStructure={(id, tx, ty) => { sound.build(); dispatch({ type: "MOVE_STRUCTURE", id, tx, ty }); }} onEditReject={() => dispatch({ type: "PUSH_DIALOG", speaker: "Zabydlování", lines: ["Sem se to nevejde — je tam les, voda nebo jiná stavba."] })} onInteract={onInteract} onEvent={onWorldEvent} />
-      <Hud onOpen={(p) => setOverlay(p)} onDevUnlock={unlockDev} editMode={editMode} onToggleEdit={() => setEditMode((v) => !v)} />
+      <Hud onOpen={(p) => { if (p === "plna") setDemoGateOpen(false); setOverlay(p); }} onDevUnlock={unlockDev} editMode={editMode} onToggleEdit={() => setEditMode((v) => !v)} />
       <Controls />
       {editMode && (
         <button className="edit-done-fab" onClick={() => setEditMode(false)}>✓ Hotovo</button>
@@ -402,8 +415,8 @@ export default function App() {
         </Overlay>
       )}
       {overlay === "plna" && (
-        <Overlay title="🌾 Plná verze" onClose={() => setOverlay(null)}>
-          <FullVersion />
+        <Overlay title="🌾 Plná verze" onClose={() => { setOverlay(null); setDemoGateOpen(false); }}>
+          <FullVersion demo={demoGateOpen} />
         </Overlay>
       )}
 

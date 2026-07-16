@@ -13,6 +13,7 @@ import { MAIN_QUESTS, QUEST_LINES } from "../../game/content/quests";
 import { CHAPTER_COUNT, currentStep, tutorialActive } from "../../game/content/tutorial";
 import { ITEM_BY_ID } from "../../game/content/items";
 import { invCount } from "../../game/engine/util";
+import { demoGateActive } from "../../platform";
 
 function MiniBar({ icon, value, max, tone }: { icon: string; value: number; max: number; tone: string }) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
@@ -78,6 +79,7 @@ export function Hud({
       <div className="hud-top">
         <div className="hud-when">
           <span className="day-badge" onClick={onDayBadge}>Den {state.day}</span>
+          {demoGateActive() && !state.fullVersion && <span className="demo-chip">DEMO</span>}
           <span className="season-pill" data-season={state.season}>{SEASON_ICON[state.season]} {SEASON_LABEL[state.season]}</span>
           <span className="hud-weather">{PHASE_ICON[state.phase]} {PHASE_LABEL[state.phase]} · {WEATHER_ICON[state.weather]} {weatherName(state.weather)}</span>
         </div>
