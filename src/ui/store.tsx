@@ -46,8 +46,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [state.started]);
 
   useEffect(() => {
-    if (state.started) saveGame(state);
+    if (state.started) scheduleSave(state);
   }, [state]);
+
+  // Úklid při odpojení providéru (HMR, testy): rozdělaný debounce nesmí
+  // vystřelit po unmountu, ale poslední stav se přesto zapíše hned teď —
+  // ať se neztratí posledních pár sekund postupu.
+  useEffect(() => {
+    return () => {
+      flushSave();
+    };
+  }, []);
 
   // Demo brána (C3): na nativním shellu (viz platform.ts) bez plné verze
   // hráč nesmí usnout za koncem demo úseku (den DEMO_DAYS → DEMO_DAYS+1).
@@ -74,6 +83,35 @@ export function GameProvider({ children }: { children: ReactNode }) {
   return (
     <GameCtx.Provider value={{ state, dispatch, demoGateHit }}>{children}</GameCtx.Provider>
   );
+}
+
+// ─── D6: debounce autosave + okamžitý flush ────────────────────────────────
+// Save do localStorage/Preferences se dřív volal na KAŽDOU změnu stavu — při
+// rychlém sledu akcí (dialogy, odměny, sezónní přechody) to zbytečně mlelo
+// disk/WebView storage. Teď se ukládá nanejvýš jednou za SAVE_DEBOUNCE_MS
+// (trailing edge — vždycky s POSLEDNÍM známým stavem), a k dispozici je
+// i okamžitý flushSave() pro místa, kde na 2s čekat nejde (ukončení appky
+// tlačítkem Zpět, přechod na pozadí — viz native.ts / App.tsx).
+const SAVE_DEBOUNCE_MS = 2000;
+let pendingState: GameState | null = null;
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleSave(s: GameState) {
+  pendingState = s;
+  if (debounceTimer != null) return; // časovač už běží, tenhle stav se stihne vzít při odpálení
+  debounceTimer = setTimeout(() => {
+    debounceTimer = null;
+    if (pendingState) saveGame(pendingState);
+  }, SAVE_DEBOUNCE_MS);
+}
+
+/** Okamžitě zapíše poslední známý stav bez čekání na debounce. */
+export function flushSave() {
+  if (debounceTimer != null) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+  if (pendingState) saveGame(pendingState);
 }
 
 export function useGame(): Store {

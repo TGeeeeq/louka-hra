@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AnimalDef, FeedGroup } from "./game/types";
-import { useGame } from "./ui/store";
+import { useGame, flushSave } from "./ui/store";
+import { registerBackButton, registerLifecycle, exitApp } from "./native";
 import { WorldCanvas, type InteractTarget, type WorldEvent } from "./ui/world/WorldCanvas";
 import { Hud } from "./ui/world/Hud";
 import { DialogBox } from "./ui/world/DialogBox";
@@ -136,6 +137,9 @@ export default function App() {
   const [build, setBuild] = useState<Interactable | null>(null);
   const [devOpen, setDevOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  // D2: potvrzovací dialog „Opustit Louku?" (hardwarové tlačítko Zpět, když
+  // nic jiného není otevřené a hra běží).
+  const [exitConfirm, setExitConfirm] = useState(false);
   useGameSounds();
 
   // Skryté odemčení dev módu: napsat na klávesnici „louka".
@@ -177,6 +181,58 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoGateHit]);
+
+  // D2: priorita zavírání pro hardwarové tlačítko Zpět — od nejvyšší vrstvy
+  // (potvrzovací dialog) přes herní dialog a vývojářský panel, jednotlivé
+  // mini-panely/minihry, až po velké overlaye (obchod/výroba/deník/plná
+  // verze) a editační režim rozestavení. Zavře se vždy jen TA NEJVRCHNĚJŠÍ.
+  const closeTopmostRef = useRef<() => boolean>(() => false);
+  closeTopmostRef.current = () => {
+    if (exitConfirm) { setExitConfirm(false); return true; }
+    if (state.dialog) { dispatch({ type: "DISMISS_DIALOG" }); return true; }
+    if (devOpen) { setDevOpen(false); return true; }
+    if (sel) { setSel(null); return true; }
+    if (npc) { setNpc(null); return true; }
+    if (minigame) { setMinigame(null); return true; }
+    if (puzzle) { setPuzzle(false); return true; }
+    if (clean) { setClean(null); return true; }
+    if (play) { setPlay(null); return true; }
+    if (build) { setBuild(null); return true; }
+    if (overlay) { setOverlay(null); setDemoGateOpen(false); return true; }
+    if (editMode) { setEditMode(false); return true; }
+    return false;
+  };
+
+  // Skutečná reakce na Zpět: zavře nejvyšší vrstvu, jinak na úvodní
+  // obrazovce rovnou ukončí appku, jinak (za běhu hry) se zeptá potvrzením.
+  const backHandlerRef = useRef<() => void>(() => {});
+  backHandlerRef.current = () => {
+    if (closeTopmostRef.current()) return;
+    if (!state.started) { void exitApp(); return; }
+    setExitConfirm(true);
+  };
+  useEffect(() => {
+    // Zaregistrováno jen jednou (na webu no-op) — indirekce přes ref
+    // zajistí, že posluchač vždy vidí AKTUÁLNÍ stav bez nutnosti se
+    // znovu a znovu přeregistrovávat.
+    return registerBackButton(() => backHandlerRef.current());
+  }, []);
+
+  // D3: pauza/probuzení appky (nativně appStateChange, na webu
+  // visibilitychange) — na pozadí ihned uloží postup a ztlumí zvuk (šetří
+  // baterii), po návratu zvuk i případně běžící hudbu obnoví.
+  const wasMusicPlayingRef = useRef(false);
+  useEffect(() => {
+    return registerLifecycle({
+      onBackground: () => {
+        wasMusicPlayingRef.current = sound.pauseForBackground();
+        flushSave();
+      },
+      onForeground: () => {
+        sound.resumeFromBackground(wasMusicPlayingRef.current);
+      },
+    });
+  }, []);
 
   if (!state.started)
     return (
@@ -466,6 +522,27 @@ export default function App() {
         </button>
       )}
       {devOpen && <DevPanel onClose={() => setDevOpen(false)} />}
+
+      {exitConfirm && (
+        <div className="modal-backdrop" onClick={() => setExitConfirm(false)}>
+          <div className="modal confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Opustit Louku?</h2>
+            <p>Postup je uložený.</p>
+            <div className="intro-actions">
+              <button
+                className="big-btn"
+                onClick={() => {
+                  flushSave();
+                  void exitApp();
+                }}
+              >
+                Ano, opustit
+              </button>
+              <button className="ghost-btn" onClick={() => setExitConfirm(false)}>Zpět</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
