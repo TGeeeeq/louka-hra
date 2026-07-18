@@ -5,6 +5,8 @@
 // produkty jsou vejce, vlna, byliny, masti. To je etické jádro celé hry.
 // ---------------------------------------------------------------------------
 
+import type { InteractKind } from "../world/entities";
+
 export type Season = "jaro" | "leto" | "podzim" | "zima";
 
 /**
@@ -216,6 +218,29 @@ export interface LogEntry {
   tone: "info" | "good" | "warn" | "bad";
 }
 
+export type BuildCategory = "zaklad" | "upgrade" | "ohrada" | "dekorace";
+
+/** Katalogová definice — CO lze postavit. */
+export interface Buildable {
+  id: string;
+  kind: InteractKind;
+  category: BuildCategory;
+  label: string;
+  fw: number;
+  fh: number;
+  cost: { money?: number; wood?: number };
+  unique: boolean;
+  solid: boolean;
+}
+
+/** Instance — CO hráč postavil. */
+export interface Placed {
+  uid: string;
+  defId: string;
+  tx: number;
+  ty: number;
+}
+
 export interface GameState {
   started: boolean;
   day: number; // číslo levelu (1+)
@@ -257,6 +282,8 @@ export interface GameState {
   animals: Record<string, AnimalState>;
   /** Volné rozmístění staveb — override autorských souřadnic (dlaždice). Chybějící = autorská pozice. */
   placements: Record<string, { tx: number; ty: number }>;
+  /** Volně postavené stavby — zdroj pravdy o tom, co stojí na louce. */
+  structures: Placed[];
   /** Podoba a jméno pečovatele (tvůrce postavy). */
   profile: PlayerProfile;
   /** Probíhající sušení sena na seništi (null = nic se nesuší). */
