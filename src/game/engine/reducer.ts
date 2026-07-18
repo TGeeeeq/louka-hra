@@ -50,7 +50,7 @@ import { CHARACTER_SET, initialAnimalStates } from "../content/characters";
 import { layoutComfortFor } from "./comfort";
 import { TUTORIAL_STEPS, tutorialActive } from "../content/tutorial";
 import { BUILDABLE_BY_ID } from "../content/buildables";
-import { canPlace } from "../build/placement";
+import { canPlace, hasBuilt } from "../build/placement";
 import { isSolidTile } from "../../world/tiles";
 import {
   addLog,
@@ -559,6 +559,12 @@ function core(state: GameState, action: Action): GameState {
     case "CRAFT": {
       const recipe = RECIPE_BY_ID[action.recipeId];
       if (!recipe) return state;
+      if (recipe.requiresFire) {
+        if (!hasBuilt(state.structures, "ohniste"))
+          return warnReturn(state, "Na vaření potřebuješ ohniště.");
+      } else if (!hasBuilt(state.structures, "dilna")) {
+        return warnReturn(state, "Nejdřív potřebuješ postavit dílnu na výrobu.");
+      }
       if (recipe.requiresFire && !state.fireLit)
         return warnReturn(state, `Na "${recipe.name}" potřebuješ rozdělaný oheň.`);
       if (!hasItems(state.inventory, recipe.inputs))
@@ -618,6 +624,8 @@ function core(state: GameState, action: Action): GameState {
     case "BUY": {
       const item = ITEM_BY_ID[action.itemId];
       if (!item || item.buyPrice == null) return state;
+      if (!hasBuilt(state.structures, "stanek"))
+        return warnReturn(state, "Bez stánku není kde nakupovat ani prodávat.");
       const qty = Math.max(1, action.qty);
       let unit = item.buyPrice;
       if (action.itemId === "seno" && has(state, "senik"))
@@ -635,6 +643,8 @@ function core(state: GameState, action: Action): GameState {
     case "SELL": {
       const item = ITEM_BY_ID[action.itemId];
       if (!item || item.sellPrice == null) return state;
+      if (!hasBuilt(state.structures, "stanek"))
+        return warnReturn(state, "Bez stánku není kde nakupovat ani prodávat.");
       const qty = Math.min(Math.max(1, action.qty), invCount(state.inventory, action.itemId));
       if (qty < 1) return warnReturn(state, `Nemáš ${item.name} k prodeji.`);
       const s = cloneState(state);
@@ -651,6 +661,8 @@ function core(state: GameState, action: Action): GameState {
     case "BUILD": {
       const b = BUILDING_BY_ID[action.buildingId];
       if (!b) return state;
+      if (!hasBuilt(state.structures, "stanek"))
+        return warnReturn(state, "Bez stánku není kde nakupovat ani prodávat.");
       if (has(state, action.buildingId))
         return warnReturn(state, "Tohle už máš.");
       if (state.money < b.cost)
