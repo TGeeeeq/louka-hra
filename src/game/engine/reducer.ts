@@ -48,8 +48,10 @@ import { initialState } from "./state";
 import { QUEST_LINES } from "../content/quests";
 import { CHARACTER_SET, initialAnimalStates } from "../content/characters";
 import { layoutComfortFor } from "./comfort";
-import { INTERACTABLE_BY_ID, isMovable } from "../../world/entities";
 import { TUTORIAL_STEPS, tutorialActive } from "../content/tutorial";
+import { BUILDABLE_BY_ID } from "../content/buildables";
+import { canPlace } from "../build/placement";
+import { isSolidTile } from "../../world/tiles";
 import {
   addLog,
   chance,
@@ -88,7 +90,9 @@ export type Action =
   | { type: "SELL"; itemId: string; qty: number }
   | { type: "BUILD"; buildingId: string }
   | { type: "BUILD_STRUCTURE"; id: string }
-  | { type: "MOVE_STRUCTURE"; id: string; tx: number; ty: number }
+  | { type: "PLACE_STRUCTURE"; defId: string; tx: number; ty: number }
+  | { type: "DEMOLISH_STRUCTURE"; uid: string }
+  | { type: "MOVE_STRUCTURE"; uid: string; tx: number; ty: number }
   | { type: "EVENING_FEED" }
   | { type: "CLOSE_ANIMALS" }
   | { type: "ADVANCE_PHASE" }
@@ -118,6 +122,9 @@ export type Action =
   | { type: "DEV_FOX" };
 
 const has = (s: GameState, id: string) => s.buildings.includes(id);
+
+let uidSeq = 0;
+const nextUid = () => `s${Date.now().toString(36)}-${uidSeq++}`;
 
 const FEED_LABEL: Record<FeedGroup, string> = {
   drubez: "drůbež",
@@ -685,13 +692,53 @@ function core(state: GameState, action: Action): GameState {
       return s;
     }
 
-    case "MOVE_STRUCTURE": {
-      // Přemístit smíš jen po tutoriálu, jen povolené a už postavené stavby.
-      if (tutorialActive(state)) return state;
-      if (!isMovable(action.id) || !state.built.includes(action.id)) return state;
+    case "PLACE_STRUCTURE": {
+      if (tutorialActive(state)) return state; // guided placement is spec 2
+      const def = BUILDABLE_BY_ID[action.defId];
+      if (!def) return state;
+      if (def.unique && state.structures.some((s) => s.defId === def.id))
+        return warnReturn(state, "Tohle už na louce máš.");
+      const footprintOf = (id: string) => {
+        const d = BUILDABLE_BY_ID[id];
+        return { fw: d?.fw ?? 1, fh: d?.fh ?? 1 };
+      };
+      const check = canPlace({ structures: state.structures, isSolid: isSolidTile, def, tx: action.tx, ty: action.ty, footprintOf });
+      if (!check.ok) return warnReturn(state, check.reason ?? "Sem stavět nejde.");
+      if (def.cost.money && state.money < def.cost.money) return warnReturn(state, "Na tohle ti chybí peníze.");
+      if (def.cost.wood && (state.inventory.drevo ?? 0) < def.cost.wood) return warnReturn(state, "Na tohle ti chybí dřevo.");
       const s = cloneState(state);
-      s.placements = { ...s.placements, [action.id]: { tx: action.tx, ty: action.ty } };
-      addLog(s, `Přemístil jsi: ${INTERACTABLE_BY_ID[action.id]?.label ?? action.id}. 🪧`, "good");
+      if (def.cost.money) s.money -= def.cost.money;
+      if (def.cost.wood) take(s, [{ item: "drevo", qty: def.cost.wood }]);
+      s.structures = [...s.structures, { uid: nextUid(), defId: def.id, tx: action.tx, ty: action.ty }];
+      if (def.category === "upgrade" && !s.buildings.includes(def.id)) s.buildings.push(def.id);
+      addLog(s, `Postavil jsi: ${def.label}. 🔨`, "good");
+      return s;
+    }
+
+    case "DEMOLISH_STRUCTURE": {
+      if (tutorialActive(state)) return state;
+      const inst = state.structures.find((x) => x.uid === action.uid);
+      if (!inst) return state;
+      const def = BUILDABLE_BY_ID[inst.defId];
+      const s = cloneState(state);
+      s.structures = s.structures.filter((x) => x.uid !== action.uid);
+      if (def?.cost.wood) s.inventory.drevo = (s.inventory.drevo ?? 0) + Math.floor(def.cost.wood * 0.5);
+      if (def?.category === "upgrade") s.buildings = s.buildings.filter((b) => b !== def.id);
+      addLog(s, `Zbořil jsi: ${def?.label ?? inst.defId}. 🧹`, "info");
+      return s;
+    }
+
+    case "MOVE_STRUCTURE": {
+      if (tutorialActive(state)) return state;
+      const inst = state.structures.find((x) => x.uid === action.uid);
+      if (!inst) return state;
+      const def = BUILDABLE_BY_ID[inst.defId];
+      const footprintOf = (id: string) => { const d = BUILDABLE_BY_ID[id]; return { fw: d?.fw ?? 1, fh: d?.fh ?? 1 }; };
+      const others = state.structures.filter((x) => x.uid !== action.uid);
+      const check = canPlace({ structures: others, isSolid: isSolidTile, def: { fw: def?.fw ?? 1, fh: def?.fh ?? 1 }, tx: action.tx, ty: action.ty, footprintOf });
+      if (!check.ok) return warnReturn(state, check.reason ?? "Sem to nejde.");
+      const s = cloneState(state);
+      s.structures = s.structures.map((x) => (x.uid === action.uid ? { ...x, tx: action.tx, ty: action.ty } : x));
       return s;
     }
 
