@@ -42,3 +42,18 @@ export function structureAt(structures: Placed[], tx: number, ty: number, footpr
 export function hasBuilt(structures: Placed[], defId: string): boolean {
   return structures.some((s) => s.defId === defId);
 }
+
+// Auto-rozvržení pro novou hru — 8 základních staveb uvnitř nové 96×72
+// domovské louky (viz src/world/tiles.ts), aby zůstala hra hratelná bez
+// nutnosti hráče cokoli stavět (spec 1).
+export const AUTO_LAYOUT: Placed[] = [
+  { uid: "auto-chalupa", defId: "chalupa", tx: 44, ty: 30 },
+  { uid: "auto-stanek", defId: "stanek", tx: 50, ty: 32 },
+  { uid: "auto-dilna", defId: "dilna", tx: 40, ty: 34 },
+  { uid: "auto-ohniste", defId: "ohniste", tx: 46, ty: 36 },
+  { uid: "auto-kurnik", defId: "kurnik", tx: 34, ty: 30 },
+  { uid: "auto-chlivek", defId: "chlivek", tx: 34, ty: 36 },
+  { uid: "auto-pastvina", defId: "pastvina", tx: 52, ty: 38 },
+  { uid: "auto-buda", defId: "buda", tx: 48, ty: 28 },
+  { uid: "auto-studna", defId: "studna", tx: 42, ty: 28 },
+];

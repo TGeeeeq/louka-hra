@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canPlace, structureAt, hasBuilt } from "./placement";
+import { canPlace, structureAt, hasBuilt, AUTO_LAYOUT } from "./placement";
 import type { Placed } from "../types";
 
 const wall = new Set(["10,10"]); // one solid tile for tests
@@ -38,5 +38,17 @@ describe("hasBuilt", () => {
   it("is true when an instance of the def exists", () => {
     expect(hasBuilt([at("dilna", 3, 3)], "dilna")).toBe(true);
     expect(hasBuilt([at("dilna", 3, 3)], "stanek")).toBe(false);
+  });
+});
+
+describe("AUTO_LAYOUT", () => {
+  it("includes the core buildings once each", () => {
+    const ids = AUTO_LAYOUT.map((p) => p.defId);
+    for (const core of ["chalupa", "stanek", "dilna", "ohniste", "kurnik", "chlivek", "pastvina", "buda"])
+      expect(ids.filter((i) => i === core).length).toBe(1);
+  });
+  it("gives every placement a unique uid", () => {
+    const uids = AUTO_LAYOUT.map((p) => p.uid);
+    expect(new Set(uids).size).toBe(uids.length);
   });
 });
