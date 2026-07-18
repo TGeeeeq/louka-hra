@@ -9,6 +9,7 @@ import { Controls } from "./ui/world/Controls";
 import { DevPanel } from "./ui/world/DevPanel";
 import { Shop } from "./ui/components/Shop";
 import { Craft } from "./ui/components/Craft";
+import { BuildPanel } from "./ui/world/BuildPanel";
 import { Journal } from "./ui/components/Journal";
 import { FullVersion } from "./ui/components/FullVersion";
 import { AnimalCard } from "./ui/components/AnimalCard";
@@ -137,6 +138,9 @@ export default function App() {
   const [build, setBuild] = useState<Interactable | null>(null);
   const [devOpen, setDevOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  // Stavební mód: katalogové defId právě vybrané v BuildPanelu (null = zatím
+  // nic, klepnutím na louku se pak vybírá existující stavba k přesunu/zboření).
+  const [buildSelection, setBuildSelection] = useState<string | null>(null);
   // D2: potvrzovací dialog „Opustit Louku?" (hardwarové tlačítko Zpět, když
   // nic jiného není otevřené a hra běží).
   const [exitConfirm, setExitConfirm] = useState(false);
@@ -455,9 +459,22 @@ export default function App() {
     <div className="game-world">
       {/* měkké rozednění po startu hry (místo tvrdého střihu z intra) */}
       <div className="game-fade-in" aria-hidden />
-      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo} foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} appearance={state.profile.appearance} placements={state.placements} editMode={editMode} onMoveStructure={(id, tx, ty) => { sound.build(); dispatch({ type: "MOVE_STRUCTURE", uid: id, tx, ty }); }} onEditReject={() => dispatch({ type: "PUSH_DIALOG", speaker: "Zabydlování", lines: ["Sem se to nevejde — je tam les, voda nebo jiná stavba."] })} onInteract={onInteract} onEvent={onWorldEvent} />
-      <Hud onOpen={(p) => { if (p === "plna") setDemoGateOpen(false); setOverlay(p); }} onDevUnlock={unlockDev} editMode={editMode} onToggleEdit={() => setEditMode((v) => !v)} />
+      <WorldCanvas
+        season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built}
+        tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo}
+        foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} appearance={state.profile.appearance}
+        structures={state.structures} editMode={editMode} buildSelection={buildSelection}
+        onPlaceStructure={(defId, tx, ty) => { sound.build(); dispatch({ type: "PLACE_STRUCTURE", defId, tx, ty }); }}
+        onDemolishStructure={(uid) => { sound.build(); dispatch({ type: "DEMOLISH_STRUCTURE", uid }); }}
+        onMoveStructure={(uid, tx, ty) => { sound.build(); dispatch({ type: "MOVE_STRUCTURE", uid, tx, ty }); }}
+        onEditReject={() => dispatch({ type: "PUSH_DIALOG", speaker: "Stavění", lines: ["Sem se to nevejde — je tam les, voda nebo jiná stavba."] })}
+        onInteract={onInteract} onEvent={onWorldEvent}
+      />
+      <Hud onOpen={(p) => { if (p === "plna") setDemoGateOpen(false); setOverlay(p); }} onDevUnlock={unlockDev} editMode={editMode} onToggleEdit={() => setEditMode((v) => { const next = !v; if (!next) setBuildSelection(null); return next; })} />
       <Controls />
+      {editMode && (
+        <BuildPanel money={state.money} wood={state.inventory.drevo ?? 0} structures={state.structures} selection={buildSelection} onSelect={setBuildSelection} />
+      )}
       {editMode && (
         <button className="edit-done-fab" onClick={() => setEditMode(false)}>✓ Hotovo</button>
       )}

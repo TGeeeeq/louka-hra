@@ -93,7 +93,7 @@ export function Hud({
         <div className="hud-right">
           <span className="money">💰 {state.money}</span>
           {!tut && (
-            <button className={`icon-btn${editMode ? " on" : ""}`} title="Zabydlit (přemístit stavby)" onClick={onToggleEdit}>🪑</button>
+            <button className={`icon-btn${editMode ? " on" : ""}`} title="Stavět (postavit / přesunout / zbořit)" onClick={onToggleEdit}>🔨</button>
           )}
           <button className="icon-btn" title="Batoh / najíst se" onClick={() => setBag((b) => !b)}>🎒</button>
           <button className="icon-btn" title="Deník" onClick={() => onOpen("denik")}>📖</button>
