@@ -1,7 +1,9 @@
 import { MAP, TILE, TS, isSolidTile, setTile } from "./tiles";
 import { ANIMALS_BY_GROUP } from "../game/content/animals";
 import { NPCS } from "../game/content/people";
-import type { FeedGroup } from "../game/types";
+import type { FeedGroup, Placed } from "../game/types";
+import { BUILDABLE_BY_ID } from "../game/content/buildables";
+import { rebuildInteractables } from "../game/build/placement";
 
 const SPAWN_TX = 22;
 const SPAWN_TY = 20;
@@ -48,16 +50,11 @@ export interface Interactable {
 
 const B = (id: string, kind: InteractKind, label: string, tx: number, ty: number, fw = 2, fh = 2, solid = true): Interactable => ({ id, kind, label, tx, ty, fw, fh, solid });
 
-export const INTERACTABLES: Interactable[] = [
-  B("chalupa", "chalupa", "Chalupa", 31, 7, 3, 2),
-  B("stanek", "stanek", "Stánek (obchod)", 35, 10),
-  B("dilna", "dilna", "Dílna (výroba)", 27, 11),
-  B("ohniste", "ohniste", "Ohniště & kuchyně", 24, 14, 2, 2),
-  B("kurnik", "kurnik", "Kurník", 13, 9, 3, 2),
-  B("chlivek", "chlivek", "Prasečí chlívek", 11, 15, 3, 2),
-  B("pastvina", "pastvina", "Pastvina & seník", 19, 24, 3, 2),
-  B("buda", "buda", "Psí bouda & pelíšky", 27, 20, 2, 2),
-  B("studna", "studna", "Studna", 16, 19, 1, 1),
+// Autorské (nikdy „stavitelné") objekty louky — sběr bylin, příběhové
+// hlavolamy, cedule apod. Základní stavby (chalupa, stánek, …) i upgrady
+// (studna, zahrada) teď žijí ve `structures` a katalogu BUILDABLES — viz
+// `setStructures` níže.
+export const WORLD_FEATURES: Interactable[] = [
   B("cedule", "cedule", "Cedule", 24, 20, 1, 1, false),
   // sběr bylin — nejvíc na „bylinkové louce" na východě
   B("byliny1", "byliny", "Bylinky", 6, 8, 1, 1, false),
@@ -70,8 +67,6 @@ export const INTERACTABLES: Interactable[] = [
   // hlavolam: lesní brána na cestě k hájku + truhla se zásobami v hájku
   B("brana", "brana", "Lesní brána", 44, 41, 1, 1, false),
   B("truhla", "truhla", "Truhla se zásobami", 60, 41, 1, 1, false),
-  // permakulturní zahrádka (pozor na uprchlíky z výběhů!)
-  B("zahrada", "zahrada", "Zahrádka", 33, 12, 2, 2, false),
   // liščí příběh: stopy a krmné místo na západním kraji lesa; ježčí listí
   // u zahrádky. Viditelnost řídí App podle postupu příběhu (hiddenIds).
   B("fox_stopy", "stopy", "Liščí stopy", 7, 22, 1, 1, false),
@@ -81,34 +76,37 @@ export const INTERACTABLES: Interactable[] = [
   B("seniste", "seniste", "Seniště — louka na seno", 30, 38, 2, 1, false),
 ];
 
-export const INTERACTABLE_BY_ID: Record<string, Interactable> = Object.fromEntries(
-  INTERACTABLES.map((i) => [i.id, i]),
-);
-
-// --- Volné rozmístění staveb (edit mód) ---------------------------------
-// Autorské (výchozí) pozice — placement override sedí NAD nimi.
-const AUTHORED_POS: Record<string, { tx: number; ty: number }> = Object.fromEntries(
-  INTERACTABLES.map((it) => [it.id, { tx: it.tx, ty: it.ty }]),
-);
-
-// Které stavby smí hráč po tutoriálu volně přemístit (rozšiřitelné).
-export const MOVABLE_IDS = new Set<string>(["buda"]);
-export const isMovable = (id: string) => MOVABLE_IDS.has(id);
+/**
+ * Runtime seznam interaktivních objektů — kreslení, hledání cíle, minimapa,
+ * kolize, pathfinding. Prázdný, dokud jej `setStructures` poprvé nenaplní
+ * (voláno z WorldCanvas při mountu i při každé změně `structures`).
+ */
+export let INTERACTABLES: Interactable[] = [];
+export let INTERACTABLE_BY_ID: Record<string, Interactable> = {};
 
 /**
- * Aplikuje override pozice na INTERACTABLES in-place (píše it.tx/it.ty).
- * Všechna čtecí místa (kreslení, hledání cíle, minimapa, setConstructed,
- * isBlocked) čtou it.tx/it.ty, takže po tomto volání vidí nové pozice bez
- * jakékoli další změny. MUSÍ běžet PŘED setConstructed.
+ * Přepočítá INTERACTABLES ze zdroje pravdy (`structures` + katalog
+ * BUILDABLES) a spojí je s autorskými WORLD_FEATURES. U unikátních staveb
+ * (chalupa, stánek, studna, …) se `id` schválně nastaví na `defId` (ne na
+ * instance `uid`) — tutoriál (`TUTORIAL_BUILDING_IDS`, `state.built`) i
+ * `onInteract` v App.tsx je čtou podle těchto stabilních id. Neunikátní
+ * stavby (plot, cedule_deko, …) dostanou `id = uid`, protože jich může být
+ * na louce víc najednou.
  */
-export function applyPlacements(placements: Record<string, { tx: number; ty: number }>) {
-  for (const it of INTERACTABLES) {
-    const p = placements[it.id];
-    const a = AUTHORED_POS[it.id];
-    it.tx = p ? p.tx : a.tx;
-    it.ty = p ? p.ty : a.ty;
-  }
+export function setStructures(structures: Placed[]) {
+  const built = rebuildInteractables(structures, BUILDABLE_BY_ID);
+  INTERACTABLES.length = 0;
+  INTERACTABLES.push(...built, ...WORLD_FEATURES);
+  INTERACTABLE_BY_ID = Object.fromEntries(INTERACTABLES.map((i) => [i.id, i]));
+  for (const it of INTERACTABLES) carveClearing(it.tx, it.ty, it.fw, it.fh, 1);
 }
+
+// Od volného stavění (v0.12) smí hráč přesunout/zbořit VŠECHNY postavené
+// stavby (viz reducer PLACE/MOVE/DEMOLISH_STRUCTURE) — MOVABLE_IDS už
+// neomezuje stavební mód. Zůstává jen jako MVP hranice výpočtu pohodlí
+// (layoutComfortFor v comfort.ts zatím počítá jen pro budu/mazlíčky).
+export const MOVABLE_IDS = new Set<string>(["buda"]);
+export const isMovable = (id: string) => MOVABLE_IDS.has(id);
 
 // Vyčistí mýtinku (les/keř/voda → tráva) pod stavbami i kolem nich a kolem
 // startu, aby byly stavby vždy v mýtině a dostupné — bez ohledu na náhodný les.
@@ -121,7 +119,7 @@ function carveClearing(tx: number, ty: number, w: number, h: number, margin: num
         MAP.tiles[y * MAP.w + x] = TILE.GRASS;
     }
 }
-for (const it of INTERACTABLES) carveClearing(it.tx, it.ty, it.fw, it.fh, 1);
+for (const it of WORLD_FEATURES) carveClearing(it.tx, it.ty, it.fw, it.fh, 1);
 carveClearing(SPAWN_TX, SPAWN_TY, 1, 1, 3);
 for (const id of NPCS) carveClearing(NPC_POS[id][0], NPC_POS[id][1], 1, 1, 1);
 
@@ -224,15 +222,12 @@ export function zoneCenterFor(group: FeedGroup): { x: number; y: number } {
   return { x: (cx + 0.5) * TS, y: (cy + 0.5) * TS };
 }
 
-/** Efektivní střed stavby (px) s ohledem na placement override. */
-export function structureCenter(
-  id: string,
-  placements: Record<string, { tx: number; ty: number }>,
-): { x: number; y: number } | null {
+/** Efektivní (aktuální) střed stavby (px) — čte živou pozici z INTERACTABLES,
+ *  takže sedí i po přesunutí stavby ve stavebním módu. */
+export function structureCenter(id: string): { x: number; y: number } | null {
   const it = INTERACTABLE_BY_ID[id];
   if (!it) return null;
-  const p = placements[id] ?? AUTHORED_POS[id];
-  return { x: (p.tx + it.fw / 2) * TS, y: (p.ty + it.fh / 2) * TS };
+  return { x: (it.tx + it.fw / 2) * TS, y: (it.ty + it.fh / 2) * TS };
 }
 
 /**

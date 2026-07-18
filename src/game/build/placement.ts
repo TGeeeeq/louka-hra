@@ -1,4 +1,4 @@
-import type { Placed } from "../types";
+import type { Buildable, Placed } from "../types";
 
 type Footprint = { fw: number; fh: number };
 type FootprintOf = (defId: string) => Footprint;
@@ -41,6 +41,43 @@ export function structureAt(structures: Placed[], tx: number, ty: number, footpr
 
 export function hasBuilt(structures: Placed[], defId: string): boolean {
   return structures.some((s) => s.defId === defId);
+}
+
+// --- Instance → runtime Interactable (regeneruje src/world/entities.ts) ----
+// Strukturně identické s `Interactable` (world/entities.ts) — vyhýbáme se
+// importu odsud tam, abychom nevytvořili hodnotový cyklus (entities.ts už
+// importuje z tohoto souboru `rebuildInteractables`).
+export interface RuntimeInteractable {
+  id: string;
+  kind: Buildable["kind"];
+  label: string;
+  tx: number;
+  ty: number;
+  fw: number;
+  fh: number;
+  solid: boolean;
+}
+
+/**
+ * U unikátních staveb (chalupa, stánek, studna, …) je `id` schválně `defId`
+ * (stabilní přes celou hru), u neunikátních (plot, cedule_deko, …) je to
+ * instance `uid`, protože jich může na louce stát víc najednou.
+ */
+export function buildableToInteractable(def: Buildable, inst: Placed): RuntimeInteractable {
+  return {
+    id: def.unique ? def.id : inst.uid,
+    kind: def.kind,
+    label: def.label,
+    tx: inst.tx,
+    ty: inst.ty,
+    fw: def.fw,
+    fh: def.fh,
+    solid: def.solid,
+  };
+}
+
+export function rebuildInteractables(structures: Placed[], byId: Record<string, Buildable>): RuntimeInteractable[] {
+  return structures.filter((s) => byId[s.defId]).map((s) => buildableToInteractable(byId[s.defId], s));
 }
 
 // Auto-rozvržení pro novou hru — 8 základních staveb uvnitř nové 96×72

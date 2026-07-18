@@ -15,12 +15,12 @@ const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
  * pelíšek). Když pelíšek/bouda existuje a je přemístitelná: kvalita 0..1
  * (0.7·blízkost zóny + 0.3·otevřenost okolí) → 40..100.
  */
-export function layoutComfortFor(animalId: string, s: GameState): number {
+export function layoutComfortFor(animalId: string, _s: GameState): number {
   const a = ANIMAL_BY_ID[animalId];
   if (!a) return 70;
   const penId = PEN_BY_GROUP[a.feedGroup];
   if (!penId || !isMovable(penId)) return 70; // MVP: jen buda (mazlíci)
-  const pos = structureCenter(penId, s.placements);
+  const pos = structureCenter(penId);
   if (!pos) return 70;
 
   const zone = zoneCenterFor(a.feedGroup);
