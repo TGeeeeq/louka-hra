@@ -27,7 +27,7 @@ import { ForestGate } from "./ui/minigames/ForestGate";
 import { CleanUp } from "./ui/minigames/CleanUp";
 import { PlayBar } from "./ui/minigames/PlayBar";
 import { openGate } from "./world/entities";
-import { settledGroups, tutorialActive, tutorialTargets } from "./game/content/tutorial";
+import { currentStep, settledGroups, tutorialActive, tutorialTargets } from "./game/content/tutorial";
 import { invalidateGround } from "./world/draw";
 import { sound } from "./audio/sound";
 import type { NpcId } from "./audio/sound";
@@ -438,6 +438,12 @@ export default function App() {
     srnkaOut: state.phase === "rano" && !tutorialActive(state) && state.day >= 4,
   };
 
+  // Tutoriál: hráč je pořád ve stavebním módu, panel ukazuje jen aktuální
+  // krok a rovnou ho vybere — nic jiného teď stejně postavit nejde.
+  const tut = tutorialActive(state);
+  const restrictTo = tut ? currentStep(state)?.buildingId ?? null : null;
+  const buildModeOn = tut || editMode;
+
   return (
     <div className="game-world">
       {/* měkké rozednění po startu hry (místo tvrdého střihu z intra) */}
@@ -446,7 +452,7 @@ export default function App() {
         season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built}
         tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo}
         foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} appearance={state.profile.appearance}
-        structures={state.structures} editMode={editMode} buildSelection={buildSelection}
+        structures={state.structures} editMode={buildModeOn} buildSelection={buildSelection}
         onPlaceStructure={(defId, tx, ty) => { sound.build(); dispatch({ type: "PLACE_STRUCTURE", defId, tx, ty }); }}
         onDemolishStructure={(uid) => { sound.build(); dispatch({ type: "DEMOLISH_STRUCTURE", uid }); }}
         onMoveStructure={(uid, tx, ty) => { sound.build(); dispatch({ type: "MOVE_STRUCTURE", uid, tx, ty }); }}
@@ -455,10 +461,10 @@ export default function App() {
       />
       <Hud onOpen={(p) => { if (p === "plna") setDemoGateOpen(false); setOverlay(p); }} onDevUnlock={unlockDev} editMode={editMode} onToggleEdit={() => setEditMode((v) => { const next = !v; if (!next) setBuildSelection(null); return next; })} />
       <Controls />
-      {editMode && (
-        <BuildPanel money={state.money} wood={state.inventory.drevo ?? 0} structures={state.structures} selection={buildSelection} onSelect={setBuildSelection} />
+      {buildModeOn && (
+        <BuildPanel money={state.money} wood={state.inventory.drevo ?? 0} structures={state.structures} selection={buildSelection} onSelect={setBuildSelection} restrictTo={restrictTo} />
       )}
-      {editMode && (
+      {editMode && !tut && (
         <button className="edit-done-fab" onClick={() => setEditMode(false)}>✓ Hotovo</button>
       )}
       <DialogBox />

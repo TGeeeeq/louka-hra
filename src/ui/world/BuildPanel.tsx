@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { BuildCategory, Placed } from "../../game/types";
-import { BUILDABLES } from "../../game/content/buildables";
+import { BUILDABLE_BY_ID, BUILDABLES } from "../../game/content/buildables";
 import { hasBuilt } from "../../game/build/placement";
 
 const TAB_LABEL: Record<BuildCategory, string> = {
@@ -33,26 +33,44 @@ interface Props {
   structures: Placed[];
   selection: string | null;
   onSelect: (defId: string | null) => void;
+  /** Tutoriál: omezí panel jen na tuto stavbu (aktuální krok) a rovnou ji
+   *  vybere. `null`/`undefined` = normální volný výběr. */
+  restrictTo?: string | null;
 }
 
-export function BuildPanel({ money, wood, structures, selection, onSelect }: Props) {
-  const [tab, setTab] = useState<BuildCategory>("zaklad");
-  const items = BUILDABLES.filter((b) => b.category === tab);
+export function BuildPanel({ money, wood, structures, selection, onSelect, restrictTo }: Props) {
+  const restrictCategory = restrictTo ? BUILDABLE_BY_ID[restrictTo]?.category : undefined;
+  const [tab, setTab] = useState<BuildCategory>(restrictCategory ?? "zaklad");
+
+  // Tutoriál: skoč na kartu s cílovou stavbou a rovnou ji vyber (hráč nemá
+  // co jinýho v panelu dělat, tak ať se rovnou zaměří).
+  useEffect(() => {
+    if (!restrictTo) return;
+    if (restrictCategory) setTab(restrictCategory);
+    onSelect(restrictTo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restrictTo]);
+
+  const items = (restrictTo ? BUILDABLES.filter((b) => b.id === restrictTo) : BUILDABLES.filter((b) => b.category === tab));
 
   return (
     <div className="build-panel">
-      <div className="subtabs">
-        {TABS.map((t) => (
-          <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
-            {TAB_LABEL[t]}
-          </button>
-        ))}
-      </div>
+      {!restrictTo && (
+        <div className="subtabs">
+          {TABS.map((t) => (
+            <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
+              {TAB_LABEL[t]}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="shop-list build-panel-list">
         {items.map((b) => {
           const already = b.unique && hasBuilt(structures, b.id);
+          // Tutoriál: aktuální krok se staví zdarma (viz reducer PLACE_STRUCTURE).
           const affordable =
-            (!b.cost.money || money >= b.cost.money) && (!b.cost.wood || wood >= b.cost.wood);
+            b.id === restrictTo ||
+            ((!b.cost.money || money >= b.cost.money) && (!b.cost.wood || wood >= b.cost.wood));
           const disabled = already || !affordable;
           const on = selection === b.id;
           return (
@@ -70,7 +88,7 @@ export function BuildPanel({ money, wood, structures, selection, onSelect }: Pro
                     disabled={!affordable}
                     onClick={() => onSelect(on ? null : b.id)}
                   >
-                    {on ? "✓ vybráno" : [
+                    {on ? "✓ vybráno" : b.id === restrictTo ? "zdarma" : [
                       b.cost.money ? `💰${b.cost.money}` : null,
                       b.cost.wood ? `🪵${b.cost.wood}` : null,
                     ].filter(Boolean).join(" ") || "zdarma"}
