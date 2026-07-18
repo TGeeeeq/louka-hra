@@ -5,14 +5,14 @@ import type { FeedGroup, Placed } from "../game/types";
 import { BUILDABLE_BY_ID } from "../game/content/buildables";
 import { rebuildInteractables } from "../game/build/placement";
 
-const SPAWN_TX = 22;
-const SPAWN_TY = 20;
+const SPAWN_TX = 45;
+const SPAWN_TY = 33;
 
-// Kde u startu stojí uvítací NPC (dlaždice).
+// Kde u startu stojí uvítací NPC (dlaždice) — kolem farmy uprostřed louky.
 const NPC_POS: Record<string, [number, number]> = {
-  tomas: [19, 18],
-  maruska: [26, 18],
-  tony: [22, 15],
+  tomas: [40, 31],
+  maruska: [49, 34],
+  tony: [43, 37],
 };
 
 export type InteractKind =
@@ -144,9 +144,9 @@ export interface Paddock {
   h: number;
 }
 export const PADDOCKS: Paddock[] = [
-  { group: "drubez", label: "Drůbeží výběh", tx: 10, ty: 10, w: 8, h: 6 },
-  { group: "prasata", label: "Prasečí výběh", tx: 8, ty: 15, w: 8, h: 6 },
-  { group: "stado", label: "Pastvina", tx: 14, ty: 20, w: 13, h: 8 },
+  { group: "drubez", label: "Drůbeží výběh", tx: 30, ty: 27, w: 9, h: 8 },
+  { group: "prasata", label: "Prasečí výběh", tx: 33, ty: 37, w: 9, h: 8 },
+  { group: "stado", label: "Pastvina", tx: 48, ty: 34, w: 15, h: 10 },
 ];
 
 // Zahrádka — sem míří uprchlá zvířata.
@@ -217,7 +217,7 @@ export function canPlaceFootprint(
 export function zoneCenterFor(group: FeedGroup): { x: number; y: number } {
   const pad = PADDOCKS.find((p) => p.group === group);
   if (pad) return { x: (pad.tx + pad.w / 2) * TS, y: (pad.ty + pad.h / 2) * TS };
-  const Z: Partial<Record<FeedGroup, [number, number]>> = { mazlici: [30, 14] }; // zrcadlí ZONES
+  const Z: Partial<Record<FeedGroup, [number, number]>> = { mazlici: [48, 31] }; // zrcadlí ZONES
   const [cx, cy] = Z[group] ?? [SPAWN_TX, SPAWN_TY];
   return { x: (cx + 0.5) * TS, y: (cy + 0.5) * TS };
 }
@@ -296,10 +296,10 @@ interface ZoneDef {
 }
 
 const ZONES: ZoneDef[] = [
-  { group: "drubez", cx: 14, cy: 12, spread: 3 },
-  { group: "prasata", cx: 12, cy: 18, spread: 2 },
-  { group: "stado", cx: 20, cy: 24, spread: 4 },
-  { group: "mazlici", cx: 30, cy: 14, spread: 4 },
+  { group: "drubez", cx: 34, cy: 31, spread: 3 },
+  { group: "prasata", cx: 37, cy: 41, spread: 2 },
+  { group: "stado", cx: 56, cy: 39, spread: 4 },
+  { group: "mazlici", cx: 48, cy: 31, spread: 3 },
 ];
 
 function buildSpawns(): AnimalSpawn[] {
