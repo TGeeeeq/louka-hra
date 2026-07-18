@@ -7,6 +7,7 @@ import {
 } from "../balance";
 import { initialAnimalStates } from "../content/characters";
 import { AUTO_LAYOUT } from "../build/placement";
+import { TUTORIAL_BUILDING_IDS, TUTORIAL_STEPS } from "../content/tutorial";
 
 export function initialState(): GameState {
   return {
@@ -48,8 +49,11 @@ export function initialState(): GameState {
       polevka: 0,
     },
     buildings: [],
-    built: [],
-    tutorialStep: 0,
+    // Spec 1: nová hra začíná s hotovou farmou (auto-rozvržení) a přeskakuje
+    // starý tutoriál — ten už s volným stavěním nesedí. Nový Tomášův tutoriál
+    // (prázdná louka + navádění) přijde ve specu 2.
+    built: [...TUTORIAL_BUILDING_IDS],
+    tutorialStep: TUTORIAL_STEPS.length,
     welfare: { drubez: 72, prasata: 72, stado: 72, mazlici: 72 },
     population: { ...STARTING_POPULATION },
 
