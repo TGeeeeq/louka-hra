@@ -6,6 +6,7 @@ import {
   STARTING_POPULATION,
 } from "../balance";
 import { initialAnimalStates } from "../content/characters";
+import { AUTO_LAYOUT } from "../build/placement";
 
 export function initialState(): GameState {
   return {
@@ -63,6 +64,7 @@ export function initialState(): GameState {
     fox: { stage: "les", trust: 0, sightings: 0, bowlCount: 0 },
     animals: initialAnimalStates(),
     placements: {},
+    structures: AUTO_LAYOUT.map((p) => ({ ...p })),
     profile: {
       name: "Ty",
       appearance: { skin: "#f0c49a", hair: "#6a4a2c", shirt: "#2d5a3d", variant: "hat" },
@@ -77,7 +79,7 @@ export function initialState(): GameState {
     questProgress: { main: 0 },
     questCompleted: [],
     fullVersion: false,
-    saveVersion: 5,
+    saveVersion: 6,
     flags: {},
     dialog: null,
 
