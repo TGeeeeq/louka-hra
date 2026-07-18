@@ -4,6 +4,7 @@ import { NPCS } from "../game/content/people";
 import type { FeedGroup, Placed } from "../game/types";
 import { BUILDABLE_BY_ID } from "../game/content/buildables";
 import { rebuildInteractables } from "../game/build/placement";
+import { COMPANION_ANIMAL_IDS } from "../game/balance";
 
 const SPAWN_TX = 45;
 const SPAWN_TY = 33;
@@ -305,7 +306,11 @@ const ZONES: ZoneDef[] = [
 function buildSpawns(): AnimalSpawn[] {
   const out: AnimalSpawn[] = [];
   for (const z of ZONES) {
-    const list = ANIMALS_BY_GROUP[z.group];
+    // Pes a kočka (companion) se renderují zvlášť, nezávisle na výběhu —
+    // vynech je tady, ať se nezdvojí, až se skupina mazlíci nastěhuje.
+    const list = ANIMALS_BY_GROUP[z.group].filter(
+      (a) => z.group !== "mazlici" || !COMPANION_ANIMAL_IDS.includes(a.id),
+    );
     const pad = PADDOCKS.find((p) => p.group === z.group);
     const bounds: Bounds | undefined = pad
       ? { x0: (pad.tx + 0.6) * TS, y0: (pad.ty + 0.6) * TS, x1: (pad.tx + pad.w - 0.6) * TS, y1: (pad.ty + pad.h - 0.6) * TS }
@@ -330,6 +335,13 @@ function buildSpawns(): AnimalSpawn[] {
       out.push({ animalId: a.id, group: z.group, hx, hy, radius: z.spread * TS * 0.5, bounds });
     });
   }
+  // Companions: pes + kočka jsou na Louce od první chvíle, volně pobíhají
+  // poblíž hráčova startu — nezávisle na tom, jestli výběh (buda) stojí.
+  COMPANION_ANIMAL_IDS.forEach((id, i) => {
+    const tx = SPAWN_TX + 1.4 * (i + 1);
+    const ty = SPAWN_TY + 1.2;
+    out.push({ animalId: id, group: "mazlici", hx: (tx + 0.5) * TS, hy: (ty + 0.5) * TS, radius: 2.5 * TS * 0.5 });
+  });
   return out;
 }
 

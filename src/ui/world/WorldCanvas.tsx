@@ -15,6 +15,7 @@ import {
   type Interactable,
 } from "../../world/entities";
 import { TUTORIAL_BUILDING_IDS } from "../../game/content/tutorial";
+import { COMPANION_ANIMAL_IDS } from "../../game/balance";
 import { BUILDABLE_BY_ID } from "../../game/content/buildables";
 import { canPlace, structureAt } from "../../game/build/placement";
 import { findPath, nearestWalkable, type Pt } from "../../world/pathfind";
@@ -259,7 +260,9 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
   // init mobů jednou — zvířata bez postaveného výběhu čekají u vjezdu
   if (mobs.current.length === 0) {
     mobs.current = ANIMAL_SPAWNS.map((s) => {
-      const waiting = !settledGroups.includes(s.group);
+      // Companions (pes + kočka) obcházejí bránu podle výběhu — jsou tu od
+      // začátku, nikdy nečekají u vjezdu.
+      const waiting = !COMPANION_ANIMAL_IDS.includes(s.animalId) && !settledGroups.includes(s.group);
       const x = waiting ? WAIT_CENTER.x + (Math.random() - 0.5) * WAIT_RADIUS * 2 : s.hx;
       const y = waiting ? WAIT_CENTER.y + (Math.random() - 0.5) * WAIT_RADIUS * 2 : s.hy;
       return {

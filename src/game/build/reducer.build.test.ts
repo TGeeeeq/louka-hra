@@ -25,9 +25,11 @@ describe("PLACE_STRUCTURE", () => {
   });
   it("refuses a second unique building", () => {
     const s = afterTutorial();
-    const before = s.structures.length;
-    const next = reducer(s, { type: "PLACE_STRUCTURE", defId: "chalupa", tx: 60, ty: 30 });
-    expect(next.structures.length).toBe(before); // chalupa already in AUTO_LAYOUT
+    const first = reducer(s, { type: "PLACE_STRUCTURE", defId: "chalupa", tx: 44, ty: 30 });
+    const before = first.structures.length;
+    expect(before).toBe(1); // sanity: první stavba prošla
+    const next = reducer(first, { type: "PLACE_STRUCTURE", defId: "chalupa", tx: 60, ty: 30 });
+    expect(next.structures.length).toBe(before); // chalupa už jednou postavená
   });
 });
 

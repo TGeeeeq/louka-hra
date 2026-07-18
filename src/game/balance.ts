@@ -83,3 +83,8 @@ export const BOND_GENTLE_DECAY = 2; // a to jen o tohle (trpělivost, ne trest)
 export const BOND_FLOOR = 10; // přátelství nikdy nespadne úplně na nulu
 // Prahy nálady (vážený skór welfare/social/comfort/bond).
 export const MOOD_THRESHOLDS = { radostny: 85, spokojeny: 68, pohoda: 50, posmutnely: 32 };
+
+// Spec 2: hráč začíná jen se psem a kočkou; ostatní zvířata přijedou, až
+// postaví jejich výběh. Companion se renderují nezávisle na výběhu.
+export const COMPANION_ANIMAL_IDS = ["riky", "roman"]; // pes + kočka
+export const COMPANION_POPULATION = 2;
