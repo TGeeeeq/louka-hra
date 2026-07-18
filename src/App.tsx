@@ -26,9 +26,8 @@ import { TechFix } from "./ui/minigames/TechFix";
 import { ForestGate } from "./ui/minigames/ForestGate";
 import { CleanUp } from "./ui/minigames/CleanUp";
 import { PlayBar } from "./ui/minigames/PlayBar";
-import { BuildIt } from "./ui/minigames/BuildIt";
-import { openGate, type Interactable } from "./world/entities";
-import { currentStep, settledGroups, tutorialActive, tutorialTargets } from "./game/content/tutorial";
+import { openGate } from "./world/entities";
+import { settledGroups, tutorialActive, tutorialTargets } from "./game/content/tutorial";
 import { invalidateGround } from "./world/draw";
 import { sound } from "./audio/sound";
 import type { NpcId } from "./audio/sound";
@@ -135,7 +134,6 @@ export default function App() {
   const [puzzle, setPuzzle] = useState(false);
   const [clean, setClean] = useState<FeedGroup | null>(null);
   const [play, setPlay] = useState<AnimalDef | null>(null);
-  const [build, setBuild] = useState<Interactable | null>(null);
   const [devOpen, setDevOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   // Stavební mód: katalogové defId právě vybrané v BuildPanelu (null = zatím
@@ -201,7 +199,6 @@ export default function App() {
     if (puzzle) { setPuzzle(false); return true; }
     if (clean) { setClean(null); return true; }
     if (play) { setPlay(null); return true; }
-    if (build) { setBuild(null); return true; }
     if (overlay) { setOverlay(null); setDemoGateOpen(false); return true; }
     if (editMode) { setEditMode(false); return true; }
     return false;
@@ -250,7 +247,7 @@ export default function App() {
       </>
     );
 
-  const paused = !!state.dialog || overlay !== null || !!sel || !!npc || !!minigame || puzzle || !!clean || !!play || !!build || !!state.gameOver;
+  const paused = !!state.dialog || overlay !== null || !!sel || !!npc || !!minigame || puzzle || !!clean || !!play || !!state.gameOver;
 
   const openClean = (group: FeedGroup) => {
     if (state.energy < 6) { dispatch({ type: "PUSH_DIALOG", speaker: "Tip", lines: ["Na úklid teď nemáš sílu. Nejdřív se najez a napij."] }); return; }
@@ -270,11 +267,6 @@ export default function App() {
   const winPlay = () => {
     if (play) dispatch({ type: "PLAY", animalId: play.id });
     setPlay(null);
-  };
-
-  const winBuild = () => {
-    if (build) dispatch({ type: "BUILD_STRUCTURE", id: build.id });
-    setBuild(null);
   };
 
   const winMinigame = (mg: Minigame) => {
@@ -383,15 +375,6 @@ export default function App() {
       return;
     }
     const it = t.it;
-    // Tutoriál: svítící „plán" aktuálního kroku → spustit stavební minihru.
-    if (tutorialActive(state)) {
-      const step = currentStep(state);
-      if (step && it.id === step.buildingId && !state.built.includes(it.id)) {
-        sound.select();
-        setBuild(it);
-        return;
-      }
-    }
     switch (it.kind) {
       case "kurnik": handleKurnik(); break;
       case "chlivek": feedStation("prasata"); break;
@@ -519,12 +502,6 @@ export default function App() {
       {clean && (
         <Overlay title="🧹 Úklid u zvířat" onClose={() => setClean(null)}>
           <CleanUp group={clean} onWin={winClean} onClose={() => setClean(null)} />
-        </Overlay>
-      )}
-
-      {build && (
-        <Overlay title="🔨 Stavba" onClose={() => setBuild(null)}>
-          <BuildIt label={build.label} onWin={winBuild} onClose={() => setBuild(null)} />
         </Overlay>
       )}
 
