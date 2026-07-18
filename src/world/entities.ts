@@ -47,34 +47,49 @@ export interface Interactable {
   fw: number; // footprint šířka (dlaždice)
   fh: number; // footprint výška
   solid: boolean;
+  note?: string; // volitelný vlastní text cedule (jinak default CEDULE_HELP)
 }
 
-const B = (id: string, kind: InteractKind, label: string, tx: number, ty: number, fw = 2, fh = 2, solid = true): Interactable => ({ id, kind, label, tx, ty, fw, fh, solid });
+const B = (id: string, kind: InteractKind, label: string, tx: number, ty: number, fw = 2, fh = 2, solid = true, note?: string): Interactable => ({ id, kind, label, tx, ty, fw, fh, solid, note });
 
 // Autorské (nikdy „stavitelné") objekty louky — sběr bylin, příběhové
 // hlavolamy, cedule apod. Základní stavby (chalupa, stánek, …) i upgrady
 // (studna, zahrada) teď žijí ve `structures` a katalogu BUILDABLES — viz
 // `setStructures` níže.
 export const WORLD_FEATURES: Interactable[] = [
-  B("cedule", "cedule", "Cedule", 24, 20, 1, 1, false),
-  // sběr bylin — nejvíc na „bylinkové louce" na východě
-  B("byliny1", "byliny", "Bylinky", 6, 8, 1, 1, false),
-  B("byliny2", "byliny", "Bylinky", 39, 12, 1, 1, false),
-  B("byliny3", "byliny", "Bylinky", 8, 27, 1, 1, false),
-  B("byliny4", "byliny", "Bylinková louka", 54, 12, 1, 1, false),
-  B("byliny5", "byliny", "Bylinková louka", 61, 18, 1, 1, false),
-  B("byliny6", "byliny", "Bylinková louka", 57, 21, 1, 1, false),
-  B("byliny7", "byliny", "Bylinky u rybníka", 31, 45, 1, 1, false),
-  // hlavolam: lesní brána na cestě k hájku + truhla se zásobami v hájku
-  B("brana", "brana", "Lesní brána", 44, 41, 1, 1, false),
-  B("truhla", "truhla", "Truhla se zásobami", 60, 41, 1, 1, false),
+  B("cedule", "cedule", "Cedule", 45, 26, 1, 1, false),
+  // sběr bylin — pár blízko domova (den 1), zbytek na satelitech
+  B("byliny1", "byliny", "Bylinky", 28, 26, 1, 1, false),
+  B("byliny2", "byliny", "Bylinky", 40, 26, 1, 1, false),
+  B("byliny3", "byliny", "Bylinky", 60, 30, 1, 1, false),
+  // bylinková louka — východní satelit, za lesní bránou
+  B(
+    "cedule_herb",
+    "cedule",
+    "Bylinková louka",
+    80,
+    20,
+    1,
+    1,
+    false,
+    "Tady roste řebříček, kopřiva a heřmánek — trhej, co potřebuješ.",
+  ),
+  B("byliny4", "byliny", "Bylinková louka", 82, 18, 1, 1, false),
+  B("byliny5", "byliny", "Bylinková louka", 86, 21, 1, 1, false),
+  B("byliny6", "byliny", "Bylinková louka", 84, 24, 1, 1, false),
+  // rybník — jižní satelit
+  B("cedule_pond", "cedule", "Rybník", 20, 55, 1, 1, false, "Rybník. Kachny si sem chodí zaplavat."),
+  B("byliny7", "byliny", "Bylinky u rybníka", 21, 56, 1, 1, false),
+  // hlavolam: lesní brána na cestě k bylinkové louce + truhla hned za ní
+  B("brana", "brana", "Lesní brána", 71, 25, 1, 1, false),
+  B("truhla", "truhla", "Truhla se zásobami", 77, 24, 1, 1, false),
   // liščí příběh: stopy a krmné místo na západním kraji lesa; ježčí listí
   // u zahrádky. Viditelnost řídí App podle postupu příběhu (hiddenIds).
-  B("fox_stopy", "stopy", "Liščí stopy", 7, 22, 1, 1, false),
-  B("fox_misto", "krmne_misto", "Krmné místo u lesa", 6, 24, 1, 1, false),
-  B("jezek_listi", "listi", "Hromada listí", 36, 14, 1, 1, false),
-  // Senné DLC: seniště na jižní louce u rybníka (viditelné jen s DLC)
-  B("seniste", "seniste", "Seniště — louka na seno", 30, 38, 2, 1, false),
+  B("fox_stopy", "stopy", "Liščí stopy", 24, 44, 1, 1, false),
+  B("fox_misto", "krmne_misto", "Krmné místo u lesa", 23, 46, 1, 1, false),
+  B("jezek_listi", "listi", "Hromada listí", 36, 44, 1, 1, false),
+  // Senné DLC: seniště u rybníka (viditelné jen s DLC)
+  B("seniste", "seniste", "Seniště — louka na seno", 24, 58, 2, 1, false),
 ];
 
 /**
@@ -124,13 +139,16 @@ for (const it of WORLD_FEATURES) carveClearing(it.tx, it.ty, it.fw, it.fh, 1);
 carveClearing(SPAWN_TX, SPAWN_TY, 1, 1, 3);
 for (const id of NPCS) carveClearing(NPC_POS[id][0], NPC_POS[id][1], 1, 1, 1);
 
-// Lesní brána přehradí cestu k hájku, dokud hráč nevyřeší hlavolam.
+// Lesní brána přehradí jediný koridor k bylinkové louce (východní satelit),
+// dokud hráč nevyřeší hlavolam. Sloupec x=73 je jediné propojení domovské
+// louky a východní mýtiny (bez CORRIDORS v tiles.ts se les nepropojí) — proto
+// těchto 7 dlaždic skutečně zavírá cestu (viz map.test.ts reachability test).
 export const GATE_TILES: [number, number][] = [
-  [44, 39], [44, 40], [44, 41], [44, 42], [44, 43],
+  [73, 22], [73, 23], [73, 24], [73, 25], [73, 26], [73, 27], [73, 28],
 ];
 for (const [gx, gy] of GATE_TILES) setTile(gx, gy, TILE.FENCE);
 
-/** Otevře lesní bránu (po vyřešení hlavolamu) — uvolní cestu k hájku. */
+/** Otevře lesní bránu (po vyřešení hlavolamu) — uvolní cestu k bylinkové louce. */
 export function openGate() {
   for (const [gx, gy] of GATE_TILES) setTile(gx, gy, TILE.PATH);
 }
