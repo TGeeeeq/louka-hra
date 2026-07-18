@@ -90,6 +90,11 @@ interface Props {
   /** Katalogové `defId` právě vybrané v BuildPanelu k umístění, nebo `null`
    *  (pak se v edit módu klepnutím vybírá existující stavba k přesunu/zboření). */
   buildSelection: string | null;
+  /** Uvítací kamerový sestřih (Task 4): když je zadaný, kamera míří na tuto
+   *  dlaždici místo sledování hráče a pohyb/vstup hráče je zamrzlý. */
+  cinematic?: { tx: number; ty: number } | null;
+  /** Klepnutí/kliknutí do světa během sestřihu ho předčasně přeruší. */
+  onSkipCinematic?: () => void;
   onPlaceStructure: (defId: string, tx: number, ty: number) => void;
   onDemolishStructure: (uid: string) => void;
   onMoveStructure: (uid: string, tx: number, ty: number) => void;
@@ -192,13 +197,13 @@ const BUILDING_VERB: Record<string, string> = {
   seniste: "Seniště (kosit / sušit / obracet)",
 };
 
-export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, onPlaceStructure, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent }: Props) {
+export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceStructure, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // měnící se props čteme přes ref, ať smyčku nemusíme restartovat
-  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, onPlaceStructure, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent });
-  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, onPlaceStructure, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent };
+  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceStructure, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent });
+  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceStructure, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent };
 
   // Vybraná existující stavba v edit módu (bez buildSelection) — místní React
   // stav, protože řídí DOM lištu Přesunout/Zbořit/Zrušit pod canvasem.
@@ -436,6 +441,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
     const onCanvasPointer = (e: PointerEvent) => {
       e.preventDefault();
       const P = propsRef.current;
+      if (P.cinematic) { P.onSkipCinematic?.(); return; } // ťuknutí = přeskočit sestřih
       if (P.editMode) {
         if (P.buildSelection) {
           buildGhost.current = computeNewGhost(e, P.buildSelection);
@@ -540,7 +546,8 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       const p = player.current;
 
       // --- update pohybu ---
-      if (!P.paused) {
+      // Uvítací sestřih zamrazí hráče (kamera si jede po svém, viz níž).
+      if (!P.paused && !P.cinematic) {
         let vx = 0;
         let vy = 0;
         if (input.left) vx -= 1;
@@ -842,8 +849,11 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       const viewH = cssH;
       const mapPixW = MAP_W * TS;
       const mapPixH = MAP_H * TS;
-      let cx = p.x - viewW / 2;
-      let cy = p.y - viewH / 2;
+      // Uvítací sestřih: kamera míří na scénickou dlaždici místo na hráče.
+      const focusX = P.cinematic ? (P.cinematic.tx + 0.5) * TS : p.x;
+      const focusY = P.cinematic ? (P.cinematic.ty + 0.5) * TS : p.y;
+      let cx = focusX - viewW / 2;
+      let cy = focusY - viewH / 2;
       cx = mapPixW <= viewW ? (mapPixW - viewW) / 2 : Math.max(0, Math.min(mapPixW - viewW, cx));
       cy = mapPixH <= viewH ? (mapPixH - viewH) / 2 : Math.max(0, Math.min(mapPixH - viewH, cy));
       cam.current.x += (cx - cam.current.x) * Math.min(1, dt * 8);

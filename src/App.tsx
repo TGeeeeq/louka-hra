@@ -142,6 +142,10 @@ export default function App() {
   // D2: potvrzovací dialog „Opustit Louku?" (hardwarové tlačítko Zpět, když
   // nic jiného není otevřené a hra běží).
   const [exitConfirm, setExitConfirm] = useState(false);
+  // Task 4: uvítací kamerový sestřih (louka → hráč) při prvním vstupu.
+  const [cinematic, setCinematic] = useState<{ tx: number; ty: number } | null>(null);
+  const welcomeStarted = useRef(false);
+  const skipCinematic = () => setCinematic(null);
   useGameSounds();
 
   // Skryté odemčení dev módu: napsat na klávesnici „louka".
@@ -183,6 +187,21 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoGateHit]);
+
+  // Task 4: uvítací sestřih — jen jednou, při prvním vstupu na prázdnou louku
+  // (tutorialStep 0, flag ještě nenastavený). Nesmí blokovat reducer/dialogy —
+  // Tomášova úvodní replika ze startu tutoriálu se zobrazí normálně přes ni.
+  useEffect(() => {
+    if (!state.started || welcomeStarted.current) return;
+    if (state.tutorialStep !== 0 || state.flags.welcome_seen) return;
+    welcomeStarted.current = true;
+    dispatch({ type: "SET_FLAG", key: "welcome_seen" });
+    setCinematic({ tx: 48, ty: 34 }); // scénický záběr na prázdnou louku
+    const t1 = window.setTimeout(() => setCinematic({ tx: 45, ty: 33 }), 2500); // k hráči
+    const t2 = window.setTimeout(() => setCinematic(null), 2500 + 1000); // uvolnit kameru
+    return () => { window.clearTimeout(t1); window.clearTimeout(t2); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.started, state.tutorialStep, state.flags.welcome_seen]);
 
   // D2: priorita zavírání pro hardwarové tlačítko Zpět — od nejvyšší vrstvy
   // (potvrzovací dialog) přes herní dialog a vývojářský panel, jednotlivé
@@ -453,6 +472,7 @@ export default function App() {
         tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo}
         foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} appearance={state.profile.appearance}
         structures={state.structures} editMode={buildModeOn} buildSelection={buildSelection}
+        cinematic={cinematic} onSkipCinematic={skipCinematic}
         onPlaceStructure={(defId, tx, ty) => { sound.build(); dispatch({ type: "PLACE_STRUCTURE", defId, tx, ty }); }}
         onDemolishStructure={(uid) => { sound.build(); dispatch({ type: "DEMOLISH_STRUCTURE", uid }); }}
         onMoveStructure={(uid, tx, ty) => { sound.build(); dispatch({ type: "MOVE_STRUCTURE", uid, tx, ty }); }}
