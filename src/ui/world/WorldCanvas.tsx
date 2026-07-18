@@ -1,23 +1,22 @@
-import { useEffect, useRef } from "react";
-import type { FeedGroup, FoxStage, Phase, PlayerAppearance, Season, Weather } from "../../game/types";
-import { MAP_H, MAP_W, TS } from "../../world/tiles";
+import { useEffect, useRef, useState } from "react";
+import type { FeedGroup, FoxStage, Phase, Placed, PlayerAppearance, Season, Weather } from "../../game/types";
+import { MAP_H, MAP_W, TS, isSolidTile } from "../../world/tiles";
 import { QUALITY, getQualityTier, onTierChange, perfFrame, perfSetDrawn } from "../../world/perf";
 import {
   ANIMAL_SPAWNS,
   GARDEN,
   INTERACTABLES,
-  INTERACTABLE_BY_ID,
   PLAYER_START,
-  applyPlacements,
-  canPlaceFootprint,
   isBlocked,
-  isMovable,
   setConstructed,
+  setStructures,
   unstuckFromBuildings,
   type Bounds,
   type Interactable,
 } from "../../world/entities";
 import { TUTORIAL_BUILDING_IDS } from "../../game/content/tutorial";
+import { BUILDABLE_BY_ID } from "../../game/content/buildables";
+import { canPlace, structureAt } from "../../game/build/placement";
 import { findPath, nearestWalkable, type Pt } from "../../world/pathfind";
 import { NPC_LIFE } from "../../game/content/npcLife";
 import { reactionFor, idleLine, ESCAPE_HELP, ESCAPE_SHRUG } from "../../game/content/npcReactions";
@@ -30,6 +29,12 @@ import type { Facing } from "../sprites/PersonSprite";
 import { PEOPLE } from "../../game/content/people";
 import { consumeAction, input } from "../../world/input";
 import { sound } from "../../audio/sound";
+
+/** fw/fh podle defId — pro `canPlace`/`structureAt` (chybějící def = 1×1). */
+const footprintOf = (defId: string) => {
+  const d = BUILDABLE_BY_ID[defId];
+  return { fw: d?.fw ?? 1, fh: d?.fh ?? 1 };
+};
 
 export type InteractTarget =
   | { kind: "building"; it: Interactable }
@@ -77,11 +82,16 @@ interface Props {
   hiddenIds: string[];
   /** Podoba hráče (tvůrce postavy) — kreslí se na Canvas. */
   appearance: PlayerAppearance;
-  /** Override pozic staveb (volné rozmístění). */
-  placements: Record<string, { tx: number; ty: number }>;
-  /** Edit mód „zabydlování" — přetahování povolených staveb. */
+  /** Volně postavené stavby — zdroj pravdy o tom, co stojí na louce. */
+  structures: Placed[];
+  /** Stavební mód: `true` = zapnuto (HUD „🔨 Stavět"). */
   editMode: boolean;
-  onMoveStructure: (id: string, tx: number, ty: number) => void;
+  /** Katalogové `defId` právě vybrané v BuildPanelu k umístění, nebo `null`
+   *  (pak se v edit módu klepnutím vybírá existující stavba k přesunu/zboření). */
+  buildSelection: string | null;
+  onPlaceStructure: (defId: string, tx: number, ty: number) => void;
+  onDemolishStructure: (uid: string) => void;
+  onMoveStructure: (uid: string, tx: number, ty: number) => void;
   onEditReject: () => void;
   onInteract: (t: InteractTarget) => void;
   onEvent: (e: WorldEvent) => void;
@@ -181,34 +191,54 @@ const BUILDING_VERB: Record<string, string> = {
   seniste: "Seniště (kosit / sušit / obracet)",
 };
 
-export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, placements, editMode, onMoveStructure, onEditReject, onInteract, onEvent }: Props) {
+export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, onPlaceStructure, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // měnící se props čteme přes ref, ať smyčku nemusíme restartovat
-  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, placements, editMode, onMoveStructure, onEditReject, onInteract, onEvent });
-  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, placements, editMode, onMoveStructure, onEditReject, onInteract, onEvent };
+  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, onPlaceStructure, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent });
+  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, onPlaceStructure, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent };
+
+  // Vybraná existující stavba v edit módu (bez buildSelection) — místní React
+  // stav, protože řídí DOM lištu Přesunout/Zbořit/Zrušit pod canvasem.
+  const [selected, setSelected] = useState<Placed | null>(null);
+  // Právě probíhá přesun vybrané stavby (po kliknutí na „↔️ Přesunout")?
+  const [moving, setMoving] = useState(false);
+  const movingRef = useRef(false);
+  movingRef.current = moving;
+  const selectedRef = useRef<Placed | null>(null);
+  selectedRef.current = selected;
+
+  // Opuštění stavebního módu / přepnutí vybraného katalogového itemu zruší
+  // rozdělanou akci nad existující stavbou.
+  useEffect(() => {
+    if (!editMode || buildSelection) { setSelected(null); setMoving(false); }
+  }, [editMode, buildSelection]);
 
   // Kolize staveb podle toho, co už stojí (blueprint je průchozí). Když hráč
   // dostavěl stavbu „zevnitř" plánu nebo těsně u jejího boku, vysuneme ho ven
   // před ni, ať nezůstane zaseknutý ani schovaný za novou stavbou.
   const builtPrev = useRef<string[]>(built);
-  const placedPrev = useRef<Record<string, { tx: number; ty: number }>>(placements);
+  const structuresPrev = useRef<Placed[]>(structures);
   useEffect(() => {
-    applyPlacements(placements); // 1) přepiš pozice in-place (čte je vše ostatní)
+    setStructures(structures); // 1) přegeneruj INTERACTABLES (čte je vše ostatní)
     setConstructed(built); // 2) přepočet solidních dlaždic z nových pozic
     const added = built.filter((id) => !builtPrev.current.includes(id));
-    const moved = Object.keys(placements).filter(
-      (id) => placedPrev.current[id]?.tx !== placements[id]?.tx || placedPrev.current[id]?.ty !== placements[id]?.ty,
-    );
+    const prevByUid = new Map(structuresPrev.current.map((p) => [p.uid, p]));
+    const changed = structures
+      .filter((p) => {
+        const prev = prevByUid.get(p.uid);
+        return !prev || prev.tx !== p.tx || prev.ty !== p.ty;
+      })
+      .map((p) => (BUILDABLE_BY_ID[p.defId]?.unique ? p.defId : p.uid));
     builtPrev.current = built;
-    placedPrev.current = placements;
-    const toUnstick = [...added, ...moved]; // stavba se mohla přesunout na hráče
+    structuresPrev.current = structures;
+    const toUnstick = [...added, ...changed]; // stavba se mohla přesunout na hráče
     if (toUnstick.length) {
       const spot = unstuckFromBuildings(player.current.x, player.current.y, toUnstick);
       if (spot) { player.current.x = spot.x; player.current.y = spot.y; }
     }
-  }, [built, placements]);
+  }, [built, structures]);
 
   const player = useRef({ x: PLAYER_START.x, y: PLAYER_START.y, dir: "down", moving: false, anim: 0, flip: false });
   const mobs = useRef<Mob[]>([]);
@@ -218,9 +248,9 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
   const wildKey = useRef("");
   const npcPhase = useRef<Phase>(phase);
   const cam = useRef({ x: 0, y: 0 });
-  // Edit mód: co se právě přetahuje + náhled cílové dlaždice (jen refy → bez re-renderu).
-  const dragId = useRef<string | null>(null);
-  const editGhost = useRef<{ id: string; tx: number; ty: number; valid: boolean } | null>(null);
+  // Stavební mód: náhled dlaždice pod prstem (nová stavba i přesun vybrané) —
+  // jen ref, bez re-renderu (kreslí se každý snímek v `loop`).
+  const buildGhost = useRef<{ it: Interactable; tx: number; ty: number; valid: boolean } | null>(null);
   const stepAcc = useRef(0);
   const escapeAcc = useRef(0);
   const lastPhase = useRef<Phase>(phase);
@@ -367,46 +397,80 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       const r = canvas.getBoundingClientRect();
       return { wx: e.clientX - r.left + cam.current.x, wy: e.clientY - r.top + cam.current.y };
     };
-    // Přemístitelná postavená stavba pod prstem (edit mód).
-    const hitMovable = (wx: number, wy: number): string | null => {
-      for (const it of INTERACTABLES) {
-        if (!isMovable(it.id) || !propsRef.current.built.includes(it.id)) continue;
-        const x0 = it.tx * TS, y0 = it.ty * TS, x1 = (it.tx + it.fw) * TS, y1 = (it.ty + it.fh) * TS;
-        if (wx >= x0 && wx <= x1 && wy >= y0 && wy <= y1) return it.id;
-      }
-      return null;
-    };
-    const updateGhost = (e: PointerEvent) => {
-      const id = dragId.current;
-      if (!id) return;
-      const it = INTERACTABLE_BY_ID[id];
+    // Náhled půdorysu pod prstem — nová stavba z BuildPanelu. Validita
+    // (zelená/červená) přesně kopíruje reducer PLACE_STRUCTURE.
+    const computeNewGhost = (e: PointerEvent, defId: string) => {
+      const def = BUILDABLE_BY_ID[defId];
       const { wx, wy } = toWorld(e);
-      const tx = Math.round(wx / TS - it.fw / 2); // střed sprite pod prstem
-      const ty = Math.round(wy / TS - it.fh / 2);
-      editGhost.current = { id, tx, ty, valid: canPlaceFootprint(it, tx, ty, id) };
+      const fw = def?.fw ?? 1;
+      const fh = def?.fh ?? 1;
+      const tx = Math.round(wx / TS - fw / 2); // střed půdorysu pod prstem
+      const ty = Math.round(wy / TS - fh / 2);
+      const structures = propsRef.current.structures;
+      const alreadyUnique = !!def?.unique && structures.some((s) => s.defId === defId);
+      const valid = !alreadyUnique && canPlace({ structures, isSolid: isSolidTile, def: { fw, fh }, tx, ty, footprintOf }).ok;
+      const it: Interactable = { id: "__ghost", kind: def?.kind ?? "cedule", label: def?.label ?? "", tx, ty, fw, fh, solid: def?.solid ?? true };
+      return { it, tx, ty, valid };
+    };
+    // Náhled přesunu vybrané stavby — stejné, ale bez ní samotné v seznamu
+    // (aby nekolidovala sama se sebou), přesně jako reducer MOVE_STRUCTURE.
+    const computeMoveGhost = (e: PointerEvent, inst: Placed) => {
+      const def = BUILDABLE_BY_ID[inst.defId];
+      const { wx, wy } = toWorld(e);
+      const fw = def?.fw ?? 1;
+      const fh = def?.fh ?? 1;
+      const tx = Math.round(wx / TS - fw / 2);
+      const ty = Math.round(wy / TS - fh / 2);
+      const others = propsRef.current.structures.filter((s) => s.uid !== inst.uid);
+      const valid = canPlace({ structures: others, isSolid: isSolidTile, def: { fw, fh }, tx, ty, footprintOf }).ok;
+      const it: Interactable = { id: "__ghost", kind: def?.kind ?? "cedule", label: def?.label ?? "", tx, ty, fw, fh, solid: def?.solid ?? true };
+      return { it, tx, ty, valid };
     };
 
-    // klik/ťuk přímo do světa = interakce s nejbližším cílem; v edit módu = uchopení stavby
+    // klik/ťuk přímo do světa = interakce s nejbližším cílem; ve stavebním
+    // módu = umístit novou stavbu (BuildPanel vybrán) nebo vybrat/přesunout
+    // existující (viz DOM lišta Přesunout/Zbořit pod canvasem).
     const onCanvasPointer = (e: PointerEvent) => {
       e.preventDefault();
-      if (propsRef.current.editMode) {
+      const P = propsRef.current;
+      if (P.editMode) {
+        if (P.buildSelection) {
+          buildGhost.current = computeNewGhost(e, P.buildSelection);
+          canvas.setPointerCapture(e.pointerId);
+          return;
+        }
+        if (movingRef.current && selectedRef.current) {
+          buildGhost.current = computeMoveGhost(e, selectedRef.current);
+          canvas.setPointerCapture(e.pointerId);
+          return;
+        }
         const { wx, wy } = toWorld(e);
-        const id = hitMovable(wx, wy);
-        if (id) { dragId.current = id; canvas.setPointerCapture(e.pointerId); updateGhost(e); }
+        const hit = structureAt(P.structures, Math.floor(wx / TS), Math.floor(wy / TS), footprintOf);
+        setSelected(hit);
         return;
       }
       if (!propsRef.current.paused) triggerAction();
     };
     const onCanvasMove = (e: PointerEvent) => {
-      if (dragId.current) { e.preventDefault(); updateGhost(e); }
+      const P = propsRef.current;
+      if (!P.editMode) return;
+      if (P.buildSelection) { e.preventDefault(); buildGhost.current = computeNewGhost(e, P.buildSelection); return; }
+      if (movingRef.current && selectedRef.current) { e.preventDefault(); buildGhost.current = computeMoveGhost(e, selectedRef.current); }
     };
     const onCanvasUp = () => {
-      if (!dragId.current) return;
-      const g = editGhost.current;
-      if (g && g.valid) propsRef.current.onMoveStructure(g.id, g.tx, g.ty);
-      else propsRef.current.onEditReject();
-      dragId.current = null;
-      editGhost.current = null;
+      const P = propsRef.current;
+      const g = buildGhost.current;
+      if (!g) return;
+      if (P.editMode && P.buildSelection) {
+        if (g.valid) P.onPlaceStructure(P.buildSelection, g.tx, g.ty);
+        else P.onEditReject();
+      } else if (P.editMode && movingRef.current && selectedRef.current) {
+        if (g.valid) P.onMoveStructure(selectedRef.current.uid, g.tx, g.ty);
+        else P.onEditReject();
+        setMoving(false);
+        setSelected(null);
+      }
+      buildGhost.current = null;
     };
     canvas.addEventListener("pointerdown", onCanvasPointer);
     canvas.addEventListener("pointermove", onCanvasMove);
@@ -930,11 +994,19 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       for (const it of items) it.draw();
       perfSetDrawn(items.length);
 
-      // edit mód „zabydlování": zvýrazni uchopitelné stavby + kresli ducha náhledu
+      // stavební mód: náhled nové stavby (BuildPanel) / zvýraznění vybrané
+      // existující stavby / náhled jejího přesunu.
       if (P.editMode) {
-        for (const it of INTERACTABLES) {
-          if (!isMovable(it.id) || !P.built.includes(it.id) || dragId.current === it.id) continue;
-          const hx = it.tx * TS - camX, hy = it.ty * TS - camY, hw = it.fw * TS, hh = it.fh * TS;
+        if (P.buildSelection) {
+          const g = buildGhost.current;
+          if (g) drawGhost(ctx, g.it, g.tx, g.ty, camX, camY, g.valid, now);
+        } else if (selectedRef.current && movingRef.current) {
+          const g = buildGhost.current;
+          if (g) drawGhost(ctx, g.it, g.tx, g.ty, camX, camY, g.valid, now);
+        } else if (selectedRef.current) {
+          const sel = selectedRef.current;
+          const f = footprintOf(sel.defId);
+          const hx = sel.tx * TS - camX, hy = sel.ty * TS - camY, hw = f.fw * TS, hh = f.fh * TS;
           ctx.save();
           ctx.lineWidth = 2;
           ctx.setLineDash([5, 4]);
@@ -945,11 +1017,9 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
           ctx.setLineDash([]);
           ctx.font = `18px ${EMOJI_FONT}`;
           ctx.textAlign = "center";
-          ctx.fillText("✋", hx + hw / 2, hy - 6);
+          ctx.fillText("👆", hx + hw / 2, hy - 6);
           ctx.restore();
         }
-        const g = editGhost.current;
-        if (g) drawGhost(ctx, INTERACTABLE_BY_ID[g.id], g.tx, g.ty, camX, camY, g.valid, now);
       }
 
       // káně krouží nad drůbežím výběhem (jen stín a silueta — nikdy neútočí)
@@ -988,6 +1058,28 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
   return (
     <div className="world-wrap" ref={wrapRef}>
       <canvas ref={canvasRef} className="world-canvas" />
+      {editMode && selected && (
+        <div className="build-select-bar">
+          {!moving ? (
+            <>
+              <span className="build-select-label">{BUILDABLE_BY_ID[selected.defId]?.label ?? selected.defId}</span>
+              <button className="build-select-btn move" onClick={() => setMoving(true)}>↔️ Přesunout</button>
+              <button
+                className="build-select-btn demolish"
+                onClick={() => { onDemolishStructure(selected.uid); setSelected(null); }}
+              >
+                🗑️ Zbořit
+              </button>
+              <button className="build-select-btn cancel" onClick={() => setSelected(null)} aria-label="Zrušit výběr">✕</button>
+            </>
+          ) : (
+            <>
+              <span className="build-select-label">Klepni na louku, kam ji přesunout</span>
+              <button className="build-select-btn cancel" onClick={() => setMoving(false)}>✕ Zrušit</button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
