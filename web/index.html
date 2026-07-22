@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#14271a" />
+    <title>Louka — kdo se stará, roste s nimi | Nech mě růst</title>
+    <meta
+      name="description"
+      content="Louka je útulná, ale poctivě náročná survival hra o péči o víc než sto zachráněných zvířat. Prozkoumej živou louku, přežij zimu, skamaráď se s liškou. Bez násilí. Podle skutečného azylu Nech mě růst."
+    />
+    <meta name="author" content="Nech mě růst z.s." />
+    <link rel="icon" type="image/png" href="./assets/favicon.png" />
+    <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" />
+
+    <!-- Open Graph / sociální náhled -->
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="cs_CZ" />
+    <meta property="og:title" content="Louka — kdo se stará, roste s nimi" />
+    <meta
+      property="og:description"
+      content="Útulná survival hra o péči o víc než sto zachráněných zvířat. Prozkoumej živou louku, přežij zimu, skamaráď se s liškou. Podle skutečného azylu Nech mě růst."
+    />
+    <meta property="og:image" content="./assets/logo.webp" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="preload" as="font" type="font/woff2" href="./assets/fonts/fraunces-500-700-latin-ext.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="./assets/fonts/jakarta-400-700-latin-ext.woff2" crossorigin />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <a class="skip" href="#hlavni">Přeskočit na obsah</a>
+
+    <!-- ===================== NAV ===================== -->
+    <header class="nav" id="nav">
+      <div class="nav__inner">
+        <a class="brand" href="#hlavni" aria-label="Louka — domů">
+          <img class="brand__mark" src="./assets/logo.webp" alt="" width="120" height="84" />
+          <span class="brand__word">Louka</span>
+        </a>
+        <nav class="nav__links" aria-label="Hlavní navigace">
+          <a href="#den">Den</a>
+          <a href="#obyvatele">Obyvatelé</a>
+          <a href="#svet">Svět</a>
+          <a href="#azyl">Skutečný azyl</a>
+          <a href="#cesta">Vývoj</a>
+        </nav>
+        <div class="nav__actions">
+          <button class="iconbtn" id="ambientBtn" type="button" aria-pressed="false" title="Zapnout ambientní zvuk">
+            <span class="iconbtn__ico" aria-hidden="true">♪</span>
+            <span class="iconbtn__lbl">Atmosféra</span>
+          </button>
+          <button class="iconbtn" id="themeBtn" type="button" title="Přepnout světlý / tmavý režim" aria-label="Přepnout režim">
+            <span class="iconbtn__ico" aria-hidden="true">◑</span>
+          </button>
+          <a class="btn btn--gold" href="#edice">Zahrát demo</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="hlavni">
+      <!-- ===================== HERO ===================== -->
+      <section class="hero" id="hero" aria-label="Louka — přehled">
+        <canvas class="hero__canvas" id="scene" aria-hidden="true"></canvas>
+        <div class="hero__scrim" aria-hidden="true"></div>
+
+        <div class="hero__content">
+          <p class="eyebrow eyebrow--onDark">
+            <span class="dot"></span> Ve vývoji · předběžný přístup
+          </p>
+          <h1 class="hero__title">
+            Kdo se stará,<br /><em>roste s nimi.</em>
+          </h1>
+          <p class="hero__lede">
+            Útulná, ale poctivě náročná hra o péči o víc než <strong>sto zachráněných zvířat</strong>
+            na louce uprostřed lesů. Jeden den je jeden level. Nakrm, ukliď, navař, zavři zvířata
+            před liškou — a přežij zimu. Postavy i příběhy vycházejí ze skutečného azylu
+            <strong>Nech mě růst</strong>.
+          </p>
+          <div class="hero__cta">
+            <a class="btn btn--gold btn--lg" href="#edice">
+              Zahrát demo zdarma
+              <span class="btn__sub">Google Play</span>
+            </a>
+            <a class="btn btn--ghost btn--lg" href="#den">Prohlédnout svět</a>
+          </div>
+
+          <ul class="hero__stats" role="list">
+            <li><span class="stat__num" data-count="100" data-suffix="+">0</span><span class="stat__lbl">zachráněných zvířat</span></li>
+            <li><span class="stat__num" data-count="4">0</span><span class="stat__lbl">roční období</span></li>
+            <li><span class="stat__num" data-count="52" data-suffix="">0</span><span class="stat__lbl">ověřených faktů</span></li>
+            <li><span class="stat__num">0</span><span class="stat__lbl">násilí ve hře</span></li>
+          </ul>
+        </div>
+
+        <!-- Interaktivní přepínač fáze dne — řídí atmosféru celé scény -->
+        <div class="phasebar" role="group" aria-label="Fáze dne">
+          <button class="phasebar__btn is-active" data-phase="morning" type="button"><span aria-hidden="true">🌅</span> Ráno</button>
+          <button class="phasebar__btn" data-phase="noon" type="button"><span aria-hidden="true">☀️</span> Poledne</button>
+          <button class="phasebar__btn" data-phase="evening" type="button"><span aria-hidden="true">🌇</span> Večer</button>
+          <button class="phasebar__btn" data-phase="night" type="button"><span aria-hidden="true">🌙</span> Noc</button>
+        </div>
+
+        <a class="hero__scroll" href="#den" aria-label="Dolů">
+          <span></span>
+        </a>
+      </section>
+
+      <!-- ===================== TICKER ===================== -->
+      <div class="ticker" aria-hidden="true">
+        <div class="ticker__track">
+          <span>Bez násilí</span><span class="ticker__dot">✦</span>
+          <span>Živý cyklus dne a ročních období</span><span class="ticker__dot">✦</span>
+          <span>Přes 100 skutečných zvířat</span><span class="ticker__dot">✦</span>
+          <span>Adaptivní hudba</span><span class="ticker__dot">✦</span>
+          <span>Skutečné fotky obyvatel</span><span class="ticker__dot">✦</span>
+          <span>Skamaráď se s liškou</span><span class="ticker__dot">✦</span>
+          <span>Bez násilí</span><span class="ticker__dot">✦</span>
+          <span>Živý cyklus dne a ročních období</span><span class="ticker__dot">✦</span>
+          <span>Přes 100 skutečných zvířat</span><span class="ticker__dot">✦</span>
+          <span>Adaptivní hudba</span><span class="ticker__dot">✦</span>
+          <span>Skutečné fotky obyvatel</span><span class="ticker__dot">✦</span>
+          <span>Skamaráď se s liškou</span><span class="ticker__dot">✦</span>
+        </div>
+      </div>
+
+      <!-- ===================== PILÍŘE ===================== -->
+      <section class="section pillars" aria-label="Pilíře hry">
+        <div class="wrap">
+          <header class="sec-head">
+            <p class="eyebrow">Co Louku dělá Loukou</p>
+            <h2 class="sec-title">Něha a poctivá dřina v jednom.</h2>
+            <p class="sec-sub">
+              Roztomilé zvenčí, ale řídíš skutečné hospodářství azylu. Spokojená zvířata =
+              dary od příznivců. Zanedbaná = veterinář a ztráty. Bankrot = konec.
+            </p>
+          </header>
+
+          <div class="pillars__grid">
+            <article class="pillar reveal">
+              <div class="pillar__ico" aria-hidden="true">🤍</div>
+              <h3>Péče, ne boj</h3>
+              <p>Žádné zbraně, žádné násilí. Lišku si trpělivostí a večerní miskou skamarádíš. Káně vyřešíš úkrytem, ne bojem. Každé setkání končí dobře — a s ponaučením.</p>
+            </article>
+            <article class="pillar reveal">
+              <div class="pillar__ico" aria-hidden="true">🌗</div>
+              <h3>Den má svůj rytmus</h3>
+              <p>Ráno vypustit a nakrmit, v poledne uklidit a vyrábět, večer zavřít zvířata před lesem. Pak spát → další den. Roční období se střídají a mění pravidla.</p>
+            </article>
+            <article class="pillar reveal">
+              <div class="pillar__ico" aria-hidden="true">🗺️</div>
+              <h3>Živý, chodící svět</h3>
+              <p>Top-down louka ve stylu Pokémon a Zoo Tycoon. Statek, bylinná louka, rybník a hájek propojené cestami lesem. Mini-mapa, minihry, hlavolamy, lidé s vlastními příběhy.</p>
+            </article>
+            <article class="pillar reveal">
+              <div class="pillar__ico" aria-hidden="true">❄️</div>
+              <h3>Přežij zimu</h3>
+              <p>Hlídej i vlastní energii, sytost a žízeň. Nakoseš a svezeš seno, naštípeš dřevo, zatopíš. Kratší dny, víc krmení. Zima nekompromisně prověří, jak dobrý jsi hospodář.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== DEN (interaktivní) ===================== -->
+      <section class="section day" id="den" aria-label="Průběh dne">
+        <div class="wrap">
+          <header class="sec-head sec-head--left">
+            <p class="eyebrow">Jeden den = jeden level</p>
+            <h2 class="sec-title">Tři fáze. Jeden západ slunce, který si nechceš nechat ujít.</h2>
+          </header>
+
+          <div class="day__layout">
+            <div class="day__stage">
+              <canvas id="dayScene" class="day__canvas" aria-hidden="true"></canvas>
+              <div class="day__stagelabel" id="dayLabel">Ráno</div>
+            </div>
+
+            <div class="day__panel">
+              <ol class="day__tabs" role="tablist" aria-label="Fáze dne">
+                <li><button class="day__tab is-active" role="tab" aria-selected="true" data-day="morning"><span class="idx">01</span> Ráno</button></li>
+                <li><button class="day__tab" role="tab" aria-selected="false" data-day="noon"><span class="idx">02</span> Poledne</button></li>
+                <li><button class="day__tab" role="tab" aria-selected="false" data-day="evening"><span class="idx">03</span> Večer</button></li>
+              </ol>
+
+              <div class="day__body">
+                <div class="day__pane is-active" data-day="morning">
+                  <h3>Rozespalý statek se probouzí</h3>
+                  <p>Vypustíš drůbež z kurníku, projdeš po miskách — drůbež, prasata, stádo i mazlíčky — a naplníš je krmivem a vodou. Cestou sesbíráš vejce. Kdo se ráno nenají, ten do večera zeslábne.</p>
+                  <ul class="chips"><li>Vypustit drůbež</li><li>Nakrmit &amp; napojit</li><li>Sběr vajec</li></ul>
+                </div>
+                <div class="day__pane" data-day="noon">
+                  <h3>Poledne patří práci a fortelu</h3>
+                  <p>Úklid výběhů, štípání dřeva, rozdělání ohně a sběr bylin. V dílně vyrobíš řebříčkovou mast, čaj nebo vařené krmivo, ostříháš vlnu. Přebytky prodáš ve stánku a nakoupíš, co dojde.</p>
+                  <ul class="chips"><li>Úklid &amp; dřevo</li><li>Výroba v dílně</li><li>Obchod ve stánku</li></ul>
+                </div>
+                <div class="day__pane" data-day="evening">
+                  <h3>Než přijde les</h3>
+                  <p>Dokrmíš, doplníš vodu a hlavně <strong>zavřeš zvířata</strong> — v noci obchází louku liška. Zkontroluješ vlastní síly a jdeš spát. Ráno začíná nový den, možná už v jiném ročním období.</p>
+                  <ul class="chips"><li>Večerní krmení</li><li>Zavřít před liškou</li><li>Spát → další den</li></ul>
+                </div>
+              </div>
+
+              <p class="day__hint">Ťukni na fázi — scéna vlevo i celá stránka změní světlo. Přesně tak plyne den ve hře.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== ROČNÍ OBDOBÍ ===================== -->
+      <section class="section seasons" aria-label="Roční období">
+        <div class="wrap">
+          <header class="sec-head">
+            <p class="eyebrow">Čtyři kapitoly roku</p>
+            <h2 class="sec-title">Rok na Louce se otáčí a pokaždé žádá něco jiného.</h2>
+          </header>
+          <div class="seasons__grid">
+            <article class="season season--spring reveal" tabindex="0">
+              <div class="season__glyph" aria-hidden="true">🌱</div>
+              <h3>Jaro</h3>
+              <p>Stříhání vlny, první byliny, rozkvetlá permakulturní zahrada. Louka ožívá.</p>
+            </article>
+            <article class="season season--summer reveal" tabindex="0">
+              <div class="season__glyph" aria-hidden="true">🌾</div>
+              <h3>Léto</h3>
+              <p>Kosení, sušení a svoz sena — závod s počasím o zásoby na zimu. Dlouhé dny, plno práce.</p>
+            </article>
+            <article class="season season--autumn reveal" tabindex="0">
+              <div class="season__glyph" aria-hidden="true">🍂</div>
+              <h3>Podzim</h3>
+              <p>Sklizeň, zavařování, poslední přípravy. Dny se krátí, les je blíž a hlasitější.</p>
+            </article>
+            <article class="season season--winter reveal" tabindex="0">
+              <div class="season__glyph" aria-hidden="true">❄️</div>
+              <h3>Zima</h3>
+              <p>Víc krmení, topení dřevem, kratší dny. Nejtěžší zkouška — a nejkrásnější ticho.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== OBYVATELÉ (interaktivní) ===================== -->
+      <section class="section residents" id="obyvatele" aria-label="Obyvatelé Louky">
+        <div class="wrap">
+          <header class="sec-head sec-head--left">
+            <p class="eyebrow">Skuteční obyvatelé</p>
+            <h2 class="sec-title">Nejsou to postavy. Jsou to Karel, Princezna, Avala&nbsp;…</h2>
+            <p class="sec-sub sec-sub--left">
+              Každé zvíře na Louce žilo nebo žije doopravdy — s vlastní povahou i osudem. Ve hře je
+              najdeš podle skutečných fotek i sprity podle reálných předloh. Vyber si a poznej je.
+            </p>
+          </header>
+
+          <div class="residents__filters" role="group" aria-label="Filtr podle druhu">
+            <button class="pill is-active" data-group="all" type="button">Všichni</button>
+            <button class="pill" data-group="stado" type="button">Stádo</button>
+            <button class="pill" data-group="prasata" type="button">Prasata</button>
+            <button class="pill" data-group="drubez" type="button">Drůbež</button>
+            <button class="pill" data-group="mazlici" type="button">Mazlíčci</button>
+          </div>
+
+          <div class="residents__grid" id="residentsGrid" aria-live="polite">
+            <!-- karty se generují v app.js -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== SVĚT / MAPA ===================== -->
+      <section class="section world" id="svet" aria-label="Svět Louky">
+        <div class="wrap">
+          <header class="sec-head">
+            <p class="eyebrow">Prozkoumatelný svět</p>
+            <h2 class="sec-title">Velká louka propojená lesními cestami.</h2>
+            <p class="sec-sub">Chodíš postavou po světě — šipky nebo WASD na klávesnici, křížové ovládání na mobilu. Ťukni na místo na mapě.</p>
+          </header>
+
+          <div class="world__map" role="group" aria-label="Mapa louky">
+            <div class="worldmap">
+              <span class="worldmap__spot" style="--x:22%;--y:32%" data-title="Statek" data-desc="Kurník, chlívek, pastvina a pelíšky. Srdce každodenní péče." tabindex="0"><b>🏡</b></span>
+              <span class="worldmap__spot" style="--x:52%;--y:22%" data-title="Bylinná louka" data-desc="Maruška tě naučí poznávat byliny. Suroviny pro mast a čaj." tabindex="0"><b>🌿</b></span>
+              <span class="worldmap__spot" style="--x:74%;--y:40%" data-title="Rybník" data-desc="Domov kachen a hus. Voda, klid a rákosí." tabindex="0"><b>💧</b></span>
+              <span class="worldmap__spot" style="--x:60%;--y:64%" data-title="Dílna &amp; stánek" data-desc="Výroba a obchod. Tony tě naučí kutit a opravovat." tabindex="0"><b>🛠️</b></span>
+              <span class="worldmap__spot" style="--x:30%;--y:68%" data-title="Ohniště &amp; kuchyně" data-desc="Vaříš krmivo, čaj a jídlo pro sebe. Tady se hřeje zima." tabindex="0"><b>🔥</b></span>
+              <span class="worldmap__spot" style="--x:84%;--y:74%" data-title="Lesní brána → hájek" data-desc="Vyřeš ptačí hlavolam Simon a otevřeš cestu i truhlu se zásobami." tabindex="0"><b>🚪</b></span>
+              <div class="worldmap__info" id="worldInfo">
+                <strong>Ťukni na značku</strong>
+                <span>Každé místo má svůj úkol, obyvatele i příběh.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="world__people">
+            <article class="person reveal">
+              <div class="person__ava" aria-hidden="true">🪓</div>
+              <div>
+                <h3>Tomáš <span>Předseda — práce &amp; rady</span></h3>
+                <p>Naučí tě štípat dřevo na čas. Minihra o rytmu a přesnosti.</p>
+              </div>
+            </article>
+            <article class="person reveal">
+              <div class="person__ava" aria-hidden="true">🌿</div>
+              <div>
+                <h3>Maruška <span>Srdce spolku</span></h3>
+                <p>Poznávání bylin. Naučná minihra, po které začneš vyrábět lék z Louky.</p>
+              </div>
+            </article>
+            <article class="person reveal">
+              <div class="person__ava" aria-hidden="true">🐾</div>
+              <div>
+                <h3>Tony <span>Technik a kutil</span></h3>
+                <p>Pexeso s obyvateli Louky. Za odměnu dovednosti i vylepšení statku.</p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== SYSTÉMY ===================== -->
+      <section class="section systems" aria-label="Herní systémy">
+        <div class="wrap">
+          <header class="sec-head">
+            <p class="eyebrow">Pod kapotou</p>
+            <h2 class="sec-title">Malá hra s hloubkou velké.</h2>
+          </header>
+          <div class="systems__grid">
+            <article class="feature feature--wide reveal">
+              <div class="feature__ico" aria-hidden="true">🎵</div>
+              <h3>Adaptivní hudba, kterou nikdo nenahrál</h3>
+              <p>
+                Vrstvená syntéza běží celá v prohlížeči — melodie, bas, pad a perkuse se skládají
+                podle situace. Útěk zvířete spustí „heartbeat“, poplach přidá hnací rytmus,
+                blížící se zima hudbu postupně ztmavuje. Žádné zvukové soubory, jen živý Web&nbsp;Audio.
+              </p>
+            </article>
+            <article class="feature reveal">
+              <div class="feature__ico" aria-hidden="true">🏗️</div>
+              <h3>Ekonomika &amp; vychytávky</h3>
+              <p>Studna, seník, automatické krmítko, sušárna bylin, permakulturní zahrada — každé vylepšení ti ulehčí práci nebo zlevní provoz.</p>
+            </article>
+            <article class="feature reveal">
+              <div class="feature__ico" aria-hidden="true">🫙</div>
+              <h3>Výroba</h3>
+              <p>Řebříčková mast, čaj, vařené krmivo, ostříhaná vlna. Suroviny sbíráš po louce a v lese.</p>
+            </article>
+            <article class="feature reveal">
+              <div class="feature__ico" aria-hidden="true">📖</div>
+              <h3>Deník poznání</h3>
+              <p>Péčí, úklidem a sběrem bylin objevuješ přes 50 ověřených faktů o přírodě a zvířatech. Hraješ se a učíš se.</p>
+            </article>
+            <article class="feature reveal">
+              <div class="feature__ico" aria-hidden="true">🦊</div>
+              <h3>Divocí sousedé</h3>
+              <p>Liška, káně, ježek, srnka. Nikdo nikomu neublíží — questové linky vedou od strachu k přátelství.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== SKUTEČNÝ AZYL ===================== -->
+      <section class="section sanctuary" id="azyl" aria-label="Skutečný azyl Nech mě růst">
+        <div class="wrap sanctuary__inner">
+          <div class="sanctuary__text reveal">
+            <p class="eyebrow eyebrow--onDark">Není to jen hra</p>
+            <h2 class="sec-title sec-title--onDark">Za každým pixelem je skutečná louka.</h2>
+            <p>
+              Louka vychází ze skutečného azylu <strong>Nech mě růst z.s.</strong> Karel, Princezna,
+              Flíček, Avala, Květa i desítky dalších tu doopravdy dožívají v klidu — není to farma
+              na porážku. Hra převádí jejich příběhy do herní podoby s úctou a s reálnými fotkami.
+            </p>
+            <p>
+              A zásadní věc: <strong>koupí plné hry podpoříš ten skutečný azyl.</strong> Hraní tak
+              není únik od světa — je to malá pomoc jemu.
+            </p>
+            <div class="sanctuary__cta">
+              <a class="btn btn--gold" href="https://nechmerust.org" target="_blank" rel="noopener">Navštívit nechmerust.org ↗</a>
+            </div>
+          </div>
+          <figure class="sanctuary__photo reveal">
+            <img src="./assets/animals/karel.webp" alt="Osel Karel, jeden ze skutečných obyvatel azylu" loading="lazy" width="360" height="640" />
+            <figcaption>Karel — hravý osel s velkým srdcem. Skutečný obyvatel Louky.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ===================== VÝVOJ / ROADMAP ===================== -->
+      <section class="section roadmap" id="cesta" aria-label="Vývoj hry">
+        <div class="wrap">
+          <header class="sec-head">
+            <p class="eyebrow">Hra se stále vyvíjí</p>
+            <h2 class="sec-title">Cesta Louky</h2>
+            <p class="sec-sub">Stavíme ji poctivě, kus po kuse. Tady je, kde jsme a kam míříme.</p>
+          </header>
+
+          <ol class="timeline">
+            <li class="timeline__item is-done reveal">
+              <span class="timeline__tag">Hotovo</span>
+              <h3>Živý svět &amp; jádro péče</h3>
+              <p>Chodící postava, denní cyklus, přes sto zvířat, ekonomika, výroba, adaptivní hudba.</p>
+            </li>
+            <li class="timeline__item is-now reveal">
+              <span class="timeline__tag">Právě teď</span>
+              <h3>Předběžný přístup na Androidu</h3>
+              <p>Demo zdarma (tutoriál a první dny) a plná hra na Google Play. Ladíme výkon i nativní zážitek.</p>
+            </li>
+            <li class="timeline__item reveal">
+              <span class="timeline__tag">Brzy</span>
+              <h3>Celý rok a všechny questy</h3>
+              <p>Kompletní příběhové linky, sezónní události, sena, svátky a další obyvatelé.</p>
+            </li>
+            <li class="timeline__item reveal">
+              <span class="timeline__tag">Vize</span>
+              <h3>Víc louky pro každého</h3>
+              <p>Další platformy, jazyky a foto-aktualizace, jak azyl roste. Hra poroste s ním.</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ===================== EDICE ===================== -->
+      <section class="section editions" id="edice" aria-label="Verze hry">
+        <div class="wrap">
+          <header class="sec-head">
+            <p class="eyebrow">Vyzkoušej, pak podpoř</p>
+            <h2 class="sec-title">Začni zdarma. Zůstaň, když tě chytne.</h2>
+          </header>
+          <div class="editions__grid">
+            <article class="edition reveal">
+              <p class="edition__kicker">Demo</p>
+              <p class="edition__price">Zdarma</p>
+              <p class="edition__note">Tutoriál a první dny na Louce</p>
+              <ul class="edition__list">
+                <li>Poznej ovládání a rytmus dne</li>
+                <li>Setkej se s prvními obyvateli</li>
+                <li>První questy a minihry</li>
+                <li>Bez závazků</li>
+              </ul>
+              <a class="btn btn--ghost btn--full" href="https://play.google.com/store" target="_blank" rel="noopener">Stáhnout na Google Play</a>
+            </article>
+
+            <article class="edition edition--feature reveal">
+              <p class="edition__badge">Podpoří skutečný azyl</p>
+              <p class="edition__kicker">Louka — plná hra</p>
+              <p class="edition__price">299 Kč <span>jednorázově</span></p>
+              <p class="edition__note">Celý rok na Louce — natrvalo</p>
+              <ul class="edition__list">
+                <li>Celý herní rok — jaro, léto, podzim i zima</li>
+                <li>Celý hlavní příběh a všechny vedlejší linky</li>
+                <li>Sušení a svoz sena na zimu</li>
+                <li>Bez reklam, platíš jen jednou</li>
+                <li>Vlastnictví přežije i novou hru</li>
+                <li>Podporuješ azyl Nech mě růst</li>
+              </ul>
+              <a class="btn btn--gold btn--full" href="https://play.google.com/store" target="_blank" rel="noopener">Získat plnou hru</a>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== FAQ ===================== -->
+      <section class="section faq" aria-label="Časté dotazy">
+        <div class="wrap wrap--narrow">
+          <header class="sec-head">
+            <p class="eyebrow">Časté dotazy</p>
+            <h2 class="sec-title">Než se do toho pustíš</h2>
+          </header>
+          <div class="faq__list">
+            <details class="faq__item">
+              <summary>Je ve hře opravdu žádné násilí?</summary>
+              <p>Ano. Nejsou zbraně ani boj. Lišku si skamarádíš trpělivostí, káně vyřešíš úkrytem. Každé setkání s divokým sousedem končí dobře a s ponaučením.</p>
+            </details>
+            <details class="faq__item">
+              <summary>Pro koho je Louka?</summary>
+              <p>Pro všechny, kdo mají rádi útulné hry se srdcem, ale nebojí se výzvy. Vhodná i pro děti — zároveň má poctivou ekonomiku a survival hloubku pro dospělé.</p>
+            </details>
+            <details class="faq__item">
+              <summary>Kde si ji zahraju?</summary>
+              <p>V předběžném přístupu na Androidu přes Google Play (demo zdarma i plná hra). Hra běží i v prohlížeči — připravujeme další platformy.</p>
+            </details>
+            <details class="faq__item">
+              <summary>Jsou zvířata skutečná?</summary>
+              <p>Ano. Jména, povahy i fotky vycházejí ze skutečných obyvatel azylu Nech mě růst z.s. Sprity jsou kreslené podle reálných předloh.</p>
+            </details>
+            <details class="faq__item">
+              <summary>Co za 299 Kč získám a komu pomůžu?</summary>
+              <p>Celý herní rok, kompletní příběh a všechny questové linky — natrvalo a bez reklam. Nákup je zároveň skutečnou podporou azylu.</p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== ZÁVĚREČNÉ CTA ===================== -->
+      <section class="section cta-final" aria-label="Výzva k akci">
+        <div class="wrap cta-final__inner">
+          <h2>Louka na tebe čeká.<br />Zvířata taky.</h2>
+          <a class="btn btn--gold btn--lg" href="#edice">Zahrát demo zdarma</a>
+        </div>
+      </section>
+    </main>
+
+    <!-- ===================== FOOTER ===================== -->
+    <footer class="footer">
+      <div class="wrap footer__inner">
+        <div class="footer__brand">
+          <img src="./assets/logo.webp" alt="Nech mě růst" width="120" height="84" />
+          <p>Louka je survival hra azylu <strong>Nech mě růst z.s.</strong> — o péči o zachráněná zvířata uprostřed lesů.</p>
+        </div>
+        <nav class="footer__col" aria-label="Hra">
+          <h4>Hra</h4>
+          <a href="#den">Průběh dne</a>
+          <a href="#obyvatele">Obyvatelé</a>
+          <a href="#svet">Svět</a>
+          <a href="#edice">Verze &amp; ceny</a>
+        </nav>
+        <nav class="footer__col" aria-label="Azyl">
+          <h4>Azyl</h4>
+          <a href="https://nechmerust.org" target="_blank" rel="noopener">nechmerust.org ↗</a>
+          <a href="#azyl">O skutečné Louce</a>
+          <a href="#cesta">Vývoj hry</a>
+        </nav>
+      </div>
+      <div class="wrap footer__bottom">
+        <p>© <span id="year">2026</span> Nech mě růst z.s. Vyrobeno s láskou k Louce.</p>
+        <p class="footer__made">Kdo se stará, roste s nimi. 🌱</p>
+      </div>
+    </footer>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>
