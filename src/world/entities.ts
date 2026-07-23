@@ -235,6 +235,48 @@ export function structureCenter(
   return { x: (p.tx + it.fw / 2) * TS, y: (p.ty + it.fh / 2) * TS };
 }
 
+/** Půlka šířky kolizního rámečku postavy (px). */
+export const PLAYER_HW = 8;
+
+/**
+ * Kolizní rámeček postavy u nohou — JEDINÝ zdroj pravdy pro pohyb hráče
+ * (WorldCanvas) i pro detekci zaseknutí. Dřív měl pohyb 5bodový rámeček,
+ * ale unstuck kontroloval jen střed: hráč zaklíněný okrajem rámečku
+ * (typicky „hlavou" −8 px do jižní hrany čerstvě dostavěné stavby) prošel
+ * kontrolou středu, a přitom se nemohl pohnout žádným směrem.
+ */
+export function isBoxBlocked(px: number, py: number): boolean {
+  return (
+    isBlocked(px - PLAYER_HW, py) ||
+    isBlocked(px + PLAYER_HW, py) ||
+    isBlocked(px - PLAYER_HW, py - 8) ||
+    isBlocked(px + PLAYER_HW, py - 8) ||
+    isBlocked(px, py)
+  );
+}
+
+/**
+ * Nejbližší volné místo pro postavu (spirála po dlaždicích, mírný sklon
+ * k jihu — tam bývají dveře a mýtina). Vrací střed dlaždice, kde je volný
+ * celý kolizní rámeček, nebo null (nemělo by nastat — mapa je z většiny louka).
+ */
+export function nearestFreeSpot(px: number, py: number): { x: number; y: number } | null {
+  const stx = Math.floor(px / TS);
+  const sty = Math.floor(py / TS);
+  for (let r = 0; r < 12; r++)
+    for (let dy = r; dy >= -r; dy--) // jih (kladné dy) má přednost
+      for (let dx = -r; dx <= r; dx++) {
+        if (r > 0 && Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+        const nx = stx + dx;
+        const ny = sty + dy;
+        if (nx < 1 || ny < 1 || nx >= MAP.w - 1 || ny >= MAP.h - 1) continue;
+        const cx = (nx + 0.5) * TS;
+        const cy = (ny + 0.5) * TS;
+        if (!isTileBlocked(nx, ny) && !isBoxBlocked(cx, cy)) return { x: cx, y: cy };
+      }
+  return null;
+}
+
 /**
  * Vysune postavu ven, pokud po dostavění stavby (`addedIds`) zůstala stát tak,
  * že ji stavba schová. Plán stavby je průchozí, takže hráč může stavět i
@@ -261,23 +303,22 @@ export function unstuckFromBuildings(
     const left = it.tx * TS - half;
     const right = (it.tx + it.fw) * TS + depth + half;
     const occluded = py < baseY && px >= left && px <= right; // hráč je ZA stavbou
-    if (!occluded && !isBlocked(px, py)) continue; // venku a vidět → nech být
+    // Zaseknutí testujeme CELÝM kolizním rámečkem postavy (ne jen středem):
+    // hráč stavějící od jižní hrany zůstával zaklíněný „hlavou" rámečku
+    // v půdorysu, střed měl přitom volný — a nemohl se pohnout nikam.
+    if (!occluded && !isBoxBlocked(px, py)) continue; // venku a vidět → nech být
     const tx = Math.floor(px / TS);
     // dolů (na jih) na první volnou dlaždici, jejíž střed je pod baseY → hráč
     // se kreslí PŘED stavbou (dveře i mýtina staveb jsou vždy na jihu)
-    const fromY = Math.max(it.ty + it.fh, Math.floor(py / TS) + 1);
-    for (let y = fromY; y < MAP.h - 1; y++)
-      if (!isTileBlocked(tx, y)) return { x: (tx + 0.5) * TS, y: (y + 0.5) * TS };
-    // pojistka: spirála se sklonem k jihu, jen dlaždice pod baseY (viditelné)
-    const sty = Math.floor(py / TS);
-    for (let r = 1; r < 10; r++)
-      for (let dy = r; dy >= -r; dy--)
-        for (let dx = -r; dx <= r; dx++) {
-          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-          const ny = sty + dy;
-          if ((ny + 0.5) * TS >= baseY && !isTileBlocked(tx + dx, ny))
-            return { x: (tx + dx + 0.5) * TS, y: (ny + 0.5) * TS };
-        }
+    const fromY = Math.max(it.ty + it.fh, Math.floor(py / TS));
+    for (let y = fromY; y < MAP.h - 1; y++) {
+      const cx = (tx + 0.5) * TS;
+      const cy = (y + 0.5) * TS;
+      if (!isTileBlocked(tx, y) && !isBoxBlocked(cx, cy)) return { x: cx, y: cy };
+    }
+    // pojistka: spirála kolem hráče (sklon k jihu), první volné místo
+    const spot = nearestFreeSpot(px, Math.max(py, baseY + TS * 0.5));
+    if (spot) return spot;
   }
   return null;
 }
