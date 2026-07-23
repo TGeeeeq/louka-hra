@@ -8,7 +8,6 @@ import {
   INTERACTABLES,
   PLAYER_START,
   isBlocked,
-  isMovable,
   isBoxBlocked,
   nearestFreeSpot,
   setConstructed,
