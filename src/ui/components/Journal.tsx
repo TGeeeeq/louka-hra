@@ -4,11 +4,12 @@ import { ANIMALS } from "../../game/content/animals";
 import { WILD_ANIMALS } from "../../game/content/wild";
 import { FACTS } from "../../game/content/facts";
 import { QUEST_LINES } from "../../game/content/quests";
+import { ACHIEVEMENTS } from "../../game/achievements";
 import { AnimalSprite } from "../sprites/AnimalSprite";
 import { useGame } from "../store";
 import { photoUrl } from "../photo";
 
-type Tab = "zvirata" | "ukoly" | "vedomosti" | "olouce";
+type Tab = "zvirata" | "ukoly" | "vedomosti" | "uspechy" | "olouce";
 
 const CAT_LABEL: Record<FactCategory, string> = {
   zvirata: "🐾 Zvířata",
@@ -32,6 +33,7 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
         <button className={tab === "zvirata" ? "on" : ""} onClick={() => setTab("zvirata")}>🐾 Zvířata</button>
         <button className={tab === "ukoly" ? "on" : ""} onClick={() => setTab("ukoly")}>📋 Úkoly</button>
         <button className={tab === "vedomosti" ? "on" : ""} onClick={() => setTab("vedomosti")}>📖 Vědomosti</button>
+        <button className={tab === "uspechy" ? "on" : ""} onClick={() => setTab("uspechy")}>🏅 Úspěchy</button>
         <button className={tab === "olouce" ? "on" : ""} onClick={() => setTab("olouce")}>🌿 O Louce</button>
       </div>
 
@@ -145,6 +147,26 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {tab === "uspechy" && (
+        <div className="facts">
+          <p className="panel-lead">
+            Odemčeno {ACHIEVEMENTS.filter((a) => state.achievements.includes(a.id)).length} z {ACHIEVEMENTS.length} úspěchů.
+            Odemykají se samy od sebe pořádnou péčí o Louku.
+          </p>
+          <div className="fact-cat">
+            {ACHIEVEMENTS.map((a) => {
+              const owned = state.achievements.includes(a.id);
+              return (
+                <div key={a.id} className={`fact-row ${owned ? "" : "locked"}`}>
+                  <b>{owned ? a.emoji : "🔒"} {a.name}</b>
+                  <p>{a.desc}</p>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

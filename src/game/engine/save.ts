@@ -64,6 +64,14 @@ export function loadGame(): GameState | null {
     if ((parsed.saveVersion ?? 0) < 5) {
       merged.saveVersion = 5;
     }
+    // Migrace v5 → v6: achievementy + počítadlo kvízu bylinek. Merge s
+    // initialState() výše už doplnil prázdné výchozí hodnoty; tady se jen
+    // pojistí typ (staré save mohly mít cokoliv) a zvedne verze.
+    if ((parsed.saveVersion ?? 0) < 6) {
+      if (!Array.isArray(merged.achievements)) merged.achievements = [];
+      if (typeof merged.herbQuizCorrect !== "number") merged.herbQuizCorrect = 0;
+      merged.saveVersion = 6;
+    }
     return merged;
   } catch {
     return null;

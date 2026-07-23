@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { FACTS } from "../../game/content/facts";
+import { useGame } from "../store";
 
 const HERBS = FACTS.filter((f) => f.category === "byliny");
 
@@ -16,6 +17,7 @@ const ROUNDS = 5;
 const PASS = 3;
 
 export function HerbQuiz({ onWin, onClose }: { onWin: () => void; onClose: () => void }) {
+  const { dispatch } = useGame();
   const questions = useMemo(() => shuffle(HERBS).slice(0, ROUNDS), []);
   const [i, setI] = useState(0);
   const [score, setScore] = useState(0);
@@ -67,7 +69,12 @@ export function HerbQuiz({ onWin, onClose }: { onWin: () => void; onClose: () =>
               disabled={reveal}
               onClick={() => {
                 setPicked(o.id);
-                if (correct) setScore((s) => s + 1);
+                if (correct) {
+                  setScore((s) => s + 1);
+                  // Správné odpovědi se sčítají napříč hrami — živí achievement
+                  // „Kvízový mistr“ (viz src/game/achievements.ts).
+                  dispatch({ type: "HERB_QUIZ_RESULT", correct: 1 });
+                }
               }}
             >
               🌿 {o.title}

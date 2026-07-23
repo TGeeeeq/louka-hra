@@ -76,8 +76,10 @@ export function initialState(): GameState {
     questLine: 0,
     questProgress: { main: 0 },
     questCompleted: [],
+    achievements: [],
+    herbQuizCorrect: 0,
     fullVersion: false,
-    saveVersion: 5,
+    saveVersion: 6,
     flags: {},
     dialog: null,
 
