@@ -138,6 +138,9 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
                       <>
                         <b>{f.title}</b>
                         <p>{f.text}</p>
+                        {f.more?.map((m, mi) => (
+                          <p key={mi} className="fact-more">🌱 {m}</p>
+                        ))}
                       </>
                     ) : (
                       <b className="lock">🔒 zatím neobjeveno</b>

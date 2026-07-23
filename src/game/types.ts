@@ -188,6 +188,8 @@ export interface Fact {
   category: FactCategory;
   title: string;
   text: string;
+  /** Doplňkové zajímavosti (herbář) — zobrazují se u objevených faktů v Deníku. */
+  more?: string[];
 }
 
 /** Rozdělané sušení sena na seništi (kosení, sušení, svoz — běžná podzimní práce na Louce). */
