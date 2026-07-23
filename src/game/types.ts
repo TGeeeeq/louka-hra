@@ -188,6 +188,8 @@ export interface Fact {
   category: FactCategory;
   title: string;
   text: string;
+  /** Doplňkové zajímavosti (herbář) — zobrazují se u objevených faktů v Deníku. */
+  more?: string[];
 }
 
 /** Rozdělané sušení sena na seništi (kosení, sušení, svoz — běžná podzimní práce na Louce). */
@@ -272,6 +274,10 @@ export interface GameState {
   /** Postup v každé questové lince (id linky → index dalšího questu). */
   questProgress: Record<string, number>;
   questCompleted: string[];
+  /** Odemčené achievementy (id — viz src/game/achievements.ts). */
+  achievements: string[];
+  /** Celkový počet správných odpovědí v kvízu bylinek (napříč hrami). */
+  herbQuizCorrect: number;
   /** Plná verze hry — zrcadlo entitlements (zdroj pravdy je mimo save). */
   fullVersion: boolean;
   /** Verze save formátu pro migrace. */

@@ -38,6 +38,7 @@ export function cloneState(s: GameState): GameState {
     knownFacts: [...s.knownFacts],
     seenAnimals: [...s.seenAnimals],
     questCompleted: [...s.questCompleted],
+    achievements: [...s.achievements],
     flags: { ...s.flags },
     log: s.log,
   };

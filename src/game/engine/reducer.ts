@@ -45,6 +45,7 @@ import {
   WINTER_FACTS,
 } from "../content/facts";
 import { initialState } from "./state";
+import { newlyUnlocked } from "../achievements";
 import { QUEST_LINES } from "../content/quests";
 import { CHARACTER_SET, initialAnimalStates } from "../content/characters";
 import { layoutComfortFor } from "./comfort";
@@ -108,6 +109,8 @@ export type Action =
   // Plná verze (entitlement)
   | { type: "SET_FULL_VERSION"; full: boolean }
   | { type: "HAY_WORK" } // Práce na seništi — kosení / rozhoz / obracení podle situace
+  // Kvíz bylinek — započítání správných odpovědí (pro achievementy)
+  | { type: "HERB_QUIZ_RESULT"; correct: number }
   // Developerský (testovací) mód
   | { type: "DEV_UNLOCK" }
   | { type: "DEV_TOGGLE"; key: "godMode" | "turbo" }
@@ -216,7 +219,24 @@ export function reducer(state: GameState, action: Action): GameState {
     return next;
   // Survival questy běží až po dokončení úvodního tutoriálu.
   if (!tutorialActive(next)) advanceQuests(next);
+  // Achievementy se kontrolují po každé stavové akci (včetně odměn questů).
+  checkAchievements(next);
   return next;
+}
+
+/** Zapíše nově splněné achievementy do stavu a ohlásí je hráči. */
+function checkAchievements(s: GameState) {
+  const fresh = newlyUnlocked(s);
+  if (!fresh.length) return;
+  for (const a of fresh) {
+    s.achievements = [...s.achievements, a.id];
+    addLog(s, `🏅 Úspěch odemčen: ${a.emoji} ${a.name}`, "good");
+  }
+  // Toast jen když zrovna neblázní jiná hláška — achievement je i v logu.
+  if (!s.flash) {
+    const a = fresh[0];
+    flash(s, `🏅 Úspěch odemčen: ${a.emoji} ${a.name}`, "good");
+  }
 }
 
 function advanceQuests(s: GameState) {
@@ -305,6 +325,15 @@ function core(state: GameState, action: Action): GameState {
       if (action.energy) s.energy = clamp(s.energy + action.energy, 0, s.maxEnergy);
       if (action.items) for (const it of action.items) give(s, it.item, it.qty);
       if (action.flag) s.flags[action.flag] = true;
+      return s;
+    }
+
+    case "HERB_QUIZ_RESULT": {
+      // Bezpečnost: záporné/nesmyslné hodnoty se ignorují.
+      const correct = Math.max(0, Math.floor(action.correct));
+      if (correct === 0) return state;
+      const s = cloneState(state);
+      s.herbQuizCorrect += correct;
       return s;
     }
 
