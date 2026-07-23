@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { GameProvider } from "./ui/store";
 import { bootstrapNative } from "./native";
+import { setupPwa } from "./pwa";
 import "./styles/global.css";
 
 function render() {
@@ -20,3 +21,6 @@ function render() {
 // appky nic nezůstalo — teprve pak store.tsx poprvé zavolá loadGame().
 // Na webu bootstrapNative() vrátí okamžitě vyřešený příslib.
 void bootstrapNative().finally(render);
+
+// PWA offline cache — registruje se jen na webu (uvnitř je detekce platformy).
+setupPwa();
