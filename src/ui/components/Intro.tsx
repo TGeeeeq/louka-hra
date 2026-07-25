@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { useGame } from "../store";
 import { PEOPLE } from "../../game/content/people";
 import { PersonSprite } from "../sprites/PersonSprite";
+import { personPhotoUrl } from "../photo";
 import { ANIMAL_BY_ID } from "../../game/content/animals";
 import { AnimalSprite } from "../sprites/AnimalSprite";
 import AFLogo from "./AFLogo";
@@ -350,7 +351,11 @@ export function Intro({ onFullVersion }: { onFullVersion?: () => void }) {
             <div className="intro-people">
               {PEOPLE.map((p) => (
                 <div key={p.id} className="intro-person">
-                  <PersonSprite person={p} size={84} />
+                  {personPhotoUrl(p) ? (
+                    <img className="npc-photo" src={personPhotoUrl(p)!} alt={p.name} width={84} height={84} />
+                  ) : (
+                    <PersonSprite person={p} size={84} />
+                  )}
                   <b>{p.name}</b>
                   <small>{p.role}</small>
                   <p>„{p.line}“</p>

@@ -1126,6 +1126,7 @@ button:disabled { cursor: not-allowed; }
 .npc-panel { display: flex; flex-direction: column; gap: 10px; }
 .npc-top { display: flex; align-items: center; gap: 14px; }
 .npc-portrait { background: var(--surface-alt); border-radius: var(--r); padding: 4px; box-shadow: var(--shadow-sm); }
+.npc-photo { display: block; border-radius: calc(var(--r) - 4px); object-fit: cover; }
 .npc-top h2 { font-size: 1.4rem; }
 .npc-role { font-size: 0.82rem; color: var(--muted); }
 .npc-line { font-family: var(--font-serif); font-style: italic; color: var(--moss-deep); font-size: 1.04rem; }

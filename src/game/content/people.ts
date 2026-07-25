@@ -6,6 +6,7 @@ export interface PersonDef {
   hair: string;
   shirt: string;
   variant?: "beard" | "ponytail" | "hat";
+  photo?: string; // stylizovaný portrét v public/people/ (generovaný ze skutečné fotky)
   line: string; // uvítání
   help?: string; // čím hráči pomůže
   domain?: string; // krátký štítek odbornosti
@@ -30,9 +31,10 @@ export const PEOPLE: PersonDef[] = [
     name: "Tomáš",
     role: "Předseda — práce & rady",
     skin: "#eebb92",
-    hair: "#3a2a1c",
-    shirt: "#b85c3c",
+    hair: "#a4653a",
+    shirt: "#6b7048",
     variant: "beard",
+    photo: "tomas.webp",
     line: "Vítej na Louce! Já jsem Tomáš. Každé zvíře tu dožije v klidu — a práce kolem je až nad hlavu.",
     help: "Práce a rady. Posílí tě a naučí sekat dřevo tak, ať z toho něco je — co kus, to teplo na zimu.",
     domain: "Práce & rady",
@@ -49,9 +51,10 @@ export const PEOPLE: PersonDef[] = [
     name: "Maruška",
     role: "Srdce spolku — vše okolo",
     skin: "#f3cba6",
-    hair: "#8a5a2c",
-    shirt: "#c89858",
+    hair: "#d9a856",
+    shirt: "#d97a3a",
     variant: "ponytail",
+    photo: "maruska.webp",
     line: "Ahoj, já jsem Maruška. Papíry, krmivo, byliny, rozpočet — držím pohromadě vše okolo. A hlídej peníze!",
     help: "Vše okolo: byliny, zásoby i rozpočet. Naučí tě poznávat byliny — základ mastí a čajů.",
     domain: "Vše okolo",
@@ -71,8 +74,9 @@ export const PEOPLE: PersonDef[] = [
     role: "Technik a kutil",
     skin: "#edc098",
     hair: "#241f1c",
-    shirt: "#2f7d8a",
+    shirt: "#4f4a44",
     variant: "beard",
+    photo: "tony.webp",
     line: "Čau, Tony. Dej mi dráty a chvíli a Louka si skoro pomáhá sama. Co je rozbité, spravím.",
     help: "Technika a vychytávky: samokrmítka, pumpa, vyhřívané napáječky, ohradník. Naučí tě je zapojit.",
     domain: "Technika",

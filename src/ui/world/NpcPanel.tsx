@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { PersonDef } from "../../game/content/people";
 import { PersonSprite } from "../sprites/PersonSprite";
+import { personPhotoUrl } from "../photo";
 
 export function NpcPanel({
   person,
@@ -18,11 +19,18 @@ export function NpcPanel({
   const tips = person.tips ?? [];
   const [ti, setTi] = useState(0);
   const tip = tips.length ? tips[ti % tips.length] : null;
+  const photo = personPhotoUrl(person);
 
   return (
     <div className="npc-panel">
       <div className="npc-top">
-        <div className="npc-portrait"><PersonSprite person={person} size={92} /></div>
+        <div className="npc-portrait">
+          {photo ? (
+            <img className="npc-photo" src={photo} alt={person.name} width={92} height={92} />
+          ) : (
+            <PersonSprite person={person} size={92} />
+          )}
+        </div>
         <div>
           <h2>{person.name}</h2>
           <span className="npc-role">{person.role}</span>
