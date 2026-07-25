@@ -100,7 +100,7 @@ export function BuildPanel({ money, wood, structures, selection, onSelect, restr
         })}
       </div>
       <p className="panel-note">
-        {selection ? "Klepni na louku, kam to postavit." : "Vyber si stavbu a pak klepni na louku."}
+        {selection ? "Klepni na louku, kam to postavit — pak ještě potvrdíš." : "Vyber si stavbu a pak klepni na louku."}
       </p>
     </div>
   );

@@ -93,11 +93,18 @@ interface Props {
    *  (pak se v edit módu klepnutím vybírá existující stavba k přesunu/zboření). */
   buildSelection: string | null;
   /** Uvítací kamerový sestřih (Task 4): když je zadaný, kamera míří na tuto
-   *  dlaždici místo sledování hráče a pohyb/vstup hráče je zamrzlý. */
-  cinematic?: { tx: number; ty: number } | null;
+   *  dlaždici místo sledování hráče a pohyb/vstup hráče je zamrzlý.
+   *  `ease` = rychlost dojezdu kamery (výchozí 8 = okamžité dorovnání jako
+   *  při sledování hráče; ~1 = pomalý filmový přelet). */
+  cinematic?: { tx: number; ty: number; ease?: number } | null;
   /** Klepnutí/kliknutí do světa během sestřihu ho předčasně přeruší. */
   onSkipCinematic?: () => void;
-  onPlaceStructure: (defId: string, tx: number, ty: number) => void;
+  /** Hráč vybral místo pro novou stavbu. Nestaví se hned — App si nechá
+   *  potvrdit „opravdu sem?" a teprve pak pošle PLACE_STRUCTURE. */
+  onPlaceRequest: (defId: string, tx: number, ty: number) => void;
+  /** Běží potvrzovací dotaz? Půdorys pak zůstane svítit na vybraném místě
+   *  (hráč musí vidět, kam staví) a canvas ignoruje další vstup. */
+  awaitingPlaceConfirm?: boolean;
   onDemolishStructure: (uid: string) => void;
   onMoveStructure: (uid: string, tx: number, ty: number) => void;
   onEditReject: () => void;
@@ -199,13 +206,13 @@ const BUILDING_VERB: Record<string, string> = {
   seniste: "Seniště (kosit / sušit / obracet)",
 };
 
-export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceStructure, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent }: Props) {
+export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, awaitingPlaceConfirm, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // měnící se props čteme přes ref, ať smyčku nemusíme restartovat
-  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceStructure, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent });
-  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceStructure, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent };
+  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, awaitingPlaceConfirm, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent });
+  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, awaitingPlaceConfirm, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent };
 
   // Vybraná existující stavba v edit módu (bez buildSelection) — místní React
   // stav, protože řídí DOM lištu Přesunout/Zbořit/Zrušit pod canvasem.
@@ -222,6 +229,11 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
   useEffect(() => {
     if (!editMode || buildSelection) { setSelected(null); setMoving(false); }
   }, [editMode, buildSelection]);
+
+  // Dotaz „postavit sem?" skončil (Ano i Ne) → zhasnout zamčený půdorys.
+  useEffect(() => {
+    if (!awaitingPlaceConfirm) buildGhost.current = null;
+  }, [awaitingPlaceConfirm]);
 
   // Kolize staveb podle toho, co už stojí (blueprint je průchozí). Když hráč
   // dostavěl stavbu „zevnitř" plánu nebo těsně u jejího boku, vysuneme ho ven
@@ -444,6 +456,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       e.preventDefault();
       const P = propsRef.current;
       if (P.cinematic) { P.onSkipCinematic?.(); return; } // ťuknutí = přeskočit sestřih
+      if (P.awaitingPlaceConfirm) return; // čeká se na Ano/Ne — místo je zamčené
       if (P.editMode) {
         if (P.buildSelection) {
           buildGhost.current = computeNewGhost(e, P.buildSelection);
@@ -464,17 +477,23 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
     };
     const onCanvasMove = (e: PointerEvent) => {
       const P = propsRef.current;
-      if (!P.editMode) return;
+      if (!P.editMode || P.awaitingPlaceConfirm) return;
       if (P.buildSelection) { e.preventDefault(); buildGhost.current = computeNewGhost(e, P.buildSelection); return; }
       if (movingRef.current && selectedRef.current) { e.preventDefault(); buildGhost.current = computeMoveGhost(e, selectedRef.current); }
     };
     const onCanvasUp = () => {
       const P = propsRef.current;
+      if (P.awaitingPlaceConfirm) return;
       const g = buildGhost.current;
       if (!g) return;
       if (P.editMode && P.buildSelection) {
-        if (g.valid) P.onPlaceStructure(P.buildSelection, g.tx, g.ty);
-        else P.onEditReject();
+        if (g.valid) {
+          // Nestavíme hned — App se zeptá „opravdu sem?". Půdorys schválně
+          // NEMAŽEME, ať hráč u dotazu pořád vidí vybrané místo.
+          P.onPlaceRequest(P.buildSelection, g.tx, g.ty);
+          return;
+        }
+        P.onEditReject();
       } else if (P.editMode && movingRef.current && selectedRef.current) {
         if (g.valid) P.onMoveStructure(selectedRef.current.uid, g.tx, g.ty);
         else P.onEditReject();
@@ -858,8 +877,9 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       let cy = focusY - viewH / 2;
       cx = mapPixW <= viewW ? (mapPixW - viewW) / 2 : Math.max(0, Math.min(mapPixW - viewW, cx));
       cy = mapPixH <= viewH ? (mapPixH - viewH) / 2 : Math.max(0, Math.min(mapPixH - viewH, cy));
-      cam.current.x += (cx - cam.current.x) * Math.min(1, dt * 8);
-      cam.current.y += (cy - cam.current.y) * Math.min(1, dt * 8);
+      const camEase = P.cinematic?.ease ?? 8;
+      cam.current.x += (cx - cam.current.x) * Math.min(1, dt * camEase);
+      cam.current.y += (cy - cam.current.y) * Math.min(1, dt * camEase);
       const camX = cam.current.x;
       const camY = cam.current.y;
 

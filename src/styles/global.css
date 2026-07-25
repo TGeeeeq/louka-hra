@@ -395,6 +395,17 @@ button:disabled { cursor: not-allowed; }
 .build-select-btn.move { background: var(--accent); color: #2a2013; }
 .build-select-btn.move:hover { filter: brightness(1.06); }
 
+/* Potvrzení „postavit sem?" — schválně jen pilulka u spodního kraje (ne modál
+   s překrytím), aby zůstal vidět rozsvícený půdorys na louce. */
+.build-confirm-bar {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); z-index: 42;
+  display: flex; align-items: center; gap: 8px; background: var(--moss-deep); color: var(--cream);
+  padding: 9px 12px; border-radius: 999px; box-shadow: var(--shadow-lg); font-size: 0.84rem; font-weight: 600;
+  max-width: 92vw; flex-wrap: wrap; justify-content: center;
+}
+.build-select-btn.confirm { background: var(--accent); color: #2a2013; }
+.build-select-btn.confirm:hover { filter: brightness(1.06); }
+
 /* ===== Craft ============================================================= */
 .craft { display: flex; flex-direction: column; gap: 9px; }
 .fire.on { color: var(--terracotta); font-weight: 700; }

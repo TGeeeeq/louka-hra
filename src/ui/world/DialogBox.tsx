@@ -1,9 +1,14 @@
 import { useEffect } from "react";
 import { useGame } from "../store";
 
-export function DialogBox() {
+/**
+ * `hidden` = replika je ve frontě, ale zatím se nemá zobrazit (běží uvítací
+ * přelet kamery). Musí blokovat i klávesy, jinak by hráč mezerníkem odklikal
+ * Tomášovo vysvětlení, aniž by ho vůbec viděl.
+ */
+export function DialogBox({ hidden = false }: { hidden?: boolean }) {
   const { state, dispatch } = useGame();
-  const d = state.dialog;
+  const d = hidden ? null : state.dialog;
 
   useEffect(() => {
     if (!d) return;

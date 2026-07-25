@@ -33,7 +33,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     intro: [
       "Vítej na Louce! Já jsem Tomáš. Zatím je to jen kus zelený louky uprostřed lesů — ale to my dva změníme.",
       "Nejdřív se nauč chodit — šipky nebo WASD (na mobilu kříž vlevo dole). Rozhlídni se po tý veliký louce — celou si ji rozvrhneš sám.",
-      "Stavět budeš přes panel dole: vyber, co chci, ať postavíme, a pak klepni na louku, kam to chceš. Začneme přístřeškem pro tebe — pořádnej hospodář potřebuje střechu nad hlavou.",
+      "Stavět budeš přes panel dole: vyber, co chci, ať postavíme, a pak klepni na louku, kam to chceš. Ukáže se ti obrys a zeptám se, jestli to tam vážně chceš — než potvrdíš, můžeš to klidně posunout jinam. Začneme přístřeškem pro tebe — pořádnej hospodář potřebuje střechu nad hlavou.",
       "A ať to víš hned: tady jsme všichni kámoši. Lidi i zvířata. Občas přijde nějaká ta šarvátka — ale stejně jsme pořád jedna parta. 🌿",
     ],
     done: ["Paráda! Máš kde složit hlavu. Jde ti to — hned to zkusíme znova."],

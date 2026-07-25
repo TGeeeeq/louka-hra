@@ -19,6 +19,8 @@ import { GameOver } from "./ui/components/GameOver";
 import { ANIMAL_BY_ID } from "./game/content/animals";
 import { PERSON_BY_ID } from "./game/content/people";
 import { reactionFor } from "./game/content/npcReactions";
+import { NPC_LIFE } from "./game/content/npcLife";
+import { BUILDABLE_BY_ID } from "./game/content/buildables";
 import { NpcPanel } from "./ui/world/NpcPanel";
 import { HerbQuiz } from "./ui/minigames/HerbQuiz";
 import { ChopWood } from "./ui/minigames/ChopWood";
@@ -38,6 +40,25 @@ type Minigame = "herb" | "chop" | "tech";
 type RewardPayload = { money?: number; energy?: number; items?: { item: string; qty: number }[] };
 
 const MG_FOR_NPC: Record<string, Minigame> = { maruska: "herb", tomas: "chop", tony: "tech" };
+
+/**
+ * Uvítací sestřih: pomalý přelet nad celou domovskou loukou (elipsa 18..78 x
+ * 12..56), pak dojezd na Tomáše, který vysvětlí stavění.
+ *
+ * `ease` je rychlost dorovnání kamery — nízká hodnota dělá ten pomalý filmový
+ * pohyb, `hold` je jak dlouho záběr trvá, než se přepne na další.
+ */
+type CineShot = { tx: number; ty: number; ease: number; hold: number };
+// Záběry drží středy tak, aby byl ve výřezu (~35x22 dlaždic) hlavně trávník,
+// ne okolní les — proto se nejde až na kraj elipsy.
+const WELCOME_FLYOVER: CineShot[] = [
+  { tx: 37, ty: 25, ease: 1.0, hold: 3000 }, // severozápad louky
+  { tx: 59, ty: 26, ease: 0.7, hold: 3400 }, // přelet na východ
+  { tx: 59, ty: 43, ease: 0.7, hold: 3200 }, // dolů k jihu
+  { tx: 37, ty: 42, ease: 0.7, hold: 3200 }, // zpátky na západ
+];
+/** Dojezd na Tomáše — o něco rychlejší, ať se řeč nerozjede pozdě. */
+const TOMAS_SHOT_EASE = 2.0;
 const MG_TITLE: Record<Minigame, string> = { herb: "🌿 Poznej bylinku", chop: "🪓 Naseč dřevo", tech: "🔌 Zapoj vynález" };
 const MG_REWARD: Record<Minigame, { flag: string; first: RewardPayload; again: RewardPayload; speaker: string; msg: string }> = {
   herb: { flag: "taught_maruska", first: { items: [{ item: "byliny", qty: 5 }] }, again: { items: [{ item: "byliny", qty: 1 }] }, speaker: "Maruška", msg: "Bylinkář se z tebe stává! Tahle hrst se hodí na mast." },
@@ -142,10 +163,27 @@ export default function App() {
   // D2: potvrzovací dialog „Opustit Louku?" (hardwarové tlačítko Zpět, když
   // nic jiného není otevřené a hra běží).
   const [exitConfirm, setExitConfirm] = useState(false);
-  // Task 4: uvítací kamerový sestřih (louka → hráč) při prvním vstupu.
-  const [cinematic, setCinematic] = useState<{ tx: number; ty: number } | null>(null);
+  // Vybrané místo pro novou stavbu, které čeká na potvrzení „opravdu sem?".
+  // Dokud tu něco je, WorldCanvas drží rozsvícený půdorys a ignoruje vstup.
+  const [placeConfirm, setPlaceConfirm] = useState<{ defId: string; tx: number; ty: number } | null>(null);
+  // Task 4: uvítací kamerový sestřih — přelet nad loukou, pak záběr na Tomáše.
+  // `talk: true` = poslední záběr, kdy už Tomáš mluví; kamera na něm drží,
+  // dokud hráč jeho repliku nedočte (viz efekt „uvolnit kameru" níž).
+  const [cinematic, setCinematic] = useState<
+    { tx: number; ty: number; ease: number; talk: boolean } | null
+  >(null);
   const welcomeStarted = useRef(false);
-  const skipCinematic = () => setCinematic(null);
+  // Naplánované přepnutí záběrů — při přeskočení je NUTNÉ je zrušit, jinak by
+  // pozdější timer kameru znovu zabral po tom, co ji hráč už uvolnil.
+  const cineTimers = useRef<number[]>([]);
+  const clearCineTimers = () => {
+    for (const t of cineTimers.current) window.clearTimeout(t);
+    cineTimers.current = [];
+  };
+  const skipCinematic = () => {
+    clearCineTimers();
+    setCinematic(null);
+  };
   useGameSounds();
 
   // Skryté odemčení dev módu: napsat na klávesnici „louka".
@@ -189,19 +227,46 @@ export default function App() {
   }, [demoGateHit]);
 
   // Task 4: uvítací sestřih — jen jednou, při prvním vstupu na prázdnou louku
-  // (tutorialStep 0, flag ještě nenastavený). Nesmí blokovat reducer/dialogy —
-  // Tomášova úvodní replika ze startu tutoriálu se zobrazí normálně přes ni.
+  // (tutorialStep 0, flag ještě nenastavený). Tomášova replika je ve frontě už
+  // od akce START, ale DialogBox ji přes přelet schová (`hidden`) a zobrazí ji
+  // teprve v posledním záběru, kdy na Tomáše dojede kamera.
   useEffect(() => {
     if (!state.started || welcomeStarted.current) return;
     if (state.tutorialStep !== 0 || state.flags.welcome_seen) return;
     welcomeStarted.current = true;
     dispatch({ type: "SET_FLAG", key: "welcome_seen" });
-    setCinematic({ tx: 48, ty: 34 }); // scénický záběr na prázdnou louku
-    const t1 = window.setTimeout(() => setCinematic({ tx: 45, ty: 33 }), 2500); // k hráči
-    const t2 = window.setTimeout(() => setCinematic(null), 2500 + 1000); // uvolnit kameru
-    return () => { window.clearTimeout(t1); window.clearTimeout(t2); };
+
+    setCinematic({ ...WELCOME_FLYOVER[0], talk: false });
+    let at = 0;
+    for (let i = 1; i < WELCOME_FLYOVER.length; i++) {
+      at += WELCOME_FLYOVER[i - 1].hold;
+      const shot = WELCOME_FLYOVER[i];
+      cineTimers.current.push(
+        window.setTimeout(() => setCinematic({ ...shot, talk: false }), at),
+      );
+    }
+    // Poslední záběr: Tomáš na svém stanovišti pro aktuální fázi dne.
+    at += WELCOME_FLYOVER[WELCOME_FLYOVER.length - 1].hold;
+    const tomas = NPC_LIFE.tomas.schedule[state.phase];
+    cineTimers.current.push(
+      window.setTimeout(
+        () => setCinematic({ tx: tomas.tx, ty: tomas.ty, ease: TOMAS_SHOT_EASE, talk: true }),
+        at,
+      ),
+    );
+    // POZOR: tady schválně NENÍ `return clearCineTimers`. Efekt si sám nastaví
+    // flag `welcome_seen`, čímž změní vlastní závislosti — cleanup by se spustil
+    // hned a zrušil všechny naplánované záběry (kamera by zamrzla na prvním).
+    // Timery se proto uklízí až při odmountování, v efektu níž.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.started, state.tutorialStep, state.flags.welcome_seen]);
+
+  useEffect(() => clearCineTimers, []);
+
+  // Uvolnit kameru, až Tomáš domluví (hráč dočetl celou repliku).
+  useEffect(() => {
+    if (cinematic?.talk && !state.dialog) setCinematic(null);
+  }, [cinematic?.talk, state.dialog]);
 
   // D2: priorita zavírání pro hardwarové tlačítko Zpět — od nejvyšší vrstvy
   // (potvrzovací dialog) přes herní dialog a vývojářský panel, jednotlivé
@@ -210,6 +275,8 @@ export default function App() {
   const closeTopmostRef = useRef<() => boolean>(() => false);
   closeTopmostRef.current = () => {
     if (exitConfirm) { setExitConfirm(false); return true; }
+    if (placeConfirm) { setPlaceConfirm(null); return true; } // Zpět = stavět jinam
+    if (cinematic) { skipCinematic(); return true; } // Zpět = přeskočit sestřih
     if (state.dialog) { dispatch({ type: "DISMISS_DIALOG" }); return true; }
     if (devOpen) { setDevOpen(false); return true; }
     if (sel) { setSel(null); return true; }
@@ -462,6 +529,9 @@ export default function App() {
   const tut = tutorialActive(state);
   const restrictTo = tut ? currentStep(state)?.buildingId ?? null : null;
   const buildModeOn = tut || editMode;
+  // Běží přelet nad loukou (ještě než Tomáš začne mluvit)? Pak schovej ovládání.
+  const flyover = !!cinematic && !cinematic.talk;
+  const pendingLabel = placeConfirm ? BUILDABLE_BY_ID[placeConfirm.defId]?.label ?? "stavbu" : "";
 
   return (
     <div className="game-world">
@@ -473,7 +543,8 @@ export default function App() {
         foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} appearance={state.profile.appearance}
         structures={state.structures} editMode={buildModeOn} buildSelection={buildSelection}
         cinematic={cinematic} onSkipCinematic={skipCinematic}
-        onPlaceStructure={(defId, tx, ty) => { sound.build(); dispatch({ type: "PLACE_STRUCTURE", defId, tx, ty }); }}
+        onPlaceRequest={(defId, tx, ty) => setPlaceConfirm({ defId, tx, ty })}
+        awaitingPlaceConfirm={!!placeConfirm}
         onDemolishStructure={(uid) => { sound.build(); dispatch({ type: "DEMOLISH_STRUCTURE", uid }); }}
         onMoveStructure={(uid, tx, ty) => { sound.build(); dispatch({ type: "MOVE_STRUCTURE", uid, tx, ty }); }}
         onEditReject={() => dispatch({ type: "PUSH_DIALOG", speaker: "Stavění", lines: ["Sem se to nevejde — je tam les, voda nebo jiná stavba."] })}
@@ -481,13 +552,34 @@ export default function App() {
       />
       <Hud onOpen={(p) => { if (p === "plna") setDemoGateOpen(false); setOverlay(p); }} onDevUnlock={unlockDev} editMode={editMode} onToggleEdit={() => setEditMode((v) => { const next = !v; if (!next) setBuildSelection(null); return next; })} />
       <Controls />
-      {buildModeOn && (
+      {/* přes dotaz „postavit sem?" panel schovej — stavba je už vybraná a
+          lišta s Ano/Ne by se s panelem překrývala */}
+      {buildModeOn && !flyover && !placeConfirm && (
         <BuildPanel money={state.money} wood={state.inventory.drevo ?? 0} structures={state.structures} selection={buildSelection} onSelect={setBuildSelection} restrictTo={restrictTo} />
       )}
-      {editMode && !tut && (
+      {editMode && !tut && !placeConfirm && (
         <button className="edit-done-fab" onClick={() => setEditMode(false)}>✓ Hotovo</button>
       )}
-      <DialogBox />
+      {placeConfirm && (
+        <div className="build-confirm-bar" role="dialog" aria-live="polite">
+          <span className="build-select-label">Postavit {pendingLabel} sem?</span>
+          <button
+            className="build-select-btn confirm"
+            onClick={() => {
+              sound.build();
+              dispatch({ type: "PLACE_STRUCTURE", ...placeConfirm });
+              setPlaceConfirm(null);
+            }}
+          >
+            ✓ Ano, postavit
+          </button>
+          <button className="build-select-btn cancel" onClick={() => setPlaceConfirm(null)}>
+            ✕ Jinam
+          </button>
+        </div>
+      )}
+      {/* přes přelet nad loukou repliku schovej — ukáže se až v záběru na Tomáše */}
+      <DialogBox hidden={!!cinematic && !cinematic.talk} />
 
       {overlay === "shop" && <Overlay title="🏪 Stánek" onClose={() => setOverlay(null)}><Shop /></Overlay>}
       {overlay === "craft" && <Overlay title="🛠️ Výroba" onClose={() => setOverlay(null)}><Craft /></Overlay>}

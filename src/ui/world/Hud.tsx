@@ -107,7 +107,7 @@ export function Hud({
         <div className="hud-quest">
           <span className="quest-label">🔨 Kapitola {step.chapterIndex}/{CHAPTER_COUNT} — {step.chapter}</span>
           <b>Postav: {step.buildLabel}</b>
-          <small>Vyber stavbu v panelu dole a klepni na louku, kam ji chceš postavit.</small>
+          <small>Vyber stavbu v panelu dole, klepni na louku, kam ji chceš postavit, a potvrď.</small>
         </div>
       ) : quest ? (
         <div className="hud-quest">
