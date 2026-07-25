@@ -17,8 +17,8 @@ export const TILE = {
 
 export type Tile = (typeof TILE)[keyof typeof TILE];
 
-export const MAP_W = 72;
-export const MAP_H = 52;
+export const MAP_W = 96;
+export const MAP_H = 72;
 
 interface Region {
   cx: number;
@@ -27,19 +27,17 @@ interface Region {
   ry: number;
 }
 
-// Mýtiny: hlavní statek + bylinková louka (V) + rybníková louka (J) + hájek (JV).
+// Mýtiny: velká domovská louka (volné stavění) + stub lokace pro spec B.
 const REGIONS: Region[] = [
-  { cx: 22, cy: 17, rx: 20, ry: 13 },
-  { cx: 57, cy: 16, rx: 12, ry: 9 },
-  { cx: 25, cy: 41, rx: 15, ry: 8 },
-  { cx: 59, cy: 41, rx: 10, ry: 7 },
+  { cx: 48, cy: 34, rx: 30, ry: 22 }, // velká domovská louka
+  { cx: 84, cy: 20, rx: 10, ry: 8 }, // stub: východní lokace (spec B)
+  { cx: 16, cy: 58, rx: 10, ry: 8 }, // stub: jižní lokace (spec B)
 ];
 
 // Cesty (koridory) lesem mezi mýtinami.
 const CORRIDORS = [
-  { ax: 40, ay: 17, bx: 47, by: 16, half: 2 }, // statek → bylinková
-  { ax: 24, ay: 29, bx: 26, by: 34, half: 2 }, // statek → rybník
-  { ax: 38, ay: 41, bx: 52, by: 41, half: 2 }, // rybník → hájek (jen přes lesní bránu)
+  { ax: 30, ay: 40, bx: 20, by: 55, half: 2 }, // domovská louka → jižní lokace (rybník)
+  { ax: 66, ay: 28, bx: 80, by: 22, half: 2 }, // domovská louka → východní lokace
 ];
 
 function buildMap() {
@@ -101,9 +99,9 @@ function buildMap() {
     }
   }
 
-  // 4) rybník v jižní mýtině
-  const pondCx = 18;
-  const pondCy = 43;
+  // 4) rybník v jižní (stub) mýtině
+  const pondCx = 16;
+  const pondCy = 58;
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const d = Math.hypot((x - pondCx) * 0.82, y - pondCy);

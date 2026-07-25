@@ -1,16 +1,19 @@
 import { MAP, TILE, TS, isSolidTile, setTile } from "./tiles";
 import { ANIMALS_BY_GROUP } from "../game/content/animals";
 import { NPCS } from "../game/content/people";
-import type { FeedGroup } from "../game/types";
+import type { FeedGroup, Placed } from "../game/types";
+import { BUILDABLE_BY_ID } from "../game/content/buildables";
+import { rebuildInteractables } from "../game/build/placement";
+import { COMPANION_ANIMAL_IDS } from "../game/balance";
 
-const SPAWN_TX = 22;
-const SPAWN_TY = 20;
+const SPAWN_TX = 45;
+const SPAWN_TY = 33;
 
-// Kde u startu stojí uvítací NPC (dlaždice).
+// Kde u startu stojí uvítací NPC (dlaždice) — kolem farmy uprostřed louky.
 const NPC_POS: Record<string, [number, number]> = {
-  tomas: [19, 18],
-  maruska: [26, 18],
-  tony: [22, 15],
+  tomas: [40, 31],
+  maruska: [49, 34],
+  tony: [43, 37],
 };
 
 export type InteractKind =
@@ -44,71 +47,82 @@ export interface Interactable {
   fw: number; // footprint šířka (dlaždice)
   fh: number; // footprint výška
   solid: boolean;
+  note?: string; // volitelný vlastní text cedule (jinak default CEDULE_HELP)
 }
 
-const B = (id: string, kind: InteractKind, label: string, tx: number, ty: number, fw = 2, fh = 2, solid = true): Interactable => ({ id, kind, label, tx, ty, fw, fh, solid });
+const B = (id: string, kind: InteractKind, label: string, tx: number, ty: number, fw = 2, fh = 2, solid = true, note?: string): Interactable => ({ id, kind, label, tx, ty, fw, fh, solid, note });
 
-export const INTERACTABLES: Interactable[] = [
-  B("chalupa", "chalupa", "Chalupa", 31, 7, 3, 2),
-  B("stanek", "stanek", "Stánek (obchod)", 35, 10),
-  B("dilna", "dilna", "Dílna (výroba)", 27, 11),
-  B("ohniste", "ohniste", "Ohniště & kuchyně", 24, 14, 2, 2),
-  B("kurnik", "kurnik", "Kurník", 13, 9, 3, 2),
-  B("chlivek", "chlivek", "Prasečí chlívek", 11, 15, 3, 2),
-  B("pastvina", "pastvina", "Pastvina & seník", 19, 24, 3, 2),
-  B("buda", "buda", "Psí bouda & pelíšky", 27, 20, 2, 2),
-  B("studna", "studna", "Studna", 16, 19, 1, 1),
-  B("cedule", "cedule", "Cedule", 24, 20, 1, 1, false),
-  // sběr bylin — nejvíc na „bylinkové louce" na východě
-  B("byliny1", "byliny", "Bylinky", 6, 8, 1, 1, false),
-  B("byliny2", "byliny", "Bylinky", 39, 12, 1, 1, false),
-  B("byliny3", "byliny", "Bylinky", 8, 27, 1, 1, false),
-  B("byliny4", "byliny", "Bylinková louka", 54, 12, 1, 1, false),
-  B("byliny5", "byliny", "Bylinková louka", 61, 18, 1, 1, false),
-  B("byliny6", "byliny", "Bylinková louka", 57, 21, 1, 1, false),
-  B("byliny7", "byliny", "Bylinky u rybníka", 31, 45, 1, 1, false),
-  // hlavolam: lesní brána na cestě k hájku + truhla se zásobami v hájku
-  B("brana", "brana", "Lesní brána", 44, 41, 1, 1, false),
-  B("truhla", "truhla", "Truhla se zásobami", 60, 41, 1, 1, false),
-  // permakulturní zahrádka (pozor na uprchlíky z výběhů!)
-  B("zahrada", "zahrada", "Zahrádka", 33, 12, 2, 2, false),
+// Autorské (nikdy „stavitelné") objekty louky — sběr bylin, příběhové
+// hlavolamy, cedule apod. Základní stavby (chalupa, stánek, …) i upgrady
+// (studna, zahrada) teď žijí ve `structures` a katalogu BUILDABLES — viz
+// `setStructures` níže.
+export const WORLD_FEATURES: Interactable[] = [
+  B("cedule", "cedule", "Cedule", 45, 26, 1, 1, false),
+  // sběr bylin — pár blízko domova (den 1), zbytek na satelitech
+  B("byliny1", "byliny", "Bylinky", 28, 26, 1, 1, false),
+  B("byliny2", "byliny", "Bylinky", 40, 26, 1, 1, false),
+  B("byliny3", "byliny", "Bylinky", 60, 30, 1, 1, false),
+  // bylinková louka — východní satelit, za lesní bránou
+  B(
+    "cedule_herb",
+    "cedule",
+    "Bylinková louka",
+    80,
+    20,
+    1,
+    1,
+    false,
+    "Tady roste řebříček, kopřiva a heřmánek — trhej, co potřebuješ.",
+  ),
+  B("byliny4", "byliny", "Bylinková louka", 82, 18, 1, 1, false),
+  B("byliny5", "byliny", "Bylinková louka", 86, 21, 1, 1, false),
+  B("byliny6", "byliny", "Bylinková louka", 84, 24, 1, 1, false),
+  // rybník — jižní satelit
+  B("cedule_pond", "cedule", "Rybník", 20, 55, 1, 1, false, "Rybník. Kachny si sem chodí zaplavat."),
+  B("byliny7", "byliny", "Bylinky u rybníka", 21, 56, 1, 1, false),
+  // hlavolam: lesní brána na cestě k bylinkové louce + truhla hned za ní
+  B("brana", "brana", "Lesní brána", 71, 25, 1, 1, false),
+  B("truhla", "truhla", "Truhla se zásobami", 77, 24, 1, 1, false),
   // liščí příběh: stopy a krmné místo na západním kraji lesa; ježčí listí
   // u zahrádky. Viditelnost řídí App podle postupu příběhu (hiddenIds).
-  B("fox_stopy", "stopy", "Liščí stopy", 7, 22, 1, 1, false),
-  B("fox_misto", "krmne_misto", "Krmné místo u lesa", 6, 24, 1, 1, false),
-  B("jezek_listi", "listi", "Hromada listí", 36, 14, 1, 1, false),
-  // Senné DLC: seniště na jižní louce u rybníka (viditelné jen s DLC)
-  B("seniste", "seniste", "Seniště — louka na seno", 30, 38, 2, 1, false),
+  B("fox_stopy", "stopy", "Liščí stopy", 24, 44, 1, 1, false),
+  B("fox_misto", "krmne_misto", "Krmné místo u lesa", 23, 46, 1, 1, false),
+  B("jezek_listi", "listi", "Hromada listí", 36, 44, 1, 1, false),
+  // Senné DLC: seniště u rybníka (viditelné jen s DLC)
+  B("seniste", "seniste", "Seniště — louka na seno", 24, 58, 2, 1, false),
 ];
 
-export const INTERACTABLE_BY_ID: Record<string, Interactable> = Object.fromEntries(
-  INTERACTABLES.map((i) => [i.id, i]),
-);
-
-// --- Volné rozmístění staveb (edit mód) ---------------------------------
-// Autorské (výchozí) pozice — placement override sedí NAD nimi.
-const AUTHORED_POS: Record<string, { tx: number; ty: number }> = Object.fromEntries(
-  INTERACTABLES.map((it) => [it.id, { tx: it.tx, ty: it.ty }]),
-);
-
-// Které stavby smí hráč po tutoriálu volně přemístit (rozšiřitelné).
-export const MOVABLE_IDS = new Set<string>(["buda"]);
-export const isMovable = (id: string) => MOVABLE_IDS.has(id);
+/**
+ * Runtime seznam interaktivních objektů — kreslení, hledání cíle, minimapa,
+ * kolize, pathfinding. Prázdný, dokud jej `setStructures` poprvé nenaplní
+ * (voláno z WorldCanvas při mountu i při každé změně `structures`).
+ */
+export let INTERACTABLES: Interactable[] = [];
+export let INTERACTABLE_BY_ID: Record<string, Interactable> = {};
 
 /**
- * Aplikuje override pozice na INTERACTABLES in-place (píše it.tx/it.ty).
- * Všechna čtecí místa (kreslení, hledání cíle, minimapa, setConstructed,
- * isBlocked) čtou it.tx/it.ty, takže po tomto volání vidí nové pozice bez
- * jakékoli další změny. MUSÍ běžet PŘED setConstructed.
+ * Přepočítá INTERACTABLES ze zdroje pravdy (`structures` + katalog
+ * BUILDABLES) a spojí je s autorskými WORLD_FEATURES. U unikátních staveb
+ * (chalupa, stánek, studna, …) se `id` schválně nastaví na `defId` (ne na
+ * instance `uid`) — tutoriál (`TUTORIAL_BUILDING_IDS`, `state.built`) i
+ * `onInteract` v App.tsx je čtou podle těchto stabilních id. Neunikátní
+ * stavby (plot, cedule_deko, …) dostanou `id = uid`, protože jich může být
+ * na louce víc najednou.
  */
-export function applyPlacements(placements: Record<string, { tx: number; ty: number }>) {
-  for (const it of INTERACTABLES) {
-    const p = placements[it.id];
-    const a = AUTHORED_POS[it.id];
-    it.tx = p ? p.tx : a.tx;
-    it.ty = p ? p.ty : a.ty;
-  }
+export function setStructures(structures: Placed[]) {
+  const built = rebuildInteractables(structures, BUILDABLE_BY_ID);
+  INTERACTABLES.length = 0;
+  INTERACTABLES.push(...built, ...WORLD_FEATURES);
+  INTERACTABLE_BY_ID = Object.fromEntries(INTERACTABLES.map((i) => [i.id, i]));
+  for (const it of INTERACTABLES) carveClearing(it.tx, it.ty, it.fw, it.fh, 1);
 }
+
+// Od volného stavění (v0.12) smí hráč přesunout/zbořit VŠECHNY postavené
+// stavby (viz reducer PLACE/MOVE/DEMOLISH_STRUCTURE) — MOVABLE_IDS už
+// neomezuje stavební mód. Zůstává jen jako MVP hranice výpočtu pohodlí
+// (layoutComfortFor v comfort.ts zatím počítá jen pro budu/mazlíčky).
+export const MOVABLE_IDS = new Set<string>(["buda"]);
+export const isMovable = (id: string) => MOVABLE_IDS.has(id);
 
 // Vyčistí mýtinku (les/keř/voda → tráva) pod stavbami i kolem nich a kolem
 // startu, aby byly stavby vždy v mýtině a dostupné — bez ohledu na náhodný les.
@@ -121,17 +135,20 @@ function carveClearing(tx: number, ty: number, w: number, h: number, margin: num
         MAP.tiles[y * MAP.w + x] = TILE.GRASS;
     }
 }
-for (const it of INTERACTABLES) carveClearing(it.tx, it.ty, it.fw, it.fh, 1);
+for (const it of WORLD_FEATURES) carveClearing(it.tx, it.ty, it.fw, it.fh, 1);
 carveClearing(SPAWN_TX, SPAWN_TY, 1, 1, 3);
 for (const id of NPCS) carveClearing(NPC_POS[id][0], NPC_POS[id][1], 1, 1, 1);
 
-// Lesní brána přehradí cestu k hájku, dokud hráč nevyřeší hlavolam.
+// Lesní brána přehradí jediný koridor k bylinkové louce (východní satelit),
+// dokud hráč nevyřeší hlavolam. Sloupec x=73 je jediné propojení domovské
+// louky a východní mýtiny (bez CORRIDORS v tiles.ts se les nepropojí) — proto
+// těchto 7 dlaždic skutečně zavírá cestu (viz map.test.ts reachability test).
 export const GATE_TILES: [number, number][] = [
-  [44, 39], [44, 40], [44, 41], [44, 42], [44, 43],
+  [73, 22], [73, 23], [73, 24], [73, 25], [73, 26], [73, 27], [73, 28],
 ];
 for (const [gx, gy] of GATE_TILES) setTile(gx, gy, TILE.FENCE);
 
-/** Otevře lesní bránu (po vyřešení hlavolamu) — uvolní cestu k hájku. */
+/** Otevře lesní bránu (po vyřešení hlavolamu) — uvolní cestu k bylinkové louce. */
 export function openGate() {
   for (const [gx, gy] of GATE_TILES) setTile(gx, gy, TILE.PATH);
 }
@@ -146,9 +163,9 @@ export interface Paddock {
   h: number;
 }
 export const PADDOCKS: Paddock[] = [
-  { group: "drubez", label: "Drůbeží výběh", tx: 10, ty: 10, w: 8, h: 6 },
-  { group: "prasata", label: "Prasečí výběh", tx: 8, ty: 15, w: 8, h: 6 },
-  { group: "stado", label: "Pastvina", tx: 14, ty: 20, w: 13, h: 8 },
+  { group: "drubez", label: "Drůbeží výběh", tx: 30, ty: 27, w: 9, h: 8 },
+  { group: "prasata", label: "Prasečí výběh", tx: 33, ty: 37, w: 9, h: 8 },
+  { group: "stado", label: "Pastvina", tx: 48, ty: 34, w: 15, h: 10 },
 ];
 
 // Zahrádka — sem míří uprchlá zvířata.
@@ -219,20 +236,17 @@ export function canPlaceFootprint(
 export function zoneCenterFor(group: FeedGroup): { x: number; y: number } {
   const pad = PADDOCKS.find((p) => p.group === group);
   if (pad) return { x: (pad.tx + pad.w / 2) * TS, y: (pad.ty + pad.h / 2) * TS };
-  const Z: Partial<Record<FeedGroup, [number, number]>> = { mazlici: [30, 14] }; // zrcadlí ZONES
+  const Z: Partial<Record<FeedGroup, [number, number]>> = { mazlici: [48, 31] }; // zrcadlí ZONES
   const [cx, cy] = Z[group] ?? [SPAWN_TX, SPAWN_TY];
   return { x: (cx + 0.5) * TS, y: (cy + 0.5) * TS };
 }
 
-/** Efektivní střed stavby (px) s ohledem na placement override. */
-export function structureCenter(
-  id: string,
-  placements: Record<string, { tx: number; ty: number }>,
-): { x: number; y: number } | null {
+/** Efektivní (aktuální) střed stavby (px) — čte živou pozici z INTERACTABLES,
+ *  takže sedí i po přesunutí stavby ve stavebním módu. */
+export function structureCenter(id: string): { x: number; y: number } | null {
   const it = INTERACTABLE_BY_ID[id];
   if (!it) return null;
-  const p = placements[id] ?? AUTHORED_POS[id];
-  return { x: (p.tx + it.fw / 2) * TS, y: (p.ty + it.fh / 2) * TS };
+  return { x: (it.tx + it.fw / 2) * TS, y: (it.ty + it.fh / 2) * TS };
 }
 
 /** Půlka šířky kolizního rámečku postavy (px). */
@@ -342,16 +356,20 @@ interface ZoneDef {
 }
 
 const ZONES: ZoneDef[] = [
-  { group: "drubez", cx: 14, cy: 12, spread: 3 },
-  { group: "prasata", cx: 12, cy: 18, spread: 2 },
-  { group: "stado", cx: 20, cy: 24, spread: 4 },
-  { group: "mazlici", cx: 30, cy: 14, spread: 4 },
+  { group: "drubez", cx: 34, cy: 31, spread: 3 },
+  { group: "prasata", cx: 37, cy: 41, spread: 2 },
+  { group: "stado", cx: 56, cy: 39, spread: 4 },
+  { group: "mazlici", cx: 48, cy: 31, spread: 3 },
 ];
 
 function buildSpawns(): AnimalSpawn[] {
   const out: AnimalSpawn[] = [];
   for (const z of ZONES) {
-    const list = ANIMALS_BY_GROUP[z.group];
+    // Pes a kočka (companion) se renderují zvlášť, nezávisle na výběhu —
+    // vynech je tady, ať se nezdvojí, až se skupina mazlíci nastěhuje.
+    const list = ANIMALS_BY_GROUP[z.group].filter(
+      (a) => z.group !== "mazlici" || !COMPANION_ANIMAL_IDS.includes(a.id),
+    );
     const pad = PADDOCKS.find((p) => p.group === z.group);
     const bounds: Bounds | undefined = pad
       ? { x0: (pad.tx + 0.6) * TS, y0: (pad.ty + 0.6) * TS, x1: (pad.tx + pad.w - 0.6) * TS, y1: (pad.ty + pad.h - 0.6) * TS }
@@ -376,6 +394,13 @@ function buildSpawns(): AnimalSpawn[] {
       out.push({ animalId: a.id, group: z.group, hx, hy, radius: z.spread * TS * 0.5, bounds });
     });
   }
+  // Companions: pes + kočka jsou na Louce od první chvíle, volně pobíhají
+  // poblíž hráčova startu — nezávisle na tom, jestli výběh (buda) stojí.
+  COMPANION_ANIMAL_IDS.forEach((id, i) => {
+    const tx = SPAWN_TX + 1.4 * (i + 1);
+    const ty = SPAWN_TY + 1.2;
+    out.push({ animalId: id, group: "mazlici", hx: (tx + 0.5) * TS, hy: (ty + 0.5) * TS, radius: 2.5 * TS * 0.5 });
+  });
   return out;
 }
 

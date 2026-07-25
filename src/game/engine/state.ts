@@ -1,9 +1,9 @@
 import type { GameState } from "../types";
 import {
   BASE_MAX_ENERGY,
+  COMPANION_POPULATION,
   SEASON_ENERGY,
   START_MONEY,
-  STARTING_POPULATION,
 } from "../balance";
 import { initialAnimalStates } from "../content/characters";
 
@@ -47,10 +47,13 @@ export function initialState(): GameState {
       polevka: 0,
     },
     buildings: [],
+    // Spec 2: nová hra začíná na prázdné louce — jen pes a kočka jako
+    // společníci. Tomáš hráče provede volnou stavbou celého zázemí a
+    // zvířata se stěhují do výběhů, jakmile jsou hotové (viz reducer.ts).
     built: [],
     tutorialStep: 0,
     welfare: { drubez: 72, prasata: 72, stado: 72, mazlici: 72 },
-    population: { ...STARTING_POPULATION },
+    population: { drubez: 0, prasata: 0, stado: 0, mazlici: COMPANION_POPULATION },
 
     birdsReleased: false,
     animalsClosed: true,
@@ -63,6 +66,7 @@ export function initialState(): GameState {
     fox: { stage: "les", trust: 0, sightings: 0, bowlCount: 0 },
     animals: initialAnimalStates(),
     placements: {},
+    structures: [],
     profile: {
       name: "Ty",
       appearance: { skin: "#f0c49a", hair: "#6a4a2c", shirt: "#2d5a3d", variant: "hat" },

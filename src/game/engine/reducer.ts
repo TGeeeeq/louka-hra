@@ -12,6 +12,7 @@ import {
   SEASON_ORDER,
   SLEEP_HUNGER_DRAIN,
   SLEEP_THIRST_DRAIN,
+  STARTING_POPULATION,
   VET_BILL,
   WELFARE_CLEAN_GAIN,
   WELFARE_FEED_GAIN,
@@ -49,8 +50,10 @@ import { newlyUnlocked } from "../achievements";
 import { QUEST_LINES } from "../content/quests";
 import { CHARACTER_SET, initialAnimalStates } from "../content/characters";
 import { layoutComfortFor } from "./comfort";
-import { INTERACTABLE_BY_ID, isMovable } from "../../world/entities";
-import { TUTORIAL_STEPS, tutorialActive } from "../content/tutorial";
+import { TUTORIAL_STEPS, currentStep, tutorialActive } from "../content/tutorial";
+import { BUILDABLE_BY_ID } from "../content/buildables";
+import { canPlace, hasBuilt } from "../build/placement";
+import { isSolidTile } from "../../world/tiles";
 import {
   addLog,
   chance,
@@ -88,8 +91,9 @@ export type Action =
   | { type: "BUY"; itemId: string; qty: number }
   | { type: "SELL"; itemId: string; qty: number }
   | { type: "BUILD"; buildingId: string }
-  | { type: "BUILD_STRUCTURE"; id: string }
-  | { type: "MOVE_STRUCTURE"; id: string; tx: number; ty: number }
+  | { type: "PLACE_STRUCTURE"; defId: string; tx: number; ty: number }
+  | { type: "DEMOLISH_STRUCTURE"; uid: string }
+  | { type: "MOVE_STRUCTURE"; uid: string; tx: number; ty: number }
   | { type: "EVENING_FEED" }
   | { type: "CLOSE_ANIMALS" }
   | { type: "ADVANCE_PHASE" }
@@ -121,6 +125,9 @@ export type Action =
   | { type: "DEV_FOX" };
 
 const has = (s: GameState, id: string) => s.buildings.includes(id);
+
+let uidSeq = 0;
+const nextUid = () => `s${Date.now().toString(36)}-${uidSeq++}`;
 
 const FEED_LABEL: Record<FeedGroup, string> = {
   drubez: "drůbež",
@@ -210,7 +217,6 @@ export function reducer(state: GameState, action: Action): GameState {
     action.type === "RESET" ||
     action.type === "SET_PLAYER_PROFILE" ||
     action.type === "LOAD" ||
-    action.type === "BUILD_STRUCTURE" ||
     action.type === "MOVE_STRUCTURE" ||
     action.type === "DEV_UNLOCK" ||
     action.type === "DEV_TOGGLE" ||
@@ -581,6 +587,12 @@ function core(state: GameState, action: Action): GameState {
     case "CRAFT": {
       const recipe = RECIPE_BY_ID[action.recipeId];
       if (!recipe) return state;
+      if (recipe.requiresFire) {
+        if (!hasBuilt(state.structures, "ohniste"))
+          return warnReturn(state, "Na vaření potřebuješ ohniště.");
+      } else if (!hasBuilt(state.structures, "dilna")) {
+        return warnReturn(state, "Nejdřív potřebuješ postavit dílnu na výrobu.");
+      }
       if (recipe.requiresFire && !state.fireLit)
         return warnReturn(state, `Na "${recipe.name}" potřebuješ rozdělaný oheň.`);
       if (!hasItems(state.inventory, recipe.inputs))
@@ -640,6 +652,8 @@ function core(state: GameState, action: Action): GameState {
     case "BUY": {
       const item = ITEM_BY_ID[action.itemId];
       if (!item || item.buyPrice == null) return state;
+      if (!hasBuilt(state.structures, "stanek"))
+        return warnReturn(state, "Bez stánku není kde nakupovat ani prodávat.");
       const qty = Math.max(1, action.qty);
       let unit = item.buyPrice;
       if (action.itemId === "seno" && has(state, "senik"))
@@ -657,6 +671,8 @@ function core(state: GameState, action: Action): GameState {
     case "SELL": {
       const item = ITEM_BY_ID[action.itemId];
       if (!item || item.sellPrice == null) return state;
+      if (!hasBuilt(state.structures, "stanek"))
+        return warnReturn(state, "Bez stánku není kde nakupovat ani prodávat.");
       const qty = Math.min(Math.max(1, action.qty), invCount(state.inventory, action.itemId));
       if (qty < 1) return warnReturn(state, `Nemáš ${item.name} k prodeji.`);
       const s = cloneState(state);
@@ -673,6 +689,8 @@ function core(state: GameState, action: Action): GameState {
     case "BUILD": {
       const b = BUILDING_BY_ID[action.buildingId];
       if (!b) return state;
+      if (!hasBuilt(state.structures, "stanek"))
+        return warnReturn(state, "Bez stánku není kde nakupovat ani prodávat.");
       if (has(state, action.buildingId))
         return warnReturn(state, "Tohle už máš.");
       if (state.money < b.cost)
@@ -685,42 +703,90 @@ function core(state: GameState, action: Action): GameState {
       return s;
     }
 
-    case "BUILD_STRUCTURE": {
-      if (!tutorialActive(state)) return state;
-      const step = TUTORIAL_STEPS[state.tutorialStep];
-      if (action.id !== step.buildingId) return state;
-      if (state.built.includes(action.id)) return state;
+    case "PLACE_STRUCTURE": {
+      const def = BUILDABLE_BY_ID[action.defId];
+      if (!def) return state;
+      const tut = tutorialActive(state);
+      if (tut) {
+        // Guided free placement (spec 2): jen aktuální krok tutoriálu smí
+        // hráč postavit; pozice si volí sám.
+        const step = currentStep(state);
+        if (!step || action.defId !== step.buildingId)
+          return warnReturn(state, "Teď postav to, co ti Tomáš ukázal.");
+      } else if (def.unique && state.structures.some((s) => s.defId === def.id)) {
+        return warnReturn(state, "Tohle už na louce máš.");
+      }
+      const footprintOf = (id: string) => {
+        const d = BUILDABLE_BY_ID[id];
+        return { fw: d?.fw ?? 1, fh: d?.fh ?? 1 };
+      };
+      const check = canPlace({ structures: state.structures, isSolid: isSolidTile, def, tx: action.tx, ty: action.ty, footprintOf });
+      if (!check.ok) return warnReturn(state, check.reason ?? "Sem stavět nejde.");
+      if (!tut) {
+        if (def.cost.money && state.money < def.cost.money) return warnReturn(state, "Na tohle ti chybí peníze.");
+        if (def.cost.wood && (state.inventory.drevo ?? 0) < def.cost.wood) return warnReturn(state, "Na tohle ti chybí dřevo.");
+      }
       const s = cloneState(state);
-      s.built.push(action.id);
-      s.tutorialStep += 1;
-      addLog(s, `Postavil jsi: ${step.buildLabel}. 🔨`, "good");
-      if (s.tutorialStep < TUTORIAL_STEPS.length) {
-        // Pochvala + uvedení další stavby.
-        const nextStep = TUTORIAL_STEPS[s.tutorialStep];
-        pushDialog(s, "Tomáš", [...step.done, ...nextStep.intro]);
+      if (!tut) {
+        // Tutoriál staví zdarma — cena přijde na řadu až po survivalu.
+        if (def.cost.money) s.money -= def.cost.money;
+        if (def.cost.wood) take(s, [{ item: "drevo", qty: def.cost.wood }]);
+      }
+      s.structures = [...s.structures, { uid: nextUid(), defId: def.id, tx: action.tx, ty: action.ty }];
+      if (def.category === "upgrade" && !s.buildings.includes(def.id)) s.buildings.push(def.id);
+      if (tut) {
+        const step = currentStep(state)!;
+        if (!s.built.includes(step.buildingId)) s.built.push(step.buildingId);
+        s.tutorialStep += 1;
+        // Příchod zvířat: hotový výběh rovnou nastěhuje celou skupinu.
+        const grp = step.settleGroup;
+        if (grp) s.population = { ...s.population, [grp]: STARTING_POPULATION[grp] };
+        if (s.tutorialStep < TUTORIAL_STEPS.length) {
+          pushDialog(s, "Tomáš", [...step.done, ...TUTORIAL_STEPS[s.tutorialStep].intro]);
+        } else {
+          // Poslední stavba — Louka je hotová, začíná survival.
+          pushDialog(s, "Tomáš", step.done);
+          s.day = 1;
+          s.dayInSeason = 1;
+          s.phase = "rano";
+          s.maxEnergy = SEASON_ENERGY[s.season];
+          s.energy = SEASON_ENERGY[s.season];
+          s.questLine = 0;
+          s.questProgress.main = 0;
+          s.flags.tutorial_done = true;
+          flash(s, "Louka je postavená! Teď začíná to hlavní — přežít. 🌱", "good");
+        }
+        addLog(s, `Postavil jsi: ${step.buildLabel}. 🔨`, "good");
       } else {
-        // Poslední stavba — Louka je hotová, začíná survival.
-        pushDialog(s, "Tomáš", step.done);
-        s.day = 1;
-        s.dayInSeason = 1;
-        s.phase = "rano";
-        s.maxEnergy = SEASON_ENERGY[s.season];
-        s.energy = SEASON_ENERGY[s.season];
-        s.questLine = 0;
-        s.questProgress.main = 0;
-        s.flags.tutorial_done = true;
-        flash(s, "Louka je postavená! Teď začíná to hlavní — přežít. 🌱", "good");
+        addLog(s, `Postavil jsi: ${def.label}. 🔨`, "good");
       }
       return s;
     }
 
-    case "MOVE_STRUCTURE": {
-      // Přemístit smíš jen po tutoriálu, jen povolené a už postavené stavby.
+    case "DEMOLISH_STRUCTURE": {
       if (tutorialActive(state)) return state;
-      if (!isMovable(action.id) || !state.built.includes(action.id)) return state;
+      const inst = state.structures.find((x) => x.uid === action.uid);
+      if (!inst) return state;
+      const def = BUILDABLE_BY_ID[inst.defId];
       const s = cloneState(state);
-      s.placements = { ...s.placements, [action.id]: { tx: action.tx, ty: action.ty } };
-      addLog(s, `Přemístil jsi: ${INTERACTABLE_BY_ID[action.id]?.label ?? action.id}. 🪧`, "good");
+      s.structures = s.structures.filter((x) => x.uid !== action.uid);
+      if (def?.cost.wood) s.inventory.drevo = (s.inventory.drevo ?? 0) + Math.floor(def.cost.wood * 0.5);
+      if (def?.category === "upgrade") s.buildings = s.buildings.filter((b) => b !== def.id);
+      addLog(s, `Zbořil jsi: ${def?.label ?? inst.defId}. 🧹`, "info");
+      return s;
+    }
+
+    case "MOVE_STRUCTURE": {
+      if (tutorialActive(state)) return state;
+      const inst = state.structures.find((x) => x.uid === action.uid);
+      if (!inst) return state;
+      const def = BUILDABLE_BY_ID[inst.defId];
+      const footprintOf = (id: string) => { const d = BUILDABLE_BY_ID[id]; return { fw: d?.fw ?? 1, fh: d?.fh ?? 1 }; };
+      const others = state.structures.filter((x) => x.uid !== action.uid);
+      const check = canPlace({ structures: others, isSolid: isSolidTile, def: { fw: def?.fw ?? 1, fh: def?.fh ?? 1 }, tx: action.tx, ty: action.ty, footprintOf });
+      if (!check.ok) return warnReturn(state, check.reason ?? "Sem to nejde.");
+      const s = cloneState(state);
+      s.structures = s.structures.map((x) => (x.uid === action.uid ? { ...x, tx: action.tx, ty: action.ty } : x));
       return s;
     }
 

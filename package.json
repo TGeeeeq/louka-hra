@@ -9,9 +9,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "photos": "node scripts/fetch-photos.mjs",
-    "assets:app": "node scripts/make-app-assets.mjs && npx -y @capacitor/assets generate --android",
-    "test": "vitest run"
+    "assets:app": "node scripts/make-app-assets.mjs && npx -y @capacitor/assets generate --android"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",

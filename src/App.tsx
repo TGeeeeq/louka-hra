@@ -9,6 +9,7 @@ import { Controls } from "./ui/world/Controls";
 import { DevPanel } from "./ui/world/DevPanel";
 import { Shop } from "./ui/components/Shop";
 import { Craft } from "./ui/components/Craft";
+import { BuildPanel } from "./ui/world/BuildPanel";
 import { Journal } from "./ui/components/Journal";
 import { FullVersion } from "./ui/components/FullVersion";
 import { AnimalCard } from "./ui/components/AnimalCard";
@@ -25,8 +26,7 @@ import { TechFix } from "./ui/minigames/TechFix";
 import { ForestGate } from "./ui/minigames/ForestGate";
 import { CleanUp } from "./ui/minigames/CleanUp";
 import { PlayBar } from "./ui/minigames/PlayBar";
-import { BuildIt } from "./ui/minigames/BuildIt";
-import { openGate, type Interactable } from "./world/entities";
+import { openGate } from "./world/entities";
 import { currentStep, settledGroups, tutorialActive, tutorialTargets } from "./game/content/tutorial";
 import { invalidateGround } from "./world/draw";
 import { sound } from "./audio/sound";
@@ -134,12 +134,18 @@ export default function App() {
   const [puzzle, setPuzzle] = useState(false);
   const [clean, setClean] = useState<FeedGroup | null>(null);
   const [play, setPlay] = useState<AnimalDef | null>(null);
-  const [build, setBuild] = useState<Interactable | null>(null);
   const [devOpen, setDevOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  // Stavební mód: katalogové defId právě vybrané v BuildPanelu (null = zatím
+  // nic, klepnutím na louku se pak vybírá existující stavba k přesunu/zboření).
+  const [buildSelection, setBuildSelection] = useState<string | null>(null);
   // D2: potvrzovací dialog „Opustit Louku?" (hardwarové tlačítko Zpět, když
   // nic jiného není otevřené a hra běží).
   const [exitConfirm, setExitConfirm] = useState(false);
+  // Task 4: uvítací kamerový sestřih (louka → hráč) při prvním vstupu.
+  const [cinematic, setCinematic] = useState<{ tx: number; ty: number } | null>(null);
+  const welcomeStarted = useRef(false);
+  const skipCinematic = () => setCinematic(null);
   useGameSounds();
 
   // Skryté odemčení dev módu: napsat na klávesnici „louka".
@@ -182,6 +188,21 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoGateHit]);
 
+  // Task 4: uvítací sestřih — jen jednou, při prvním vstupu na prázdnou louku
+  // (tutorialStep 0, flag ještě nenastavený). Nesmí blokovat reducer/dialogy —
+  // Tomášova úvodní replika ze startu tutoriálu se zobrazí normálně přes ni.
+  useEffect(() => {
+    if (!state.started || welcomeStarted.current) return;
+    if (state.tutorialStep !== 0 || state.flags.welcome_seen) return;
+    welcomeStarted.current = true;
+    dispatch({ type: "SET_FLAG", key: "welcome_seen" });
+    setCinematic({ tx: 48, ty: 34 }); // scénický záběr na prázdnou louku
+    const t1 = window.setTimeout(() => setCinematic({ tx: 45, ty: 33 }), 2500); // k hráči
+    const t2 = window.setTimeout(() => setCinematic(null), 2500 + 1000); // uvolnit kameru
+    return () => { window.clearTimeout(t1); window.clearTimeout(t2); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.started, state.tutorialStep, state.flags.welcome_seen]);
+
   // D2: priorita zavírání pro hardwarové tlačítko Zpět — od nejvyšší vrstvy
   // (potvrzovací dialog) přes herní dialog a vývojářský panel, jednotlivé
   // mini-panely/minihry, až po velké overlaye (obchod/výroba/deník/plná
@@ -197,7 +218,6 @@ export default function App() {
     if (puzzle) { setPuzzle(false); return true; }
     if (clean) { setClean(null); return true; }
     if (play) { setPlay(null); return true; }
-    if (build) { setBuild(null); return true; }
     if (overlay) { setOverlay(null); setDemoGateOpen(false); return true; }
     if (editMode) { setEditMode(false); return true; }
     return false;
@@ -246,7 +266,7 @@ export default function App() {
       </>
     );
 
-  const paused = !!state.dialog || overlay !== null || !!sel || !!npc || !!minigame || puzzle || !!clean || !!play || !!build || !!state.gameOver;
+  const paused = !!state.dialog || overlay !== null || !!sel || !!npc || !!minigame || puzzle || !!clean || !!play || !!state.gameOver;
 
   const openClean = (group: FeedGroup) => {
     if (state.energy < 6) { dispatch({ type: "PUSH_DIALOG", speaker: "Tip", lines: ["Na úklid teď nemáš sílu. Nejdřív se najez a napij."] }); return; }
@@ -266,11 +286,6 @@ export default function App() {
   const winPlay = () => {
     if (play) dispatch({ type: "PLAY", animalId: play.id });
     setPlay(null);
-  };
-
-  const winBuild = () => {
-    if (build) dispatch({ type: "BUILD_STRUCTURE", id: build.id });
-    setBuild(null);
   };
 
   const winMinigame = (mg: Minigame) => {
@@ -379,15 +394,6 @@ export default function App() {
       return;
     }
     const it = t.it;
-    // Tutoriál: svítící „plán" aktuálního kroku → spustit stavební minihru.
-    if (tutorialActive(state)) {
-      const step = currentStep(state);
-      if (step && it.id === step.buildingId && !state.built.includes(it.id)) {
-        sound.select();
-        setBuild(it);
-        return;
-      }
-    }
     switch (it.kind) {
       case "kurnik": handleKurnik(); break;
       case "chlivek": feedStation("prasata"); break;
@@ -451,14 +457,34 @@ export default function App() {
     srnkaOut: state.phase === "rano" && !tutorialActive(state) && state.day >= 4,
   };
 
+  // Tutoriál: hráč je pořád ve stavebním módu, panel ukazuje jen aktuální
+  // krok a rovnou ho vybere — nic jiného teď stejně postavit nejde.
+  const tut = tutorialActive(state);
+  const restrictTo = tut ? currentStep(state)?.buildingId ?? null : null;
+  const buildModeOn = tut || editMode;
+
   return (
     <div className="game-world">
       {/* měkké rozednění po startu hry (místo tvrdého střihu z intra) */}
       <div className="game-fade-in" aria-hidden />
-      <WorldCanvas season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built} tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo} foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} appearance={state.profile.appearance} placements={state.placements} editMode={editMode} onMoveStructure={(id, tx, ty) => { sound.build(); dispatch({ type: "MOVE_STRUCTURE", id, tx, ty }); }} onEditReject={() => dispatch({ type: "PUSH_DIALOG", speaker: "Zabydlování", lines: ["Sem se to nevejde — je tam les, voda nebo jiná stavba."] })} onInteract={onInteract} onEvent={onWorldEvent} />
-      <Hud onOpen={(p) => { if (p === "plna") setDemoGateOpen(false); setOverlay(p); }} onDevUnlock={unlockDev} editMode={editMode} onToggleEdit={() => setEditMode((v) => !v)} />
+      <WorldCanvas
+        season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built}
+        tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo}
+        foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} appearance={state.profile.appearance}
+        structures={state.structures} editMode={buildModeOn} buildSelection={buildSelection}
+        cinematic={cinematic} onSkipCinematic={skipCinematic}
+        onPlaceStructure={(defId, tx, ty) => { sound.build(); dispatch({ type: "PLACE_STRUCTURE", defId, tx, ty }); }}
+        onDemolishStructure={(uid) => { sound.build(); dispatch({ type: "DEMOLISH_STRUCTURE", uid }); }}
+        onMoveStructure={(uid, tx, ty) => { sound.build(); dispatch({ type: "MOVE_STRUCTURE", uid, tx, ty }); }}
+        onEditReject={() => dispatch({ type: "PUSH_DIALOG", speaker: "Stavění", lines: ["Sem se to nevejde — je tam les, voda nebo jiná stavba."] })}
+        onInteract={onInteract} onEvent={onWorldEvent}
+      />
+      <Hud onOpen={(p) => { if (p === "plna") setDemoGateOpen(false); setOverlay(p); }} onDevUnlock={unlockDev} editMode={editMode} onToggleEdit={() => setEditMode((v) => { const next = !v; if (!next) setBuildSelection(null); return next; })} />
       <Controls />
-      {editMode && (
+      {buildModeOn && (
+        <BuildPanel money={state.money} wood={state.inventory.drevo ?? 0} structures={state.structures} selection={buildSelection} onSelect={setBuildSelection} restrictTo={restrictTo} />
+      )}
+      {editMode && !tut && (
         <button className="edit-done-fab" onClick={() => setEditMode(false)}>✓ Hotovo</button>
       )}
       <DialogBox />
@@ -502,12 +528,6 @@ export default function App() {
       {clean && (
         <Overlay title="🧹 Úklid u zvířat" onClose={() => setClean(null)}>
           <CleanUp group={clean} onWin={winClean} onClose={() => setClean(null)} />
-        </Overlay>
-      )}
-
-      {build && (
-        <Overlay title="🔨 Stavba" onClose={() => setBuild(null)}>
-          <BuildIt label={build.label} onWin={winBuild} onClose={() => setBuild(null)} />
         </Overlay>
       )}
 

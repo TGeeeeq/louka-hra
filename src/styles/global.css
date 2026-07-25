@@ -364,6 +364,36 @@ button:disabled { cursor: not-allowed; }
 .shop-buy button:hover:not(:disabled) { filter: brightness(1.08); }
 .shop-buy button:disabled { background: var(--border); color: var(--muted); }
 .owned-tag { font-size: 0.8rem; color: var(--good); font-weight: 700; }
+.shop-row.build.on { background: #fdf3d8; border-color: var(--accent); }
+
+/* ===== BuildPanel (stavební mód) ========================================= */
+.build-panel {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 0; z-index: 30;
+  width: min(480px, 96vw); max-height: 46vh; display: flex; flex-direction: column;
+  background: var(--cream); border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: var(--shadow-lg);
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  animation: rise 0.2s ease;
+}
+.build-panel-list { max-height: 30vh; }
+.build-panel .panel-note { margin-top: 6px; text-align: center; }
+@media (pointer: coarse), (max-width: 820px) {
+  .build-panel { margin-bottom: 168px; border-radius: var(--r-lg); box-shadow: var(--shadow-lg); }
+}
+
+/* Lišta pro výběr/přesun/zboření existující stavby ve stavebním módu. */
+.build-select-bar {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); z-index: 41;
+  display: flex; align-items: center; gap: 8px; background: var(--moss-deep); color: var(--cream);
+  padding: 9px 12px; border-radius: 999px; box-shadow: var(--shadow-lg); font-size: 0.84rem; font-weight: 600;
+  max-width: 92vw; flex-wrap: wrap; justify-content: center;
+}
+.build-select-label { white-space: nowrap; }
+.build-select-btn { padding: 6px 12px; border-radius: 999px; font-weight: 700; font-size: 0.8rem; background: rgba(255,255,255,0.16); color: var(--cream); }
+.build-select-btn:hover { background: rgba(255,255,255,0.3); }
+.build-select-btn.demolish { background: var(--terracotta); }
+.build-select-btn.demolish:hover { filter: brightness(1.08); }
+.build-select-btn.move { background: var(--accent); color: #2a2013; }
+.build-select-btn.move:hover { filter: brightness(1.06); }
 
 /* ===== Craft ============================================================= */
 .craft { display: flex; flex-direction: column; gap: 9px; }
@@ -1098,6 +1128,7 @@ button:disabled { cursor: not-allowed; }
 .npc-panel { display: flex; flex-direction: column; gap: 10px; }
 .npc-top { display: flex; align-items: center; gap: 14px; }
 .npc-portrait { background: var(--surface-alt); border-radius: var(--r); padding: 4px; box-shadow: var(--shadow-sm); }
+.npc-photo { display: block; border-radius: calc(var(--r) - 4px); object-fit: cover; }
 .npc-top h2 { font-size: 1.4rem; }
 .npc-role { font-size: 0.82rem; color: var(--muted); }
 .npc-line { font-family: var(--font-serif); font-style: italic; color: var(--moss-deep); font-size: 1.04rem; }
