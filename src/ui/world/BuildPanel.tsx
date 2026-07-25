@@ -36,11 +36,24 @@ interface Props {
   /** Tutoriál: omezí panel jen na tuto stavbu (aktuální krok) a rovnou ji
    *  vybere. `null`/`undefined` = normální volný výběr. */
   restrictTo?: string | null;
+  /** Ukončení stavebního módu — tlačítko „✓ Hotovo" v hlavičce panelu.
+   *  `undefined` v tutoriálu (odtamtud se odejít nedá). */
+  onDone?: () => void;
 }
 
-export function BuildPanel({ money, wood, structures, selection, onSelect, restrictTo }: Props) {
+/** Cenovka stavby („💰420 🪵2" / „zdarma"). */
+function priceOf(id: string, free: boolean) {
+  if (free) return "zdarma";
+  const c = BUILDABLE_BY_ID[id]?.cost ?? {};
+  return [c.money ? `💰${c.money}` : null, c.wood ? `🪵${c.wood}` : null].filter(Boolean).join(" ") || "zdarma";
+}
+
+export function BuildPanel({ money, wood, structures, selection, onSelect, restrictTo, onDone }: Props) {
   const restrictCategory = restrictTo ? BUILDABLE_BY_ID[restrictTo]?.category : undefined;
   const [tab, setTab] = useState<BuildCategory>(restrictCategory ?? "zaklad");
+  // Katalog je rozbalený jen když si hráč vybírá. Jakmile stavbu vybere,
+  // panel se scvrkne na jeden řádek — hlavní je vidět louku, kam ji dát.
+  const [open, setOpen] = useState(!selection);
 
   // Tutoriál: skoč na kartu s cílovou stavbou a rovnou ji vyber (hráč nemá
   // co jinýho v panelu dělat, tak ať se rovnou zaměří).
@@ -51,57 +64,79 @@ export function BuildPanel({ money, wood, structures, selection, onSelect, restr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restrictTo]);
 
-  const items = (restrictTo ? BUILDABLES.filter((b) => b.id === restrictTo) : BUILDABLES.filter((b) => b.category === tab));
+  // Vybráno → sbal katalog a uvolni výhled na louku. Zrušeno → zase rozbal.
+  useEffect(() => { setOpen(!selection); }, [selection]);
+
+  const items = restrictTo
+    ? BUILDABLES.filter((b) => b.id === restrictTo)
+    : BUILDABLES.filter((b) => b.category === tab);
+  const sel = selection ? BUILDABLE_BY_ID[selection] : null;
 
   return (
-    <div className="build-panel">
-      {!restrictTo && (
-        <div className="subtabs">
-          {TABS.map((t) => (
-            <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
-              {TAB_LABEL[t]}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="shop-list build-panel-list">
-        {items.map((b) => {
-          const already = b.unique && hasBuilt(structures, b.id);
-          // Tutoriál: aktuální krok se staví zdarma (viz reducer PLACE_STRUCTURE).
-          const affordable =
-            b.id === restrictTo ||
-            ((!b.cost.money || money >= b.cost.money) && (!b.cost.wood || wood >= b.cost.wood));
-          const disabled = already || !affordable;
-          const on = selection === b.id;
-          return (
-            <div className={`shop-row build${already ? " owned" : ""}${disabled && !already ? " dim" : ""}${on ? " on" : ""}`} key={b.id}>
-              <span className="shop-ico">{ICON[b.id] ?? "🔨"}</span>
-              <span className="shop-info">
-                <b>{b.label}</b>
-                <small>{b.fw}×{b.fh} dlaždice</small>
+    <div className={`build-panel${open ? " open" : ""}`}>
+      <div className="build-head">
+        <button className="build-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          {sel ? (
+            <>
+              <span className="bp-ico">{ICON[sel.id] ?? "🔨"}</span>
+              <span className="bp-text">
+                <b>{sel.label}</b>
+                <small>klepni na louku, kam ji chceš</small>
               </span>
-              <span className="shop-buy">
-                {already ? (
-                  <span className="owned-tag">✓ máš</span>
-                ) : (
-                  <button
-                    disabled={!affordable}
-                    onClick={() => onSelect(on ? null : b.id)}
-                  >
-                    {on ? "✓ vybráno" : b.id === restrictTo ? "zdarma" : [
-                      b.cost.money ? `💰${b.cost.money}` : null,
-                      b.cost.wood ? `🪵${b.cost.wood}` : null,
-                    ].filter(Boolean).join(" ") || "zdarma"}
-                  </button>
-                )}
+            </>
+          ) : (
+            <>
+              <span className="bp-ico">🔨</span>
+              <span className="bp-text">
+                <b>Stavění</b>
+                <small>vyber si, co postavíš</small>
               </span>
-            </div>
-          );
-        })}
+            </>
+          )}
+          <em aria-hidden>{open ? "▾" : "▴"}</em>
+        </button>
+        {sel && !restrictTo && (
+          <button className="build-clear" onClick={() => onSelect(null)} title="Zrušit výběr stavby">✕</button>
+        )}
+        {onDone && <button className="build-done" onClick={onDone}>✓ Hotovo</button>}
       </div>
-      <p className="panel-note">
-        {selection ? "Klepni na louku, kam to postavit — pak ještě potvrdíš." : "Vyber si stavbu a pak klepni na louku."}
-      </p>
+
+      {open && (
+        <>
+          {!restrictTo && (
+            <div className="subtabs build-tabs">
+              {TABS.map((t) => (
+                <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
+                  {TAB_LABEL[t]}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="build-strip">
+            {items.map((b) => {
+              const already = b.unique && hasBuilt(structures, b.id);
+              // Tutoriál: aktuální krok se staví zdarma (viz reducer PLACE_STRUCTURE).
+              const free = b.id === restrictTo;
+              const affordable =
+                free || ((!b.cost.money || money >= b.cost.money) && (!b.cost.wood || wood >= b.cost.wood));
+              const disabled = already || !affordable;
+              const on = selection === b.id;
+              return (
+                <button
+                  key={b.id}
+                  className={`build-chip${already ? " owned" : ""}${disabled ? " dim" : ""}${on ? " on" : ""}`}
+                  disabled={disabled}
+                  onClick={() => onSelect(on ? null : b.id)}
+                >
+                  <span className="bc-ico">{ICON[b.id] ?? "🔨"}</span>
+                  <b>{b.label}</b>
+                  <small>{already ? "✓ máš" : `${priceOf(b.id, free)} · ${b.fw}×${b.fh}`}</small>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { AnimalDef, FeedGroup } from "./game/types";
 import { useGame, flushSave } from "./ui/store";
 import { registerBackButton, registerLifecycle, exitApp } from "./native";
-import { WorldCanvas, type InteractTarget, type WorldEvent } from "./ui/world/WorldCanvas";
+import { WorldCanvas, type InteractTarget, type PendingPlacement, type WorldEvent } from "./ui/world/WorldCanvas";
 import { Hud } from "./ui/world/Hud";
 import { DialogBox } from "./ui/world/DialogBox";
 import { Controls } from "./ui/world/Controls";
@@ -21,6 +21,7 @@ import { PERSON_BY_ID } from "./game/content/people";
 import { reactionFor } from "./game/content/npcReactions";
 import { NPC_LIFE } from "./game/content/npcLife";
 import { BUILDABLE_BY_ID } from "./game/content/buildables";
+import { nudgeWithinMap, placementValid } from "./game/build/preview";
 import { NpcPanel } from "./ui/world/NpcPanel";
 import { HerbQuiz } from "./ui/minigames/HerbQuiz";
 import { ChopWood } from "./ui/minigames/ChopWood";
@@ -163,9 +164,11 @@ export default function App() {
   // D2: potvrzovací dialog „Opustit Louku?" (hardwarové tlačítko Zpět, když
   // nic jiného není otevřené a hra běží).
   const [exitConfirm, setExitConfirm] = useState(false);
-  // Vybrané místo pro novou stavbu, které čeká na potvrzení „opravdu sem?".
-  // Dokud tu něco je, WorldCanvas drží rozsvícený půdorys a ignoruje vstup.
-  const [placeConfirm, setPlaceConfirm] = useState<{ defId: string; tx: number; ty: number } | null>(null);
+  // Rozestavěná stavba (nová i přesouvaná) čekající na potvrzení „opravdu
+  // sem?". Dokud tu něco je, WorldCanvas drží rozsvícený půdorys na tomhle
+  // místě a hráč s ním může hýbat — šipkami po dlaždicích nebo ťuknutím
+  // jinam do louky.
+  const [pending, setPending] = useState<PendingPlacement | null>(null);
   // Task 4: uvítací kamerový sestřih — přelet nad loukou, pak záběr na Tomáše.
   // `talk: true` = poslední záběr, kdy už Tomáš mluví; kamera na něm drží,
   // dokud hráč jeho repliku nedočte (viz efekt „uvolnit kameru" níž).
@@ -268,6 +271,60 @@ export default function App() {
     if (cinematic?.talk && !state.dialog) setCinematic(null);
   }, [cinematic?.talk, state.dialog]);
 
+  // --- Rozestavěná stavba: posun po dlaždicích + potvrzení ------------------
+  // Půdorys se dá doladit šipkami (i WASD) nebo tlačítky v potvrzovací liště,
+  // Enter/„✓" ho postaví, Esc/„✕" zruší. Chůze hráče je po tu dobu vypnutá
+  // (viz WorldCanvas → arrowsOwnedByPlacement).
+  const pendingRef = useRef<PendingPlacement | null>(null);
+  pendingRef.current = pending;
+  const pendingValid = pending
+    ? placementValid(state.structures, pending.defId, pending.tx, pending.ty, pending.uid)
+    : false;
+
+  const nudgePending = (dx: number, dy: number) =>
+    setPending((p) => (p ? { ...p, ...nudgeWithinMap(p.defId, p.tx, p.ty, dx, dy) } : p));
+
+  const commitPending = () => {
+    const p = pendingRef.current;
+    if (!p) return;
+    if (!placementValid(state.structures, p.defId, p.tx, p.ty, p.uid)) {
+      sound.error();
+      return;
+    }
+    sound.build();
+    if (p.kind === "new") {
+      dispatch({ type: "PLACE_STRUCTURE", defId: p.defId, tx: p.tx, ty: p.ty });
+      // Unikátní stavbu už podruhé neumístíš — výběr v panelu zhasni, ať
+      // panel nezůstane „zamčený" na hotové stavbě. U plotů a cedulí ho
+      // naopak nech, aby šlo klidně postavit celou řadu za sebou.
+      if (BUILDABLE_BY_ID[p.defId]?.unique) setBuildSelection(null);
+    } else if (p.uid) {
+      dispatch({ type: "MOVE_STRUCTURE", uid: p.uid, tx: p.tx, ty: p.ty });
+    }
+    setPending(null);
+  };
+
+  const NUDGE_KEYS: Record<string, [number, number]> = {
+    ArrowUp: [0, -1], KeyW: [0, -1],
+    ArrowDown: [0, 1], KeyS: [0, 1],
+    ArrowLeft: [-1, 0], KeyA: [-1, 0],
+    ArrowRight: [1, 0], KeyD: [1, 0],
+  };
+  const hasDialog = !!state.dialog;
+  useEffect(() => {
+    if (!pending) return;
+    const onKey = (e: KeyboardEvent) => {
+      const d = NUDGE_KEYS[e.code];
+      if (d) { e.preventDefault(); nudgePending(d[0], d[1]); return; }
+      if (e.code === "Escape") { e.preventDefault(); setPending(null); return; }
+      // Enter/mezerník při otevřené replice patří dialogu, ne stavbě.
+      if ((e.code === "Enter" || e.code === "Space") && !hasDialog) { e.preventDefault(); commitPending(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending, hasDialog, state.structures]);
+
   // D2: priorita zavírání pro hardwarové tlačítko Zpět — od nejvyšší vrstvy
   // (potvrzovací dialog) přes herní dialog a vývojářský panel, jednotlivé
   // mini-panely/minihry, až po velké overlaye (obchod/výroba/deník/plná
@@ -275,7 +332,7 @@ export default function App() {
   const closeTopmostRef = useRef<() => boolean>(() => false);
   closeTopmostRef.current = () => {
     if (exitConfirm) { setExitConfirm(false); return true; }
-    if (placeConfirm) { setPlaceConfirm(null); return true; } // Zpět = stavět jinam
+    if (pending) { setPending(null); return true; } // Zpět = zahodit rozestavěné
     if (cinematic) { skipCinematic(); return true; } // Zpět = přeskočit sestřih
     if (state.dialog) { dispatch({ type: "DISMISS_DIALOG" }); return true; }
     if (devOpen) { setDevOpen(false); return true; }
@@ -531,7 +588,7 @@ export default function App() {
   const buildModeOn = tut || editMode;
   // Běží přelet nad loukou (ještě než Tomáš začne mluvit)? Pak schovej ovládání.
   const flyover = !!cinematic && !cinematic.talk;
-  const pendingLabel = placeConfirm ? BUILDABLE_BY_ID[placeConfirm.defId]?.label ?? "stavbu" : "";
+  const pendingLabel = pending ? BUILDABLE_BY_ID[pending.defId]?.label ?? "stavbu" : "";
 
   return (
     <div className="game-world">
@@ -543,39 +600,55 @@ export default function App() {
         foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} appearance={state.profile.appearance}
         structures={state.structures} editMode={buildModeOn} buildSelection={buildSelection}
         cinematic={cinematic} onSkipCinematic={skipCinematic}
-        onPlaceRequest={(defId, tx, ty) => setPlaceConfirm({ defId, tx, ty })}
-        awaitingPlaceConfirm={!!placeConfirm}
+        onPlaceRequest={(defId, tx, ty) => setPending({ kind: "new", defId, tx, ty })}
+        onMoveRequest={(uid, tx, ty) => {
+          const inst = state.structures.find((s) => s.uid === uid);
+          if (inst) setPending({ kind: "move", defId: inst.defId, uid, tx, ty });
+        }}
+        pending={pending}
         onDemolishStructure={(uid) => { sound.build(); dispatch({ type: "DEMOLISH_STRUCTURE", uid }); }}
-        onMoveStructure={(uid, tx, ty) => { sound.build(); dispatch({ type: "MOVE_STRUCTURE", uid, tx, ty }); }}
         onEditReject={() => dispatch({ type: "PUSH_DIALOG", speaker: "Stavění", lines: ["Sem se to nevejde — je tam les, voda nebo jiná stavba."] })}
         onInteract={onInteract} onEvent={onWorldEvent}
       />
       <Hud onOpen={(p) => { if (p === "plna") setDemoGateOpen(false); setOverlay(p); }} onDevUnlock={unlockDev} editMode={editMode} onToggleEdit={() => setEditMode((v) => { const next = !v; if (!next) setBuildSelection(null); return next; })} />
       <Controls />
       {/* přes dotaz „postavit sem?" panel schovej — stavba je už vybraná a
-          lišta s Ano/Ne by se s panelem překrývala */}
-      {buildModeOn && !flyover && !placeConfirm && (
-        <BuildPanel money={state.money} wood={state.inventory.drevo ?? 0} structures={state.structures} selection={buildSelection} onSelect={setBuildSelection} restrictTo={restrictTo} />
+          lišta s posunem/potvrzením potřebuje spodek obrazovky pro sebe */}
+      {buildModeOn && !flyover && !pending && (
+        <BuildPanel
+          money={state.money}
+          wood={state.inventory.drevo ?? 0}
+          structures={state.structures}
+          selection={buildSelection}
+          onSelect={setBuildSelection}
+          restrictTo={restrictTo}
+          onDone={editMode && !tut ? () => setEditMode(false) : undefined}
+        />
       )}
-      {editMode && !tut && !placeConfirm && (
-        <button className="edit-done-fab" onClick={() => setEditMode(false)}>✓ Hotovo</button>
-      )}
-      {placeConfirm && (
-        <div className="build-confirm-bar" role="dialog" aria-live="polite">
-          <span className="build-select-label">Postavit {pendingLabel} sem?</span>
-          <button
-            className="build-select-btn confirm"
-            onClick={() => {
-              sound.build();
-              dispatch({ type: "PLACE_STRUCTURE", ...placeConfirm });
-              setPlaceConfirm(null);
-            }}
-          >
-            ✓ Ano, postavit
-          </button>
-          <button className="build-select-btn cancel" onClick={() => setPlaceConfirm(null)}>
-            ✕ Jinam
-          </button>
+      {pending && (
+        <div className="place-bar" role="dialog" aria-live="polite">
+          <div className="place-bar-head">
+            {/* Název je v 1. pádu (katalog), tak ho nechávám vepředu — jinak by
+                z toho lezlo „Postavit Chalupa sem?". */}
+            <b>{pendingLabel}</b>
+            <span>— {pending.kind === "move" ? "přesunout" : "postavit"} sem?</span>
+            {!pendingValid && <span className="place-bar-warn">⚠ Sem se to nevejde</span>}
+          </div>
+          <div className="place-bar-row">
+            <div className="nudge-pad" role="group" aria-label="Posunout stavbu">
+              <button className="nudge up" aria-label="posunout nahoru" onClick={() => nudgePending(0, -1)}>▲</button>
+              <button className="nudge left" aria-label="posunout vlevo" onClick={() => nudgePending(-1, 0)}>◀</button>
+              <button className="nudge right" aria-label="posunout vpravo" onClick={() => nudgePending(1, 0)}>▶</button>
+              <button className="nudge down" aria-label="posunout dolů" onClick={() => nudgePending(0, 1)}>▼</button>
+            </div>
+            <div className="place-bar-actions">
+              <button className="build-select-btn confirm" disabled={!pendingValid} onClick={commitPending}>
+                ✓ {pending.kind === "move" ? "Přesunout" : "Postavit"}
+              </button>
+              <button className="build-select-btn cancel" onClick={() => setPending(null)}>✕ Zrušit</button>
+            </div>
+          </div>
+          <small className="place-bar-hint">Šipkami posuneš po dlaždicích · ťuknutím na louku přehodíš jinam</small>
         </div>
       )}
       {/* přes přelet nad loukou repliku schovej — ukáže se až v záběru na Tomáše */}

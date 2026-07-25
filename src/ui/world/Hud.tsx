@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGame } from "../store";
 import { sound } from "../../audio/sound";
 import {
@@ -25,6 +25,18 @@ function MiniBar({ icon, value, max, tone }: { icon: string; value: number; max:
   );
 }
 
+/** Ukládá si hráčovo rozbalení/sbalení úkolů, ať to nemusí řešit každý den. */
+const QUEST_OPEN_KEY = "louka.hud.questOpen";
+
+function initialQuestOpen(): boolean {
+  if (typeof window === "undefined") return true;
+  const saved = window.localStorage?.getItem(QUEST_OPEN_KEY);
+  if (saved === "0") return false;
+  if (saved === "1") return true;
+  // Bez uložené volby: na malém displeji radši sbaleno, ať je vidět louka.
+  return window.matchMedia("(min-width: 700px) and (min-height: 620px)").matches;
+}
+
 export function Hud({
   onOpen,
   onDevUnlock,
@@ -40,6 +52,14 @@ export function Hud({
   const [bag, setBag] = useState(false);
   const [muted, setMuted] = useState(sound.muted);
   const [music, setMusic] = useState(sound.musicOn);
+  const [menu, setMenu] = useState(false);
+  const [questOpen, setQuestOpen] = useState(initialQuestOpen);
+
+  const toggleQuest = () =>
+    setQuestOpen((v) => {
+      window.localStorage?.setItem(QUEST_OPEN_KEY, v ? "0" : "1");
+      return !v;
+    });
 
   // Skryté odemčení dev módu: 5× ťuknout na odznak „Den X" do 2 sekund.
   const tap = useRef({ count: 0, last: 0 });
@@ -52,6 +72,9 @@ export function Hud({
       onDevUnlock?.();
     }
   };
+
+  // Přepnutí do stavebního módu zavře rozbalené menu (překrývalo by panel).
+  useEffect(() => { if (editMode) setMenu(false); }, [editMode]);
 
   const quest = MAIN_QUESTS[state.questProgress.main ?? state.questLine];
   const tut = tutorialActive(state);
@@ -73,6 +96,22 @@ export function Hud({
 
   const consum = ["chleba", "polevka", "voda", "caj"].filter((id) => invCount(state.inventory, id) > 0);
 
+  // Druhořadá tlačítka — na širokém displeji rovnou v liště, na úzkém se
+  // schovají pod „⋯", ať se horní lišta vejde do jediného řádku.
+  const secondary = [
+    { key: "bag", icon: "🎒", label: "Batoh / najíst se", act: () => setBag((b) => !b) },
+    { key: "denik", icon: "📖", label: "Deník", act: () => onOpen("denik") },
+    { key: "plna", icon: "🌾", label: "Plná verze", act: () => onOpen("plna") },
+    { key: "zvuk", icon: muted ? "🔇" : "🔊", label: "Zvuk", act: () => setMuted(sound.toggleMute()) },
+    { key: "hudba", icon: music ? "🎵" : "🎵̶", label: "Hudba", act: () => setMusic(sound.toggleMusic()) },
+  ];
+
+  const questBox = tut && step
+    ? { cls: "", label: `🔨 Kapitola ${step.chapterIndex}/${CHAPTER_COUNT} — ${step.chapter}`, title: `Postav: ${step.buildLabel}`, hint: "Vyber stavbu v panelu dole, klepni na louku a potvrď — před potvrzením ji ještě můžeš posunout šipkami." }
+    : quest
+      ? { cls: "", label: `📋 Úkol ${(state.questProgress.main ?? 0) + 1}/${MAIN_QUESTS.length}`, title: quest.title, hint: quest.hint }
+      : { cls: " done", label: "🎉 Hotovo", title: "Všechny úkoly splněné!", hint: "Teď je Louka jen tvoje — hospodař, jak umíš." };
+
   return (
     <>
       <div className="hud-stack">
@@ -80,7 +119,9 @@ export function Hud({
         <div className="hud-when">
           <span className="day-badge" onClick={onDayBadge}>Den {state.day}</span>
           {demoGateActive() && !state.fullVersion && <span className="demo-chip">DEMO</span>}
-          <span className="season-pill" data-season={state.season}>{SEASON_ICON[state.season]} {SEASON_LABEL[state.season]}</span>
+          <span className="season-pill" data-season={state.season}>
+            {SEASON_ICON[state.season]} <i>{SEASON_LABEL[state.season]}</i>
+          </span>
           <span className="hud-weather">{PHASE_ICON[state.phase]} {PHASE_LABEL[state.phase]} · {WEATHER_ICON[state.weather]} {weatherName(state.weather)}</span>
         </div>
 
@@ -95,42 +136,48 @@ export function Hud({
           {!tut && (
             <button className={`icon-btn${editMode ? " on" : ""}`} title="Stavět (postavit / přesunout / zbořit)" onClick={onToggleEdit}>🔨</button>
           )}
-          <button className="icon-btn" title="Batoh / najíst se" onClick={() => setBag((b) => !b)}>🎒</button>
-          <button className="icon-btn" title="Deník" onClick={() => onOpen("denik")}>📖</button>
-          <button className="icon-btn" title="Plná verze" onClick={() => onOpen("plna")}>🌾</button>
-          <button className="icon-btn" title="Zvuk" onClick={() => setMuted(sound.toggleMute())}>{muted ? "🔇" : "🔊"}</button>
-          <button className="icon-btn" title="Hudba" onClick={() => setMusic(sound.toggleMusic())}>{music ? "🎵" : "🎵̶"}</button>
+          {secondary.map((b) => (
+            <button key={b.key} className="icon-btn hud-secondary" title={b.label} onClick={b.act}>{b.icon}</button>
+          ))}
+          <button
+            className={`icon-btn hud-menu-btn${menu ? " on" : ""}`}
+            title="Další"
+            aria-expanded={menu}
+            onClick={() => setMenu((m) => !m)}
+          >
+            ⋯
+          </button>
         </div>
       </div>
 
-      {tut && step ? (
-        <div className="hud-quest">
-          <span className="quest-label">🔨 Kapitola {step.chapterIndex}/{CHAPTER_COUNT} — {step.chapter}</span>
-          <b>Postav: {step.buildLabel}</b>
-          <small>Vyber stavbu v panelu dole, klepni na louku, kam ji chceš postavit, a potvrď.</small>
-        </div>
-      ) : quest ? (
-        <div className="hud-quest">
-          <span className="quest-label">📋 Úkol {(state.questProgress.main ?? 0) + 1}/{MAIN_QUESTS.length}</span>
-          <b>{quest.title}</b>
-          <small>{quest.hint}</small>
-        </div>
-      ) : (
-        <div className="hud-quest done">
-          <b>🎉 Všechny úkoly hotové!</b>
-          <small>Teď je Louka jen tvoje — hospodař, jak umíš.</small>
+      {menu && (
+        <div className="hud-menu" onClick={() => setMenu(false)}>
+          {secondary.map((b) => (
+            <button key={b.key} onClick={(e) => { e.stopPropagation(); b.act(); setMenu(false); }}>
+              <span>{b.icon}</span> {b.label}
+            </button>
+          ))}
         </div>
       )}
-      {!tut && sideQuest && (
-        <div className="hud-quest side">
+
+      <div className={`hud-quest${questBox.cls}${questOpen ? " open" : ""}`}>
+        <button className="quest-toggle" onClick={toggleQuest} aria-expanded={questOpen}>
+          <span className="quest-label">{questBox.label}</span>
+          <b>{questBox.title}</b>
+          <em aria-hidden>{questOpen ? "▾" : "▸"}</em>
+        </button>
+        {questOpen && <small>{questBox.hint}</small>}
+      </div>
+
+      {!tut && questOpen && sideQuest && (
+        <div className="hud-quest side open">
           <span className="quest-label">{sideLine.icon} {sideLine.title}</span>
           <b>{sideQuest.title}</b>
-          <small>{sideQuest.hint}</small>
         </div>
       )}
       </div>
 
-      {!tut && <button className={`phase-fab ${phaseBtn.cls}`} onClick={phaseBtn.act}>{phaseBtn.label}</button>}
+      {!tut && !editMode && <button className={`phase-fab ${phaseBtn.cls}`} onClick={phaseBtn.act}>{phaseBtn.label}</button>}
 
       {bag && (
         <div className="bag-pop" onClick={() => setBag(false)}>

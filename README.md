@@ -40,6 +40,10 @@ Chodíš postavou po Louce (top-down mapa ve stylu Pokémon / Zoo Tycoon):
   stavení, uděláš, co je potřeba (vypustit, nakrmit, sebrat vejce, vařit, prodat, spát…).
 - **Stavení:** 🐔 kurník · 🐖 chlívek · 🌾 pastvina · 🦴 pelíšky · ⛲ studna · 🔥 ohniště &
   kuchyně · 🛠️ dílna (výroba) · 🏪 stánek (obchod) · 🏡 chalupa (spánek) · 🪧 cedule (nápověda).
+- **Stavění (🔨 v HUD):** vyber stavbu ve spodní liště (po výběru se sbalí, ať je vidět
+  louka), klepni na místo a **než potvrdíš, dolaď pozici šipkami / WASD** (na mobilu
+  křížkem v potvrzovací liště). **Enter** postaví, **Esc** zruší. Stejně se přesouvají
+  i hotové stavby — klepni na ni, dej *Přesunout*, vyber místo a dolaď.
 - **Questy** vedou nahoře (vtipná příběhová linka), **zvuky** jsou chiptune + ambient
   (🔊 / 🎵 v HUD je vypneš), 🎒 batoh = najíst se a napít.
 - **Mini-mapa** v rohu ukazuje oblasti i tebe. Svět je velký a **cestovatelný** —

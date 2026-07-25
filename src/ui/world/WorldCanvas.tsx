@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { FeedGroup, FoxStage, Phase, Placed, PlayerAppearance, Season, Weather } from "../../game/types";
-import { MAP_H, MAP_W, TS, isSolidTile } from "../../world/tiles";
+import { MAP_H, MAP_W, TS } from "../../world/tiles";
 import { QUALITY, getQualityTier, onTierChange, perfFrame, perfSetDrawn } from "../../world/perf";
 import {
   ANIMAL_SPAWNS,
@@ -19,7 +19,8 @@ import {
 import { TUTORIAL_BUILDING_IDS } from "../../game/content/tutorial";
 import { COMPANION_ANIMAL_IDS } from "../../game/balance";
 import { BUILDABLE_BY_ID } from "../../game/content/buildables";
-import { canPlace, structureAt } from "../../game/build/placement";
+import { structureAt } from "../../game/build/placement";
+import { footprintOf, placementValid } from "../../game/build/preview";
 import { findPath, nearestWalkable, type Pt } from "../../world/pathfind";
 import { NPC_LIFE } from "../../game/content/npcLife";
 import { reactionFor, idleLine, ESCAPE_HELP, ESCAPE_SHRUG } from "../../game/content/npcReactions";
@@ -33,10 +34,17 @@ import { PEOPLE } from "../../game/content/people";
 import { consumeAction, input } from "../../world/input";
 import { sound } from "../../audio/sound";
 
-/** fw/fh podle defId — pro `canPlace`/`structureAt` (chybějící def = 1×1). */
-const footprintOf = (defId: string) => {
-  const d = BUILDABLE_BY_ID[defId];
-  return { fw: d?.fw ?? 1, fh: d?.fh ?? 1 };
+/**
+ * Rozestavěná stavba čekající na potvrzení — buď nová z katalogu (`new`),
+ * nebo přesun už stojící stavby (`move`, drží si její `uid`). Dokud tu něco
+ * je, svítí na louce půdorys a dá se posouvat šipkami (viz App).
+ */
+export type PendingPlacement = {
+  kind: "new" | "move";
+  defId: string;
+  uid?: string;
+  tx: number;
+  ty: number;
 };
 
 export type InteractTarget =
@@ -102,11 +110,12 @@ interface Props {
   /** Hráč vybral místo pro novou stavbu. Nestaví se hned — App si nechá
    *  potvrdit „opravdu sem?" a teprve pak pošle PLACE_STRUCTURE. */
   onPlaceRequest: (defId: string, tx: number, ty: number) => void;
-  /** Běží potvrzovací dotaz? Půdorys pak zůstane svítit na vybraném místě
-   *  (hráč musí vidět, kam staví) a canvas ignoruje další vstup. */
-  awaitingPlaceConfirm?: boolean;
+  /** Totéž pro přesun už stojící stavby — taky se potvrzuje. */
+  onMoveRequest: (uid: string, tx: number, ty: number) => void;
+  /** Rozestavěný půdorys čekající na potvrzení. Kreslí se na svém místě
+   *  (hráč musí vidět, kam staví) a dá se posouvat šipkami z App. */
+  pending?: PendingPlacement | null;
   onDemolishStructure: (uid: string) => void;
-  onMoveStructure: (uid: string, tx: number, ty: number) => void;
   onEditReject: () => void;
   onInteract: (t: InteractTarget) => void;
   onEvent: (e: WorldEvent) => void;
@@ -206,13 +215,13 @@ const BUILDING_VERB: Record<string, string> = {
   seniste: "Seniště (kosit / sušit / obracet)",
 };
 
-export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, awaitingPlaceConfirm, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent }: Props) {
+export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, onMoveRequest, pending, onDemolishStructure, onEditReject, onInteract, onEvent }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // měnící se props čteme přes ref, ať smyčku nemusíme restartovat
-  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, awaitingPlaceConfirm, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent });
-  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, awaitingPlaceConfirm, onDemolishStructure, onMoveStructure, onEditReject, onInteract, onEvent };
+  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, onMoveRequest, pending, onDemolishStructure, onEditReject, onInteract, onEvent });
+  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, onMoveRequest, pending, onDemolishStructure, onEditReject, onInteract, onEvent };
 
   // Vybraná existující stavba v edit módu (bez buildSelection) — místní React
   // stav, protože řídí DOM lištu Přesunout/Zbořit/Zrušit pod canvasem.
@@ -230,10 +239,11 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
     if (!editMode || buildSelection) { setSelected(null); setMoving(false); }
   }, [editMode, buildSelection]);
 
-  // Dotaz „postavit sem?" skončil (Ano i Ne) → zhasnout zamčený půdorys.
+  // Rozestavěná stavba čeká na potvrzení → lišta Přesunout/Zbořit se schová,
+  // ať se nepřekrývá s potvrzovací lištou.
   useEffect(() => {
-    if (!awaitingPlaceConfirm) buildGhost.current = null;
-  }, [awaitingPlaceConfirm]);
+    if (pending) { setSelected(null); setMoving(false); }
+  }, [pending]);
 
   // Kolize staveb podle toho, co už stojí (blueprint je průchozí). Když hráč
   // dostavěl stavbu „zevnitř" plánu nebo těsně u jejího boku, vysuneme ho ven
@@ -376,12 +386,22 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       ArrowLeft: "left", KeyA: "left",
       ArrowRight: "right", KeyD: "right",
     };
+    /** Šipky patří rozestavěné stavbě, ne hráči (posun půdorysu řeší App). */
+    const arrowsOwnedByPlacement = () => !!propsRef.current.pending;
+    const releaseWalk = () => {
+      input.up = false; input.down = false; input.left = false; input.right = false;
+    };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (keymap[e.code]) { input[keymap[e.code]] = true; e.preventDefault(); }
+      if (keymap[e.code]) {
+        e.preventDefault();
+        if (arrowsOwnedByPlacement()) { releaseWalk(); return; }
+        input[keymap[e.code]] = true;
+      }
       if (e.code === "Space" || e.code === "Enter") e.preventDefault();
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (keymap[e.code]) { input[keymap[e.code]] = false; e.preventDefault(); }
+      if (arrowsOwnedByPlacement()) return; // Enter/Esc obsluhuje potvrzovací lišta
       if ((e.code === "Space" || e.code === "Enter") && !propsRef.current.paused) {
         // action na keyup, ať se nedrží
         triggerAction();
@@ -419,35 +439,33 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       const r = canvas.getBoundingClientRect();
       return { wx: e.clientX - r.left + cam.current.x, wy: e.clientY - r.top + cam.current.y };
     };
-    // Náhled půdorysu pod prstem — nová stavba z BuildPanelu. Validita
-    // (zelená/červená) přesně kopíruje reducer PLACE_STRUCTURE.
-    const computeNewGhost = (e: PointerEvent, defId: string) => {
+    // Náhled půdorysu pod prstem. Validitu (zelená/červená) počítá stejný
+    // helper jako potvrzovací lišta i reducer — nikdy se nerozejdou.
+    // `ignoreUid` = přesouvaná stavba (sama se sebou kolidovat nesmí).
+    const computeGhost = (e: PointerEvent, defId: string, ignoreUid?: string) => {
       const def = BUILDABLE_BY_ID[defId];
       const { wx, wy } = toWorld(e);
-      const fw = def?.fw ?? 1;
-      const fh = def?.fh ?? 1;
+      const { fw, fh } = footprintOf(defId);
       const tx = Math.round(wx / TS - fw / 2); // střed půdorysu pod prstem
       const ty = Math.round(wy / TS - fh / 2);
-      const structures = propsRef.current.structures;
-      const alreadyUnique = !!def?.unique && structures.some((s) => s.defId === defId);
-      const valid = !alreadyUnique && canPlace({ structures, isSolid: isSolidTile, def: { fw, fh }, tx, ty, footprintOf }).ok;
+      const valid = placementValid(propsRef.current.structures, defId, tx, ty, ignoreUid);
       const it: Interactable = { id: "__ghost", kind: def?.kind ?? "cedule", label: def?.label ?? "", tx, ty, fw, fh, solid: def?.solid ?? true };
       return { it, tx, ty, valid };
     };
-    // Náhled přesunu vybrané stavby — stejné, ale bez ní samotné v seznamu
-    // (aby nekolidovala sama se sebou), přesně jako reducer MOVE_STRUCTURE.
-    const computeMoveGhost = (e: PointerEvent, inst: Placed) => {
-      const def = BUILDABLE_BY_ID[inst.defId];
-      const { wx, wy } = toWorld(e);
-      const fw = def?.fw ?? 1;
-      const fh = def?.fh ?? 1;
-      const tx = Math.round(wx / TS - fw / 2);
-      const ty = Math.round(wy / TS - fh / 2);
-      const others = propsRef.current.structures.filter((s) => s.uid !== inst.uid);
-      const valid = canPlace({ structures: others, isSolid: isSolidTile, def: { fw, fh }, tx, ty, footprintOf }).ok;
-      const it: Interactable = { id: "__ghost", kind: def?.kind ?? "cedule", label: def?.label ?? "", tx, ty, fw, fh, solid: def?.solid ?? true };
-      return { it, tx, ty, valid };
+    /** Co se právě chystá umístit — nová stavba, přesun, nebo rozestavěný
+     *  půdorys čekající na potvrzení (ten se dá ťuknutím přehodit jinam). */
+    const activePlacement = (): { defId: string; ignoreUid?: string } | null => {
+      const P = propsRef.current;
+      if (!P.editMode) return null;
+      if (P.buildSelection) return { defId: P.buildSelection };
+      if (movingRef.current && selectedRef.current)
+        return { defId: selectedRef.current.defId, ignoreUid: selectedRef.current.uid };
+      if (P.pending) return { defId: P.pending.defId, ignoreUid: P.pending.uid };
+      return null;
     };
+    // Táhne se právě půdorys prstem/myší? U rozestavěné stavby jen tehdy
+    // sledujeme kurzor — jinak by náhled utekl pryč od potvrzovaného místa.
+    let ghostDrag = false;
 
     // klik/ťuk přímo do světa = interakce s nejbližším cílem; ve stavebním
     // módu = umístit novou stavbu (BuildPanel vybrán) nebo vybrat/přesunout
@@ -456,15 +474,11 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       e.preventDefault();
       const P = propsRef.current;
       if (P.cinematic) { P.onSkipCinematic?.(); return; } // ťuknutí = přeskočit sestřih
-      if (P.awaitingPlaceConfirm) return; // čeká se na Ano/Ne — místo je zamčené
       if (P.editMode) {
-        if (P.buildSelection) {
-          buildGhost.current = computeNewGhost(e, P.buildSelection);
-          canvas.setPointerCapture(e.pointerId);
-          return;
-        }
-        if (movingRef.current && selectedRef.current) {
-          buildGhost.current = computeMoveGhost(e, selectedRef.current);
+        const pl = activePlacement();
+        if (pl) {
+          ghostDrag = true;
+          buildGhost.current = computeGhost(e, pl.defId, pl.ignoreUid);
           canvas.setPointerCapture(e.pointerId);
           return;
         }
@@ -477,30 +491,34 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
     };
     const onCanvasMove = (e: PointerEvent) => {
       const P = propsRef.current;
-      if (!P.editMode || P.awaitingPlaceConfirm) return;
-      if (P.buildSelection) { e.preventDefault(); buildGhost.current = computeNewGhost(e, P.buildSelection); return; }
-      if (movingRef.current && selectedRef.current) { e.preventDefault(); buildGhost.current = computeMoveGhost(e, selectedRef.current); }
+      if (P.pending && !ghostDrag) return; // půdorys drží své potvrzované místo
+      const pl = activePlacement();
+      if (!pl) return;
+      e.preventDefault();
+      buildGhost.current = computeGhost(e, pl.defId, pl.ignoreUid);
     };
     const onCanvasUp = () => {
       const P = propsRef.current;
-      if (P.awaitingPlaceConfirm) return;
       const g = buildGhost.current;
-      if (!g) return;
-      if (P.editMode && P.buildSelection) {
-        if (g.valid) {
-          // Nestavíme hned — App se zeptá „opravdu sem?". Půdorys schválně
-          // NEMAŽEME, ať hráč u dotazu pořád vidí vybrané místo.
-          P.onPlaceRequest(P.buildSelection, g.tx, g.ty);
-          return;
-        }
-        P.onEditReject();
-      } else if (P.editMode && movingRef.current && selectedRef.current) {
-        if (g.valid) P.onMoveStructure(selectedRef.current.uid, g.tx, g.ty);
+      buildGhost.current = null;
+      ghostDrag = false;
+      if (!g || !P.editMode) return;
+      // Nestaví se hned — App se zeptá „opravdu sem?" a do té doby jde
+      // s půdorysem hýbat (šipkami i dalším ťuknutím do louky).
+      if (P.buildSelection) {
+        if (g.valid) P.onPlaceRequest(P.buildSelection, g.tx, g.ty);
+        else if (!P.pending) P.onEditReject(); // u rozestavěné stavby jen zůstane, kde byla
+        return;
+      }
+      if (movingRef.current && selectedRef.current) {
+        if (g.valid) P.onMoveRequest(selectedRef.current.uid, g.tx, g.ty);
         else P.onEditReject();
         setMoving(false);
         setSelected(null);
+        return;
       }
-      buildGhost.current = null;
+      if (P.pending?.kind === "move" && P.pending.uid && g.valid)
+        P.onMoveRequest(P.pending.uid, g.tx, g.ty);
     };
     canvas.addEventListener("pointerdown", onCanvasPointer);
     canvas.addEventListener("pointermove", onCanvasMove);
@@ -932,8 +950,10 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       }
 
       // popisek akce nejbližšího cíle (kontextová nápověda)
+      // Ve stavebním módu se stejně neinteraguje (viz triggerAction), takže
+      // by nápověda „A — Pohladit" jen zbytečně překážela přes půdorys.
       let actionLabel: string | null = null;
-      if (nearest && !P.paused) {
+      if (nearest && !P.paused && !P.editMode) {
         if (nearest.kind === "npc") actionLabel = "Promluvit — " + (PERSON_BY_ID[nearest.npcId]?.name ?? "");
         else if (nearest.kind === "wild") {
           actionLabel =
@@ -1032,13 +1052,19 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       // stavební mód: náhled nové stavby (BuildPanel) / zvýraznění vybrané
       // existující stavby / náhled jejího přesunu.
       if (P.editMode) {
-        if (P.buildSelection) {
-          const g = buildGhost.current;
-          if (g) drawGhost(ctx, g.it, g.tx, g.ty, camX, camY, g.valid, now);
-        } else if (selectedRef.current && movingRef.current) {
-          const g = buildGhost.current;
-          if (g) drawGhost(ctx, g.it, g.tx, g.ty, camX, camY, g.valid, now);
-        } else if (selectedRef.current) {
+        const g = buildGhost.current;
+        if (g) {
+          drawGhost(ctx, g.it, g.tx, g.ty, camX, camY, g.valid, now);
+        } else if (P.pending) {
+          // Rozestavěná stavba čekající na potvrzení — půdorys svítí na svém
+          // místě, dokud ho hráč nepotvrdí, neposune šipkami nebo nezruší.
+          const pd = P.pending;
+          const def = BUILDABLE_BY_ID[pd.defId];
+          const { fw, fh } = footprintOf(pd.defId);
+          const valid = placementValid(P.structures, pd.defId, pd.tx, pd.ty, pd.uid);
+          const it: Interactable = { id: "__ghost", kind: def?.kind ?? "cedule", label: def?.label ?? "", tx: pd.tx, ty: pd.ty, fw, fh, solid: def?.solid ?? true };
+          drawGhost(ctx, it, pd.tx, pd.ty, camX, camY, valid, now);
+        } else if (selectedRef.current && !movingRef.current) {
           const sel = selectedRef.current;
           const f = footprintOf(sel.defId);
           const hx = sel.tx * TS - camX, hy = sel.ty * TS - camY, hw = f.fw * TS, hh = f.fh * TS;
@@ -1093,7 +1119,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
   return (
     <div className="world-wrap" ref={wrapRef}>
       <canvas ref={canvasRef} className="world-canvas" />
-      {editMode && selected && (
+      {editMode && selected && !pending && (
         <div className="build-select-bar">
           {!moving ? (
             <>
