@@ -3,6 +3,8 @@ import { useGame } from "../store";
 import { FULL_VERSION } from "../../game/content/fullVersion";
 import { getPurchaseProvider } from "../../game/entitlement/purchase";
 import { sound } from "../../audio/sound";
+import { Icon } from "../icons/Icon";
+import { EmojiIcon } from "../icons/emojiMap";
 
 /**
  * Obrazovka plné verze. Na webu jen náhled (bez platební brány) — nákup
@@ -38,32 +40,39 @@ export function FullVersion({ demo = false }: { demo?: boolean }) {
   return (
     <div className="fullver">
       {demo && !owned && (
-        <h3 className="fullver-demo-title">Demo končí — Louka pokračuje v plné verzi 💚</h3>
+        <h3 className="fullver-demo-title">
+          Demo končí — Louka pokračuje v plné verzi <Icon name="heart" size={17} className="ic-heart" />
+        </h3>
       )}
       <div className="fullver-banner" aria-hidden>
         <span className="fullver-sun" />
         <span className="fullver-hill fullver-hill-back" />
         <span className="fullver-hill fullver-hill-front" />
-        <span className="fullver-flower" style={{ left: "18%" }}>🌼</span>
-        <span className="fullver-flower" style={{ left: "38%" }}>🌾</span>
-        <span className="fullver-flower" style={{ left: "58%" }}>🌸</span>
-        <span className="fullver-flower" style={{ left: "78%" }}>🌿</span>
+        <span className="fullver-flower" style={{ left: "18%" }}><Icon name="flower" size={20} /></span>
+        <span className="fullver-flower" style={{ left: "38%" }}><Icon name="wheat" size={20} /></span>
+        <span className="fullver-flower" style={{ left: "58%" }}><Icon name="flower" size={18} /></span>
+        <span className="fullver-flower" style={{ left: "78%" }}><Icon name="leaf" size={20} /></span>
       </div>
 
       <p className="panel-lead">
         Louka je poctivá hra bez reklam. Tahle bezplatná verze je demo — tutoriál a první dny na
-        Louce. Plnou verzí odemkneš zbytek natrvalo a <b>skutečně podpoříš azyl Nech mě růst</b>. 💚
+        Louce. Plnou verzí odemkneš zbytek natrvalo a <b>skutečně podpoříš azyl Nech mě růst</b>.{" "}
+        <Icon name="heart" size={15} className="ic-heart" />
       </p>
 
       <div className={`fullver-card ${owned ? "owned" : ""}`}>
         <div className="fullver-head">
-          <span className="fullver-emoji">{FULL_VERSION.emoji}</span>
+          <span className="fullver-emoji">
+            <EmojiIcon emoji={FULL_VERSION.emoji} size={34} />
+          </span>
           <div>
             <h3>{FULL_VERSION.name}</h3>
             <em>{FULL_VERSION.tagline}</em>
           </div>
           {owned ? (
-            <span className="owned-tag">✓ Máš</span>
+            <span className="owned-tag">
+              <Icon name="check" size={15} /> Máš
+            </span>
           ) : (
             <button className="big-btn fullver-buy" onClick={() => void buy()}>
               {FULL_VERSION.priceCzk} Kč
@@ -73,7 +82,9 @@ export function FullVersion({ demo = false }: { demo?: boolean }) {
         <p className="fullver-desc">{FULL_VERSION.desc}</p>
         <ul className="fullver-features">
           {FULL_VERSION.features.map((f) => (
-            <li key={f}>🌱 {f}</li>
+            <li key={f}>
+              <Icon name="sprout" size={15} className="ic-good" /> {f}
+            </li>
           ))}
         </ul>
       </div>
@@ -93,7 +104,7 @@ export function FullVersion({ demo = false }: { demo?: boolean }) {
           <a href="https://nechmerust.org" target="_blank" rel="noreferrer">
             nechmerust.org
           </a>
-          . 💚
+          . <Icon name="heart" size={14} className="ic-heart" />
         </p>
       )}
     </div>

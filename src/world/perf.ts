@@ -14,15 +14,55 @@ export interface QualitySettings {
   dprCap: number;
   walkFrames: 2 | 3;
   particles: boolean;
+  /** Kolik ambientních částic (okvětní lístky / pyl / listí / sníh) najednou. */
+  particleBudget: number;
+  /** Kolik motýlů poletuje nad loukou (jaro/léto). */
+  butterflies: number;
+  /** Putující stíny mraků přes terén (offscreen blob × multiply). */
+  cloudShadows: boolean;
+  /** Vlnící se trsy trávy nad statickou cache terénu. */
+  windGrass: number; // max. počet trsů na snímek (0 = vypnuto)
+  /** Třpytky na vodních dlaždicích. */
+  waterShimmer: boolean;
+  /** Filmové zrno navrch snímku (cachovaná textura). */
+  grain: boolean;
+  /** Měkký „painterly" bloom (rozostřená kopie snímku přes `lighter`). */
+  bloom: boolean;
+  /** Plný barevný grade (multiply + teplý wash + sluneční záře + závoj).
+   *  `false` = jen multiply průchod — polovina fill rate, stejná barva hodiny. */
+  richGrade: boolean;
 }
 
-/** Konfigurace jednotlivých úrovní kvality. Spotřebitelé (DPR, animace chůze,
- * částice) se zapojují postupně — v tomto WP je zapojen jen `dprCap`. */
+/** Konfigurace jednotlivých úrovní kvality. Na `low` zůstává jen barevný grade
+ * a vinětace — vše ostatní je vypnuté (viz atmosphere.ts / particles.ts). */
 export const QUALITY: Record<QualityTier, QualitySettings> = {
-  high: { dprCap: 2, walkFrames: 3, particles: true },
-  medium: { dprCap: 1.5, walkFrames: 3, particles: true },
-  low: { dprCap: 1, walkFrames: 2, particles: false },
+  high: { dprCap: 2, walkFrames: 3, particles: true, particleBudget: 46, butterflies: 2, cloudShadows: true, windGrass: 90, waterShimmer: true, grain: true, bloom: true, richGrade: true },
+  medium: { dprCap: 1.5, walkFrames: 3, particles: true, particleBudget: 26, butterflies: 1, cloudShadows: true, windGrass: 0, waterShimmer: true, grain: true, bloom: false, richGrade: true },
+  low: { dprCap: 1, walkFrames: 2, particles: false, particleBudget: 0, butterflies: 0, cloudShadows: false, windGrass: 0, waterShimmer: false, grain: false, bloom: false, richGrade: false },
 };
+
+/** Aktuální nastavení kvality (bez alokace — vrací sdílený objekt z QUALITY). */
+export function quality(): QualitySettings {
+  return QUALITY[tier];
+}
+
+// --- prefers-reduced-motion ------------------------------------------------
+// Čte se z hot smyčky, takže výsledek držíme v proměnné a jen posloucháme
+// změnu média (žádné matchMedia volání na snímek).
+let reducedMotion = false;
+try {
+  const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+  reducedMotion = mq.matches;
+  mq.addEventListener("change", (e) => { reducedMotion = e.matches; });
+} catch {
+  /* matchMedia nemusí existovat (test/SSR) — ber to jako „pohyb povolen" */
+}
+
+/** True, když si hráč v systému přeje omezený pohyb — ambientní efekty se
+ * pak ztlumí nebo zmrazí (grade a vinětace zůstávají, ty se nehýbou). */
+export function prefersReducedMotion(): boolean {
+  return reducedMotion;
+}
 
 export interface PerfStats {
   fps: number;

@@ -26,7 +26,9 @@ import { NPC_LIFE } from "../../game/content/npcLife";
 import { reactionFor, idleLine, ESCAPE_HELP, ESCAPE_SHRUG } from "../../game/content/npcReactions";
 import { pick } from "../../game/engine/util";
 import { PERSON_BY_ID } from "../../game/content/people";
-import { drawBlueprint, drawBuilding, drawGhost, drawGround, drawPaddocks, drawSunlight, drawVignette, drawWaterShimmer, getMinimapBase, roundRect } from "../../world/draw";
+import { drawBlueprint, drawBuilding, drawGhost, drawGround, drawPaddocks, drawWaterShimmer, getMinimapBase, roundRect } from "../../world/draw";
+import { drawCloudShadows, drawColorGrade, drawSoftBloom, drawVignetteGrain, drawWindGrass } from "../../world/atmosphere";
+import { drawSeasonParticles } from "../../world/particles";
 import { animalImg, personImg, personImgFor, preloadSprites, ready } from "../../world/spriteCache";
 import { ANIMALS, ANIMAL_BY_ID, animalScale } from "../../game/content/animals";
 import type { Facing } from "../sprites/PersonSprite";
@@ -533,39 +535,6 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
     // logika, takže „pohyb blokuje, ale záchrana zásek nevidí" nemůže nastat.
     const canMoveTo = (nx: number, ny: number) => !isBoxBlocked(nx, ny);
 
-    // sezónní částice (sníh / listí / okvětní lístky / pyl)
-    type Particle = { x: number; y: number; rot: number; rv: number; sz: number };
-    let particles: Particle[] = [];
-    let pSeason = "";
-    const seedParticles = (s: Season, w: number, h: number) => {
-      const n = s === "leto" ? 26 : 44;
-      particles = Array.from({ length: n }, () => ({ x: Math.random() * w, y: Math.random() * h, rot: Math.random() * 6, rv: (Math.random() - 0.5) * 2.5, sz: 2 + Math.random() * 1.6 }));
-      pSeason = s;
-    };
-    const drawParticles = (s: Season, w: number, h: number, dt: number, now: number) => {
-      if (pSeason !== s || !particles.length) seedParticles(s, w, h);
-      const col = s === "zima" ? "#ffffff" : s === "podzim" ? "#cf7a2e" : s === "jaro" ? "#f2b4d0" : "#f3e08a";
-      ctx.fillStyle = col;
-      for (const pt of particles) {
-        if (s === "zima") { pt.x += Math.sin(now * 0.001 + pt.rot) * 0.4 + 6 * dt; pt.y += 24 * dt; }
-        else if (s === "podzim") { pt.x += Math.sin(now * 0.0013 + pt.rot) * 0.9 + 10 * dt; pt.y += 30 * dt; pt.rot += pt.rv * dt; }
-        else if (s === "jaro") { pt.x += Math.sin(now * 0.001 + pt.rot) * 0.8 + 14 * dt; pt.y += 18 * dt; }
-        else { pt.x += Math.sin(now * 0.0008 + pt.rot) * 0.5 + 5 * dt; pt.y -= 7 * dt; }
-        if (pt.y > h + 10) { pt.y = -10; pt.x = Math.random() * w; }
-        else if (pt.y < -10) { pt.y = h + 10; pt.x = Math.random() * w; }
-        if (pt.x > w + 10) pt.x = -10;
-        else if (pt.x < -10) pt.x = w + 10;
-        if (s === "podzim") {
-          ctx.save(); ctx.translate(pt.x, pt.y); ctx.rotate(pt.rot); ctx.globalAlpha = 0.85;
-          ctx.fillRect(-pt.sz, -pt.sz * 0.6, pt.sz * 2, pt.sz * 1.2); ctx.restore();
-        } else {
-          ctx.globalAlpha = s === "leto" ? 0.7 : 0.85;
-          ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.sz, 0, Math.PI * 2); ctx.fill();
-        }
-      }
-      ctx.globalAlpha = 1;
-    };
-
     // Znovupoužívaný seznam objektů k vykreslení (seřazený dle baseY) — alokován
     // jednou pro celý běh efektu, aby nevznikalo GC tlaku každý snímek.
     type Item = { y: number; draw: () => void };
@@ -896,11 +865,16 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       let cy = focusY - viewH / 2;
       cx = mapPixW <= viewW ? (mapPixW - viewW) / 2 : Math.max(0, Math.min(mapPixW - viewW, cx));
       cy = mapPixH <= viewH ? (mapPixH - viewH) / 2 : Math.max(0, Math.min(mapPixH - viewH, cy));
+      // Exponenciální dojezd (1 - e^-kt) je nezávislý na délce snímku — dřívější
+      // `dt*k` se při výkyvech FPS trhalo. Kamera se pak zaokrouhlí na celé
+      // pixely: cache terénu se kreslí drawImage z celočíselného offsetu, takže
+      // tráva a stromy nešumí resamplováním (hráč sám má pořád subpixel pohyb).
       const camEase = P.cinematic?.ease ?? 8;
-      cam.current.x += (cx - cam.current.x) * Math.min(1, dt * camEase);
-      cam.current.y += (cy - cam.current.y) * Math.min(1, dt * camEase);
-      const camX = cam.current.x;
-      const camY = cam.current.y;
+      const camK = 1 - Math.exp(-camEase * dt);
+      cam.current.x += (cx - cam.current.x) * camK;
+      cam.current.y += (cy - cam.current.y) * camK;
+      const camX = Math.round(cam.current.x);
+      const camY = Math.round(cam.current.y);
 
       // stav stavby: postavená (nebo negatovaná) / svítící plán / skrytá
       const buildStateOf = (it: Interactable) => {
@@ -984,6 +958,9 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       // --- RENDER ---
       ctx.clearRect(0, 0, viewW, viewH);
       drawGround(ctx, camX, camY, viewW, viewH, P.season);
+      // putující stíny mraků + vlnící se tráva leží na terénu, ale POD zvířaty
+      drawCloudShadows(ctx, camX, camY, viewW, viewH, now, P.weather);
+      drawWindGrass(ctx, camX, camY, viewW, viewH, now, P.season);
       drawPaddocks(ctx, camX, camY, P.settledGroups);
 
       // seznam objektů seřazený dle baseY — pole je znovupoužité (viz deklarace
@@ -1088,12 +1065,11 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       if (P.wildActive.kaneCircle && P.phase === "poledne") drawKaneCircle(ctx, camX, camY, now);
 
       drawWaterShimmer(ctx, camX, camY, viewW, viewH, now);
-      // sluneční světlo (sjednocuje směr osvětlení) → tint fáze/období
-      drawSunlight(ctx, viewW, viewH, P.phase, P.season);
-      drawTint(ctx, viewW, viewH, P.phase, P.season);
-      // sezónní částice + vinětace
-      drawParticles(P.season, viewW, viewH, dt, now);
-      drawVignette(ctx, viewW, viewH);
+      // atmosféra: barevný grade hodiny/počasí → částice → bloom → vinětace+zrno
+      drawColorGrade(ctx, viewW, viewH, dt, P.phase, P.season, P.weather);
+      drawSeasonParticles(ctx, P.season, viewW, viewH, dt, now);
+      drawSoftBloom(ctx, viewW, viewH);
+      drawVignetteGrain(ctx, viewW, viewH, now);
       // kontextová akční nápověda
       if (actionLabel) drawActionChip(ctx, viewW, viewH, actionLabel);
       // mini-mapa (pod horní HUD lištou — na mobilu na výšku ji nepřekryje)
@@ -1407,22 +1383,6 @@ function drawPlayer(
     ctx.drawImage(img, -size / 2, -size / 2, size, size);
     ctx.restore();
   }
-}
-
-function drawTint(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  phase: Phase,
-  season: Season,
-) {
-  let color = "";
-  if (phase === "vecer") color = "rgba(40,30,80,0.22)";
-  else if (phase === "rano") color = "rgba(255,200,120,0.08)";
-  if (season === "zima") color = phase === "vecer" ? "rgba(40,40,90,0.24)" : "rgba(180,205,225,0.14)";
-  if (!color) return;
-  ctx.fillStyle = color;
-  ctx.fillRect(0, 0, w, h);
 }
 
 function drawActionChip(ctx: CanvasRenderingContext2D, vw: number, vh: number, label: string) {

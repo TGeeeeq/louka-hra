@@ -23,6 +23,7 @@ Jeden **level = jeden den**. Den má tři fáze a střídají se roční období
   (stahuje `npm run photos`); sprity vycházejí z reálných předloh.
 - **Adaptivní hudba** — vrstvená syntéza (melodie/bas/pad/perkuse): útěk zvířete spustí „heartbeat",
   poplach hnací rytmus, blížící se zima hudbu postupně ztmavuje. Vše Web Audio, žádné soubory.
+  Intro/menu navíc hraje jeden nahraný orchestrální track (viz Kredity níže).
 - **Seno na zimu** — 🌾 kosení, sušení a svoz sena je běžná questová linka: závod s počasím podle
   skutečné sklizně (a skutečné sbírky) Louky.
 - **Demo + plná verze** — na Google Play vychází bezplatné demo (tutoriál a první dny). Jediný
@@ -144,6 +145,13 @@ public/animals/           skutečné fotky obyvatel (bundlují se do aplikace)
 - Faktum do Deníku: `src/game/content/facts.ts`.
 - Recept výroby: `src/game/content/recipes.ts`. Předmět: `src/game/content/items.ts`.
 - Obtížnost: vše laditelné v `src/game/balance.ts`.
+
+## Kredity
+
+- **Hudba (intro/menu):** „Eternal Hope" – Kevin MacLeod ([incompetech.com](https://incompetech.com)) —
+  Licensed under Creative Commons: By Attribution 3.0 (`public/audio/menu-theme.mp3`).
+- **Hudba (ve hře):** vrstvená syntetizovaná adaptivní hudba, viz `src/audio/sound.ts` — žádné soubory.
+- Postavičky, fotky a příběhy podle skutečných obyvatel Louky · `nechmerust.org`.
 
 ---
 

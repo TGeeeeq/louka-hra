@@ -33,6 +33,7 @@ import { openGate } from "./world/entities";
 import { currentStep, settledGroups, tutorialActive, tutorialTargets } from "./game/content/tutorial";
 import { invalidateGround } from "./world/draw";
 import { sound } from "./audio/sound";
+import { Icon, type IconName } from "./ui/icons/Icon";
 import type { NpcId } from "./audio/sound";
 
 type Overlay = "shop" | "craft" | "denik" | "plna" | null;
@@ -60,7 +61,8 @@ const WELCOME_FLYOVER: CineShot[] = [
 ];
 /** Dojezd na Tomáše — o něco rychlejší, ať se řeč nerozjede pozdě. */
 const TOMAS_SHOT_EASE = 2.0;
-const MG_TITLE: Record<Minigame, string> = { herb: "🌿 Poznej bylinku", chop: "🪓 Naseč dřevo", tech: "🔌 Zapoj vynález" };
+const MG_TITLE: Record<Minigame, string> = { herb: "Poznej bylinku", chop: "Naseč dřevo", tech: "Zapoj vynález" };
+const MG_ICON: Record<Minigame, IconName> = { herb: "leaf", chop: "axe", tech: "plug" };
 const MG_REWARD: Record<Minigame, { flag: string; first: RewardPayload; again: RewardPayload; speaker: string; msg: string }> = {
   herb: { flag: "taught_maruska", first: { items: [{ item: "byliny", qty: 5 }] }, again: { items: [{ item: "byliny", qty: 1 }] }, speaker: "Maruška", msg: "Bylinkář se z tebe stává! Tahle hrst se hodí na mast." },
   chop: { flag: "taught_tomas", first: { items: [{ item: "drevo", qty: 8 }] }, again: { items: [{ item: "drevo", qty: 2 }] }, speaker: "Tomáš", msg: "Máš v sobě sílu! Dřevo na zimu se vždycky hodí." },
@@ -130,13 +132,28 @@ function useGameSounds() {
   }, [state]);
 }
 
-function Overlay({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function Overlay({
+  title,
+  icon,
+  onClose,
+  children,
+}: {
+  title: string;
+  icon?: IconName;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="overlay-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="overlay-modal paper" onClick={(e) => e.stopPropagation()}>
         <div className="overlay-head">
-          <h2>{title}</h2>
-          <button className="modal-close" onClick={onClose} aria-label="Zavřít">×</button>
+          <h2>
+            {icon && <Icon name={icon} size={22} className="overlay-ico" />}
+            {title}
+          </h2>
+          <button className="modal-close" onClick={onClose} aria-label="Zavřít">
+            <Icon name="close" size={18} />
+          </button>
         </div>
         <div className="overlay-body">{children}</div>
       </div>
@@ -384,7 +401,7 @@ export default function App() {
       <>
         <Intro onFullVersion={() => setOverlay("plna")} />
         {overlay === "plna" && (
-          <Overlay title="🌾 Plná verze" onClose={() => setOverlay(null)}>
+          <Overlay title="Plná verze" icon="wheat" onClose={() => setOverlay(null)}>
             <FullVersion />
           </Overlay>
         )}
@@ -636,20 +653,34 @@ export default function App() {
                 z toho lezlo „Postavit Chalupa sem?". */}
             <b>{pendingLabel}</b>
             <span>— {pending.kind === "move" ? "přesunout" : "postavit"} sem?</span>
-            {pendingIssue && <span className="place-bar-warn">⚠ {pendingIssue.short}</span>}
+            {pendingIssue && (
+              <span className="place-bar-warn">
+                <Icon name="warn" size={14} /> {pendingIssue.short}
+              </span>
+            )}
           </div>
           <div className="place-bar-row">
             <div className="nudge-pad" role="group" aria-label="Posunout stavbu">
-              <button className="nudge up" aria-label="posunout nahoru" onClick={() => nudgePending(0, -1)}>▲</button>
-              <button className="nudge left" aria-label="posunout vlevo" onClick={() => nudgePending(-1, 0)}>◀</button>
-              <button className="nudge right" aria-label="posunout vpravo" onClick={() => nudgePending(1, 0)}>▶</button>
-              <button className="nudge down" aria-label="posunout dolů" onClick={() => nudgePending(0, 1)}>▼</button>
+              <button className="nudge up" aria-label="posunout nahoru" onClick={() => nudgePending(0, -1)}>
+                <Icon name="chevronUp" size={18} />
+              </button>
+              <button className="nudge left" aria-label="posunout vlevo" onClick={() => nudgePending(-1, 0)}>
+                <Icon name="chevronLeft" size={18} />
+              </button>
+              <button className="nudge right" aria-label="posunout vpravo" onClick={() => nudgePending(1, 0)}>
+                <Icon name="chevronRight" size={18} />
+              </button>
+              <button className="nudge down" aria-label="posunout dolů" onClick={() => nudgePending(0, 1)}>
+                <Icon name="chevronDown" size={18} />
+              </button>
             </div>
             <div className="place-bar-actions">
               <button className="build-select-btn confirm" disabled={!pendingValid} onClick={commitPending}>
-                ✓ {pending.kind === "move" ? "Přesunout" : "Postavit"}
+                <Icon name="check" size={15} /> {pending.kind === "move" ? "Přesunout" : "Postavit"}
               </button>
-              <button className="build-select-btn cancel" onClick={() => setPending(null)}>✕ Zrušit</button>
+              <button className="build-select-btn cancel" onClick={() => setPending(null)}>
+                <Icon name="close" size={15} /> Zrušit
+              </button>
             </div>
           </div>
           <small className="place-bar-hint">Šipkami posuneš po dlaždicích · ťuknutím na louku přehodíš jinam</small>
@@ -658,15 +689,15 @@ export default function App() {
       {/* přes přelet nad loukou repliku schovej — ukáže se až v záběru na Tomáše */}
       <DialogBox hidden={!!cinematic && !cinematic.talk} />
 
-      {overlay === "shop" && <Overlay title="🏪 Stánek" onClose={() => setOverlay(null)}><Shop /></Overlay>}
-      {overlay === "craft" && <Overlay title="🛠️ Výroba" onClose={() => setOverlay(null)}><Craft /></Overlay>}
+      {overlay === "shop" && <Overlay title="Stánek" icon="stall" onClose={() => setOverlay(null)}><Shop /></Overlay>}
+      {overlay === "craft" && <Overlay title="Výroba" icon="tools" onClose={() => setOverlay(null)}><Craft /></Overlay>}
       {overlay === "denik" && (
-        <Overlay title="📖 Deník" onClose={() => setOverlay(null)}>
+        <Overlay title="Deník" icon="book" onClose={() => setOverlay(null)}>
           <Journal onSelect={(a) => setSel(a)} />
         </Overlay>
       )}
       {overlay === "plna" && (
-        <Overlay title="🌾 Plná verze" onClose={() => { setOverlay(null); setDemoGateOpen(false); }}>
+        <Overlay title="Plná verze" icon="wheat" onClose={() => { setOverlay(null); setDemoGateOpen(false); }}>
           <FullVersion demo={demoGateOpen} />
         </Overlay>
       )}
@@ -683,19 +714,19 @@ export default function App() {
         </Overlay>
       )}
       {minigame && (
-        <Overlay title={MG_TITLE[minigame]} onClose={() => setMinigame(null)}>
+        <Overlay title={MG_TITLE[minigame]} icon={MG_ICON[minigame]} onClose={() => setMinigame(null)}>
           {minigame === "herb" && <HerbQuiz onWin={() => winMinigame("herb")} onClose={() => setMinigame(null)} />}
           {minigame === "chop" && <ChopWood onWin={() => winMinigame("chop")} onClose={() => setMinigame(null)} />}
           {minigame === "tech" && <TechFix onWin={() => winMinigame("tech")} onClose={() => setMinigame(null)} />}
         </Overlay>
       )}
       {puzzle && (
-        <Overlay title="🚪 Lesní brána" onClose={() => setPuzzle(false)}>
+        <Overlay title="Lesní brána" icon="gate" onClose={() => setPuzzle(false)}>
           <ForestGate onWin={solveGate} onClose={() => setPuzzle(false)} />
         </Overlay>
       )}
       {clean && (
-        <Overlay title="🧹 Úklid u zvířat" onClose={() => setClean(null)}>
+        <Overlay title="Úklid u zvířat" icon="brush" onClose={() => setClean(null)}>
           <CleanUp group={clean} onWin={winClean} onClose={() => setClean(null)} />
         </Overlay>
       )}
@@ -707,14 +738,14 @@ export default function App() {
 
       {state.dev.enabled && !devOpen && (
         <button className="dev-fab" title="Developerský mód" onClick={() => setDevOpen(true)}>
-          🛠️
+          <Icon name="gear" size={22} />
         </button>
       )}
       {devOpen && <DevPanel onClose={() => setDevOpen(false)} />}
 
       {exitConfirm && (
         <div className="modal-backdrop" onClick={() => setExitConfirm(false)}>
-          <div className="modal confirm-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal confirm-modal paper" onClick={(e) => e.stopPropagation()}>
             <h2>Opustit Louku?</h2>
             <p>Postup je uložený.</p>
             <div className="intro-actions">

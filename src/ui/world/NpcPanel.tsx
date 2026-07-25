@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { PersonDef } from "../../game/content/people";
 import { PersonSprite } from "../sprites/PersonSprite";
 import { personPhotoUrl } from "../photo";
+import { Icon } from "../icons/Icon";
 
 export function NpcPanel({
   person,
@@ -40,15 +41,26 @@ export function NpcPanel({
       <p className="npc-line">„{mood ?? person.line}“</p>
       {tip && (
         <div className="npc-tip">
-          <b>💡 Rada:</b> {tip}
+          <b>
+            <Icon name="lightbulb" size={15} /> Rada:
+          </b>{" "}
+          {tip}
           {tips.length > 1 && (
-            <button className="npc-tip-btn" onClick={() => setTi((t) => t + 1)}>další ›</button>
+            <button className="npc-tip-btn" onClick={() => setTi((t) => t + 1)}>
+              další <Icon name="chevronRight" size={13} />
+            </button>
           )}
         </div>
       )}
-      {person.help && <p className="npc-help">✨ {person.help}</p>}
+      {person.help && (
+        <p className="npc-help">
+          <Icon name="sparkle" size={15} /> {person.help}
+        </p>
+      )}
       <div className="mg-actions">
-        <button className="big-btn" onClick={onPlay}>{taught ? "Procvičit znovu 🎮" : "Pojď na to! 🎮"}</button>
+        <button className="big-btn" onClick={onPlay}>
+          <Icon name="gamepad" size={18} /> {taught ? "Procvičit znovu" : "Pojď na to!"}
+        </button>
         <button className="ghost-btn" onClick={onClose}>Možná později</button>
       </div>
     </div>

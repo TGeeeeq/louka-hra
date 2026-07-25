@@ -6,13 +6,18 @@ import { PLAY_KIND, playKindFor } from "../../game/content/play";
 import { photoUrl } from "../photo";
 import { useGame } from "../store";
 import { MOOD_EMOJI, MOOD_LABEL, MOOD_TONE, bondTier } from "../../game/content/characters";
+import { Icon, type IconName } from "../icons/Icon";
+import { EmojiIcon } from "../icons/emojiMap";
+import { useTween } from "../hud/useTween";
 
-/** Malý ukazatel potřeby (kopíruje styl HUD MiniBar). */
-function NeedBar({ icon, label, value, tone }: { icon: string; label: string; value: number; tone: string }) {
+/** Malý ukazatel potřeby (kopíruje styl HUD StatBar). */
+function NeedBar({ icon, label, value, tone }: { icon: IconName; label: string; value: number; tone: string }) {
+  const shown = useTween(value);
   return (
     <div className="need-bar" title={`${label}: ${Math.round(value)} %`}>
-      <span className="need-ico" aria-hidden>{icon}</span>
-      <div className="need-track"><div className={`mini-fill ${tone}`} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>
+      <span className="need-ico"><Icon name={icon} size={15} /></span>
+      <div className="need-track"><div className={`mini-fill ${tone}`} style={{ width: `${Math.max(0, Math.min(100, shown))}%` }} /></div>
+      <span className="need-label">{label}</span>
     </div>
   );
 }
@@ -44,8 +49,10 @@ export function AnimalCard({ animal, onClose, onPlay }: { animal: AnimalDef; onC
   const [photoOk, setPhotoOk] = useState(true);
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal animal-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose} aria-label="Zavřít">×</button>
+      <div className="modal animal-modal paper" onClick={(e) => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose} aria-label="Zavřít">
+          <Icon name="close" size={18} />
+        </button>
         <div className="animal-modal-top">
           <div className="animal-portrait">
             <AnimalSprite animal={animal} size={130} />
@@ -66,25 +73,35 @@ export function AnimalCard({ animal, onClose, onPlay }: { animal: AnimalDef; onC
             <h2>{animal.name}</h2>
             <span className="species-tag">{SPECIES_LABEL[animal.species]}</span>
             <span className="group-tag">{GROUP_LABEL[animal.feedGroup]}</span>
-            {animal.special === "missing" && <span className="missing-tag">pohřešuje se 🕊️</span>}
+            {animal.special === "missing" && (
+              <span className="missing-tag">
+                pohřešuje se <Icon name="feather" size={13} />
+              </span>
+            )}
           </div>
         </div>
         {st && (
           <div className="animal-mood">
-            <span className={`zone-mood ${MOOD_TONE[st.mood]}`}>{MOOD_EMOJI[st.mood]} {MOOD_LABEL[st.mood]}</span>
-            <span className="bond-tier">❤️ {bondTier(st.bond)}</span>
+            <span className={`zone-mood ${MOOD_TONE[st.mood]}`}>
+              <EmojiIcon emoji={MOOD_EMOJI[st.mood]} size={16} /> {MOOD_LABEL[st.mood]}
+            </span>
+            <span className="bond-tier">
+              <Icon name="heart" size={15} className="ic-heart" /> {bondTier(st.bond)}
+            </span>
           </div>
         )}
         {st && (
           <div className="need-bars">
-            <NeedBar icon="❤️" label="Přátelství" value={st.bond} tone="bond" />
-            <NeedBar icon="🫂" label="Společnost" value={st.social} tone="social" />
-            <NeedBar icon="🏠" label="Pohodlí" value={st.comfort} tone="comfort" />
+            <NeedBar icon="heart" label="Přátelství" value={st.bond} tone="bond" />
+            <NeedBar icon="friends" label="Společnost" value={st.social} tone="social" />
+            <NeedBar icon="home" label="Pohodlí" value={st.comfort} tone="comfort" />
           </div>
         )}
         <p className="animal-personality">„{animal.personality}“</p>
         <div className="animal-fact">
-          <span className="fact-badge">🎓 Víš, že…</span>
+          <span className="fact-badge">
+            <Icon name="cap" size={14} /> Víš, že…
+          </span>
           <p>{animal.fact}</p>
         </div>
         {playKind && onPlay && (

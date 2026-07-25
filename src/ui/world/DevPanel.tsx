@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useGame } from "../store";
-import { SEASON_ICON, SEASON_LABEL } from "../labels";
+import { SEASON_LABEL } from "../labels";
 import { sound, type TensionLevel } from "../../audio/sound";
+import { Icon } from "../icons/Icon";
 import { FULL_VERSION } from "../../game/content/fullVersion";
 import { grantFull, revokeFull } from "../../game/entitlement/entitlements";
 import {
@@ -51,14 +52,18 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="dev-panel" onClick={(e) => e.stopPropagation()}>
+    <div className="dev-panel paper" onClick={(e) => e.stopPropagation()}>
       <div className="dev-head">
-        <h3>🛠️ Developerský mód</h3>
-        <button className="modal-close" onClick={onClose} aria-label="Zavřít">×</button>
+        <h3>
+          <Icon name="gear" size={18} /> Developerský mód
+        </h3>
+        <button className="modal-close" onClick={onClose} aria-label="Zavřít">
+          <Icon name="close" size={17} />
+        </button>
       </div>
 
       <p className="dev-sub">
-        Den {state.day} · {SEASON_ICON[state.season]} {SEASON_LABEL[state.season]} ·{" "}
+        Den {state.day} · {SEASON_LABEL[state.season]} ·{" "}
         {state.dayInSeason}. den · rok {state.year}
       </p>
 

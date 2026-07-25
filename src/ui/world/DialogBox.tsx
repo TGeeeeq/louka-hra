@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useGame } from "../store";
+import { Icon } from "../icons/Icon";
 
 /**
  * `hidden` = replika je ve frontě, ale zatím se nemá zobrazit (běží uvítací
@@ -26,11 +27,11 @@ export function DialogBox({ hidden = false }: { hidden?: boolean }) {
   const more = d.lines.length > 1;
   return (
     <div className="dialog-layer" onClick={() => dispatch({ type: "DISMISS_DIALOG" })}>
-      <div className="dialog-box" onClick={(e) => e.stopPropagation()}>
+      <div className="dialog-box paper" onClick={(e) => e.stopPropagation()}>
         {d.speaker && <span className="dialog-speaker">{d.speaker}</span>}
         <p className="dialog-text">{d.lines[0]}</p>
         <button className="dialog-next" onClick={() => dispatch({ type: "DISMISS_DIALOG" })}>
-          {more ? "▼ dál" : "▼ zavřít"}
+          <Icon name="chevronDown" size={14} /> {more ? "dál" : "zavřít"}
         </button>
       </div>
     </div>

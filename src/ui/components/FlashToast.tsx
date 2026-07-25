@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useGame } from "../store";
+import { Icon } from "../icons/Icon";
 
 export function FlashToast() {
   const { state, dispatch } = useGame();
@@ -19,7 +20,9 @@ export function FlashToast() {
       <p className="toast-text">{flash.text}</p>
       {flash.fact && (
         <div className="toast-fact">
-          <span className="fact-badge">🎓 {flash.fact.title}</span>
+          <span className="fact-badge">
+            <Icon name="cap" size={14} /> {flash.fact.title}
+          </span>
           <p>{flash.fact.text}</p>
         </div>
       )}

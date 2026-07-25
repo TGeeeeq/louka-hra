@@ -3,6 +3,8 @@ import { useGame } from "../store";
 import { BUYABLE, SELLABLE } from "../../game/content/items";
 import { BUILDINGS } from "../../game/content/buildings";
 import { invCount } from "../../game/engine/util";
+import { Icon } from "../icons/Icon";
+import { EmojiIcon } from "../icons/emojiMap";
 
 type Tab = "nakup" | "prodej" | "stavby";
 
@@ -18,9 +20,15 @@ export function Shop() {
   return (
     <div className="shop">
       <div className="subtabs">
-        <button className={tab === "nakup" ? "on" : ""} onClick={() => setTab("nakup")}>🛒 Nákup</button>
-        <button className={tab === "prodej" ? "on" : ""} onClick={() => setTab("prodej")}>💱 Prodej</button>
-        <button className={tab === "stavby" ? "on" : ""} onClick={() => setTab("stavby")}>🏗️ Stavby</button>
+        <button className={tab === "nakup" ? "on" : ""} onClick={() => setTab("nakup")}>
+          <Icon name="cart" size={16} /> Nákup
+        </button>
+        <button className={tab === "prodej" ? "on" : ""} onClick={() => setTab("prodej")}>
+          <Icon name="exchange" size={16} /> Prodej
+        </button>
+        <button className={tab === "stavby" ? "on" : ""} onClick={() => setTab("stavby")}>
+          <Icon name="hammer" size={16} /> Stavby
+        </button>
       </div>
 
       {tab === "nakup" && (
@@ -30,7 +38,9 @@ export function Shop() {
               it.id === "seno" && senoDiscount ? Math.round(it.buyPrice! * 0.7) : it.buyPrice!;
             return (
               <div className="shop-row" key={it.id}>
-                <span className="shop-ico">{it.emoji}</span>
+                <span className="shop-ico">
+                  <EmojiIcon emoji={it.emoji} size={22} />
+                </span>
                 <span className="shop-info">
                   <b>{it.name}</b>
                   <small>{it.desc}</small>
@@ -56,7 +66,9 @@ export function Shop() {
             const have = invCount(state.inventory, it.id);
             return (
               <div className={`shop-row ${have ? "" : "dim"}`} key={it.id}>
-                <span className="shop-ico">{it.emoji}</span>
+                <span className="shop-ico">
+                  <EmojiIcon emoji={it.emoji} size={22} />
+                </span>
                 <span className="shop-info">
                   <b>{it.name}</b>
                   <small>{it.desc}</small>
@@ -70,7 +82,9 @@ export function Shop() {
               </div>
             );
           })}
-          <p className="panel-note">Nejlépe se prodává řebříčková mast 🪻 — vyrob ji z bylin v záložce Výroba.</p>
+          <p className="panel-note">
+            Nejlépe se prodává řebříčková mast <Icon name="jar" size={14} /> — vyrob ji z bylin v záložce Výroba.
+          </p>
         </div>
       )}
 
@@ -80,15 +94,21 @@ export function Shop() {
             const owned = state.buildings.includes(b.id);
             return (
               <div className={`shop-row build ${owned ? "owned" : ""}`} key={b.id}>
-                <span className="shop-ico">{b.emoji}</span>
+                <span className="shop-ico">
+                  <EmojiIcon emoji={b.emoji} size={22} />
+                </span>
                 <span className="shop-info">
                   <b>{b.name}</b>
                   <small>{b.desc}</small>
-                  <em className="benefit">✨ {b.benefit}</em>
+                  <em className="benefit">
+                    <Icon name="sparkle" size={13} /> {b.benefit}
+                  </em>
                 </span>
                 <span className="shop-buy">
                   {owned ? (
-                    <span className="owned-tag">✓ máš</span>
+                    <span className="owned-tag">
+                      <Icon name="check" size={14} /> máš
+                    </span>
                   ) : (
                     <button disabled={state.money < b.cost} onClick={() => dispatch({ type: "BUILD", buildingId: b.id })}>
                       {b.cost} Kč

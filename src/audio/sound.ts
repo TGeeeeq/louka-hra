@@ -26,6 +26,13 @@ export interface MusicContext {
 
 const BASE_MASTER = 0.3;
 
+// Strop hloubky FM modulace: modGain nesmí přesáhnout 0.85× carrier, jinak
+// okamžitá frekvence padá k nule/zápornu → aliasovaný "chrčivý" artefakt
+// (nejhorší u sawtooth). Exportováno kvůli unit testu (fm() je private).
+export function clampModGain(carrier: number, modDepth: number): number {
+  return Math.min(carrier * modDepth, carrier * 0.85);
+}
+
 // Mix vrstev + tempo podle napětí. Alert = „heartbeat", danger = hnací
 // rytmus s arpeggiem, relief = krátké projasnění.
 const MIX: Record<TensionLevel, { melody: number; bass: number; pad: number; perc: number; arp: number; tempo: number }> = {
@@ -137,6 +144,15 @@ class SoundEngine {
   private windGain: GainNode | null = null;
   private windLfo: OscillatorNode | null = null;
 
+  // Menu/intro téma — nahraný orchestrální track (HTMLAudioElement, ne
+  // syntéza). Jde přes vlastní gain do master, ať funguje mute i limiter.
+  private menuAudio: HTMLAudioElement | null = null;
+  private menuMediaSrc: MediaElementAudioSourceNode | null = null;
+  private menuGain: GainNode | null = null;
+  private menuFadeTimer: number | null = null;
+  private menuWantsPlay = false;
+  private menuRetryBound = false;
+
   // „Vzduch louky" — tichý kontinuální podklad, ať svět nikdy neztichne úplně
   private airSrc: AudioBufferSourceNode | null = null;
   private airGain: GainNode | null = null;
@@ -168,10 +184,10 @@ class SoundEngine {
       // Limiter na výstupu: chytá špičky z překrývajících se FM tónů + dozvuku.
       // Měkké koleno a mírnější ratio — tvrdé koleno s 20:1 na basech „žvýkalo".
       this.limiter = this.ctx.createDynamicsCompressor();
-      this.limiter.threshold.value = -10;
+      this.limiter.threshold.value = -12;
       this.limiter.knee.value = 10;
       this.limiter.ratio.value = 12;
-      this.limiter.attack.value = 0.005;
+      this.limiter.attack.value = 0.002;
       this.limiter.release.value = 0.25;
       this.verb = this.ctx.createConvolver();
       this.verb.buffer = this.makeReverb(2.4);
@@ -313,7 +329,7 @@ class SoundEngine {
     const g = this.ctx.createGain();
 
     mod.frequency.value = carrier * modRatio;
-    modGain.gain.value = carrier * modDepth;
+    modGain.gain.value = clampModGain(carrier, modDepth);
     mod.connect(modGain);
     modGain.connect(osc.frequency);
 
@@ -1308,6 +1324,90 @@ class SoundEngine {
   resumeFromBackground(wasPlaying: boolean) {
     this.ensure();
     if (wasPlaying && this.musicOn) this.startMusic();
+  }
+
+  // ─── MENU HUDBA (nahraný track, intro/menu) ────────────────────────────────
+  // Přehrává se přes HTMLAudioElement → MediaElementAudioSourceNode → master,
+  // aby ji ovládal mute a limiter stejně jako syntetizovanou hudbu ve hře.
+
+  /** Spustí (nebo pokračuje v) menu téma s fade-inem ~2 s. Idempotentní. */
+  startMenuMusic() {
+    if (!this.musicOn) return;
+    this.ensure();
+    if (!this.ctx || !this.master) return;
+    this.menuWantsPlay = true;
+    if (this.menuFadeTimer != null) {
+      window.clearTimeout(this.menuFadeTimer);
+      this.menuFadeTimer = null;
+    }
+
+    if (!this.menuAudio) {
+      const audio = new Audio(`${import.meta.env.BASE_URL}audio/menu-theme.mp3`);
+      audio.loop = true;
+      audio.preload = "auto";
+      try {
+        this.menuMediaSrc = this.ctx.createMediaElementSource(audio);
+        this.menuGain = this.ctx.createGain();
+        this.menuGain.gain.value = 0.0001;
+        this.menuMediaSrc.connect(this.menuGain);
+        this.menuGain.connect(this.master);
+        this.menuAudio = audio;
+      } catch {
+        // MediaElementSource se nepodařilo vytvořit (např. starý WebView) —
+        // menu téma prostě zůstane tiché, hra běží dál beze změny.
+        return;
+      }
+    }
+    if (!this.menuGain) return;
+
+    const now = this.ctx.currentTime;
+    this.menuGain.gain.cancelScheduledValues(now);
+    this.menuGain.gain.setValueAtTime(this.menuGain.gain.value, now);
+    this.menuGain.gain.linearRampToValueAtTime(1.0, now + 2.0);
+
+    if (this.menuAudio.paused) {
+      const p = this.menuAudio.play();
+      if (p && typeof p.catch === "function") {
+        p.catch(() => this.bindMenuRetry());
+      }
+    }
+  }
+
+  // Autoplay policy odmítla play() mimo gesto — tiše počkej na další klik/dotyk.
+  private bindMenuRetry() {
+    if (this.menuRetryBound) return;
+    this.menuRetryBound = true;
+    const retry = () => {
+      this.menuRetryBound = false;
+      window.removeEventListener("click", retry, true);
+      window.removeEventListener("keydown", retry, true);
+      window.removeEventListener("touchstart", retry, true);
+      if (this.menuWantsPlay && this.menuAudio && this.menuAudio.paused) {
+        this.menuAudio.play().catch(() => this.bindMenuRetry());
+      }
+    };
+    window.addEventListener("click", retry, true);
+    window.addEventListener("keydown", retry, true);
+    window.addEventListener("touchstart", retry, true);
+  }
+
+  /** Fade-out menu tématu (default 1.5 s) a pauza — beze ztráty pozice/nodů. */
+  stopMenuMusic(fadeSec = 1.5) {
+    this.menuWantsPlay = false;
+    if (!this.menuAudio || !this.menuGain || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const g = this.menuGain;
+    const audio = this.menuAudio;
+    g.gain.cancelScheduledValues(now);
+    g.gain.setValueAtTime(g.gain.value, now);
+    g.gain.linearRampToValueAtTime(0.0001, now + fadeSec);
+    if (this.menuFadeTimer != null) window.clearTimeout(this.menuFadeTimer);
+    this.menuFadeTimer = window.setTimeout(() => {
+      this.menuFadeTimer = null;
+      if (!audio.paused) {
+        try { audio.pause(); } catch { /* ignore */ }
+      }
+    }, fadeSec * 1000 + 60);
   }
 
   toggleMute() {

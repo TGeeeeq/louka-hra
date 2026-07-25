@@ -8,16 +8,34 @@ import { ACHIEVEMENTS } from "../../game/achievements";
 import { AnimalSprite } from "../sprites/AnimalSprite";
 import { useGame } from "../store";
 import { photoUrl } from "../photo";
+import { Icon, type IconName } from "../icons/Icon";
+import { EmojiIcon } from "../icons/emojiMap";
 
 type Tab = "zvirata" | "ukoly" | "vedomosti" | "uspechy" | "olouce";
 
 const CAT_LABEL: Record<FactCategory, string> = {
-  zvirata: "🐾 Zvířata",
-  byliny: "🌿 Byliny a výroba",
-  priroda: "🌲 Příroda a les",
-  obdobi: "🗓️ Roční období",
-  azyl: "🏡 O azylu",
+  zvirata: "Zvířata",
+  byliny: "Byliny a výroba",
+  priroda: "Příroda a les",
+  obdobi: "Roční období",
+  azyl: "O azylu",
 };
+
+const CAT_ICON: Record<FactCategory, IconName> = {
+  zvirata: "paw",
+  byliny: "leaf",
+  priroda: "tree",
+  obdobi: "calendar",
+  azyl: "home",
+};
+
+const TAB_META: { id: Tab; label: string; icon: IconName }[] = [
+  { id: "zvirata", label: "Zvířata", icon: "paw" },
+  { id: "ukoly", label: "Úkoly", icon: "clipboard" },
+  { id: "vedomosti", label: "Vědomosti", icon: "book" },
+  { id: "uspechy", label: "Úspěchy", icon: "trophy" },
+  { id: "olouce", label: "O Louce", icon: "leaf" },
+];
 
 export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
   const { state } = useGame();
@@ -29,12 +47,13 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
 
   return (
     <div className="journal">
-      <div className="subtabs">
-        <button className={tab === "zvirata" ? "on" : ""} onClick={() => setTab("zvirata")}>🐾 Zvířata</button>
-        <button className={tab === "ukoly" ? "on" : ""} onClick={() => setTab("ukoly")}>📋 Úkoly</button>
-        <button className={tab === "vedomosti" ? "on" : ""} onClick={() => setTab("vedomosti")}>📖 Vědomosti</button>
-        <button className={tab === "uspechy" ? "on" : ""} onClick={() => setTab("uspechy")}>🏅 Úspěchy</button>
-        <button className={tab === "olouce" ? "on" : ""} onClick={() => setTab("olouce")}>🌿 O Louce</button>
+      <div className="subtabs subtabs-wrap">
+        {TAB_META.map((t) => (
+          <button key={t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>
+            <Icon name={t.icon} size={16} />
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {tab === "ukoly" && (
@@ -45,7 +64,7 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
             return (
               <div key={l.id} className="fact-cat">
                 <h4>
-                  {l.icon} {l.title}{" "}
+                  <EmojiIcon emoji={l.icon} size={17} /> {l.title}{" "}
                   <small className="quest-progress">
                     {Math.min(idx, l.quests.length)}/{l.quests.length}
                   </small>
@@ -53,18 +72,28 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
                 {l.quests.map((q, i) => (
                   <div key={q.id} className={`fact-row ${i < idx ? "" : i === idx ? "" : "locked"}`}>
                     {i < idx ? (
-                      <b>✓ {q.title}</b>
+                      <b>
+                        <Icon name="check" size={15} className="ic-good" /> {q.title}
+                      </b>
                     ) : i === idx ? (
                       <>
-                        <b>▸ {q.title}</b>
+                        <b>
+                          <Icon name="chevronRight" size={15} /> {q.title}
+                        </b>
                         <p>{q.hint}</p>
                       </>
                     ) : (
-                      <b className="lock">🔒 …</b>
+                      <b className="lock">
+                        <Icon name="lock" size={14} /> …
+                      </b>
                     )}
                   </div>
                 ))}
-                {!current && <p className="panel-lead">Linka dokončená! 🎉</p>}
+                {!current && (
+                  <p className="panel-lead">
+                    Linka dokončená! <Icon name="party" size={15} />
+                  </p>
+                )}
               </div>
             );
           })}
@@ -105,7 +134,9 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
           if (!met.length) return null;
           return (
             <>
-              <h4 className="enc-wild-head">🌲 Divocí sousedé</h4>
+              <h4 className="enc-wild-head">
+                <Icon name="tree" size={18} /> Divocí sousedé
+              </h4>
               <div className="enc-grid">
                 {met.map((w) => (
                   <button key={w.id} className="enc-card" onClick={() => onSelect(w)}>
@@ -131,7 +162,9 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
             const list = ownedFacts.filter((f) => f.category === c);
             return (
               <div key={c} className="fact-cat">
-                <h4>{CAT_LABEL[c]}</h4>
+                <h4>
+                  <Icon name={CAT_ICON[c]} size={17} /> {CAT_LABEL[c]}
+                </h4>
                 {list.map((f) => (
                   <div key={f.id} className={`fact-row ${known.has(f.id) ? "" : "locked"}`}>
                     {known.has(f.id) ? (
@@ -139,11 +172,15 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
                         <b>{f.title}</b>
                         <p>{f.text}</p>
                         {f.more?.map((m, mi) => (
-                          <p key={mi} className="fact-more">🌱 {m}</p>
+                          <p key={mi} className="fact-more">
+                            <Icon name="sprout" size={13} /> {m}
+                          </p>
                         ))}
                       </>
                     ) : (
-                      <b className="lock">🔒 zatím neobjeveno</b>
+                      <b className="lock">
+                        <Icon name="lock" size={14} /> zatím neobjeveno
+                      </b>
                     )}
                   </div>
                 ))}
@@ -164,7 +201,9 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
               const owned = state.achievements.includes(a.id);
               return (
                 <div key={a.id} className={`fact-row ${owned ? "" : "locked"}`}>
-                  <b>{owned ? a.emoji : "🔒"} {a.name}</b>
+                  <b>
+                    {owned ? <EmojiIcon emoji={a.emoji} size={18} /> : <Icon name="lock" size={15} />} {a.name}
+                  </b>
                   <p>{a.desc}</p>
                 </div>
               );
@@ -175,7 +214,9 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
 
       {tab === "olouce" && (
         <div className="about">
-          <h3>🌳 Louka — azyl Nech mě růst</h3>
+          <h3>
+            <Icon name="tree" size={20} /> Louka — azyl Nech mě růst
+          </h3>
           <p>
             Dlouhá louka uprostřed lesů, kde našlo domov přes sto zachráněných zvířat. Není to farma ani
             zoo — zvířata tu <b>dožívají v klidu a nikdo je nevyužívá</b>. To je celý smysl azylu.
@@ -193,7 +234,8 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
             <li>Hlídej spokojenost zvířat i vlastní sytost — a přežij <b>zimu</b>.</li>
           </ul>
           <p className="credit">
-            Postavičky a příběhy podle skutečných obyvatel Louky · nechmerust.org · 💚
+            Postavičky a příběhy podle skutečných obyvatel Louky · nechmerust.org{" "}
+            <Icon name="heart" size={13} className="ic-heart" />
           </p>
         </div>
       )}

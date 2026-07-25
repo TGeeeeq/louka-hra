@@ -1,6 +1,7 @@
 import { MAP, TILE, TS } from "./tiles";
-import type { Phase, Season } from "../game/types";
+import type { Season } from "../game/types";
 import { PADDOCKS, type InteractKind, type Interactable } from "./entities";
+import { prefersReducedMotion, quality } from "./perf";
 
 interface Pal {
   grass: string;
@@ -23,6 +24,12 @@ const PALS: Record<Season, Pal> = {
 
 export function seasonPalette(s: Season): Pal {
   return PALS[s];
+}
+
+/** Světlejší odstín trávy dané sezóny — používá animovaná tráva ve větru
+ *  (atmosphere.ts), aby vlnící se stébla ladila se statickou cache terénu. */
+export function seasonHighlight(s: Season): string {
+  return shiftHex(PALS[s].grass, 26);
 }
 
 // Posune hex barvu o `amt` na každém kanálu (kladně = zesvětlí, záporně = ztmaví).
@@ -79,9 +86,11 @@ function drawBase(c: CanvasRenderingContext2D, t: number, sx: number, sy: number
     c.fillRect(sx, sy, TS + 1, TS + 1);
     return;
   }
-  // tráva (GRASS / FLOWERS / TALL / BUSH) — dvoutón + jemný velkoplošný flek
-  const patch = tileHash(Math.floor(tx / 2), Math.floor(ty / 2));
-  c.fillStyle = patch(0) > 0.62 ? shiftHex(pal.grass, -8) : r(0) > 0.6 ? pal.grassAlt : pal.grass;
+  // Tráva (GRASS / FLOWERS / TALL / BUSH) — JEDNOLITÝ podklad. Dřívější
+  // dvoutón na dlaždici + patch na 2×2 dlaždice vytvářel viditelnou šachovnici;
+  // veškerou variaci teď dělají brushStrokes a paintedWash, které mřížku
+  // ignorují, takže louka působí malovaně, ne dlaždicově.
+  c.fillStyle = pal.grass;
   c.fillRect(sx, sy, TS + 1, TS + 1);
   if (r(1) > 0.45) {
     c.fillStyle = shiftHex(pal.grass, 10);
@@ -257,6 +266,85 @@ function drawProp(c: CanvasRenderingContext2D, t: number, sx: number, sy: number
   }
 }
 
+// Malovaný závoj přes celý terén: velkoplošné měkké fleky teplé a chladné
+// barvy. Rozbíjí pravidelnou mřížku dlaždic a dává akvarelový dojem. Peče se
+// jednou do cache terénu, takže za běhu nic nekostuje. Deterministický
+// (vlastní LCG), aby louka vypadala po každém načtení stejně.
+const WASH_DIV = 3; // závoj se maluje v 1/3 rozlišení a natáhne — fleky jsou tak
+                    // jako tak měkké, ale bake je ~9× levnější (bez hitche při
+                    // změně období, kdy se cache terénu přepéká)
+function paintedWash(c: CanvasRenderingContext2D, w: number, h: number) {
+  let s = 0x9e3779b9;
+  const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const tw = Math.ceil(w / WASH_DIV);
+  const th = Math.ceil(h / WASH_DIV);
+  const tmp = document.createElement("canvas");
+  tmp.width = tw;
+  tmp.height = th;
+  const t = tmp.getContext("2d")!;
+  t.fillStyle = "rgb(128,128,128)"; // neutrál pro soft-light: nic nemění
+  t.fillRect(0, 0, tw, th);
+  // dvě frekvence: velké plochy světla/stínu + středně velké malířské fleky
+  // (ty nesou variaci, kterou dřív dělal dvoutón na dlaždici)
+  for (let oct = 0; oct < 2; oct++) {
+    const n = oct === 0 ? 84 : 300;
+    const rMin = (oct === 0 ? 130 : 38) / WASH_DIV;
+    const rSpan = (oct === 0 ? 300 : 78) / WASH_DIV;
+    const a = oct === 0 ? 0.34 : 0.4;
+    for (let i = 0; i < n; i++) {
+      const cx = rnd() * tw;
+      const cy = rnd() * th;
+      const r = rMin + rnd() * rSpan;
+      // teplé fleky prosvětlí, chladné zastíní → víc hloubky, ne jen zesvětlení
+      const warm = rnd() > 0.5;
+      const g = t.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, warm ? `rgba(255,238,178,${a})` : `rgba(74,98,96,${a * 0.88})`);
+      g.addColorStop(1, warm ? "rgba(255,238,178,0)" : "rgba(74,98,96,0)");
+      t.fillStyle = g;
+      t.fillRect(cx - r, cy - r, r * 2, r * 2);
+    }
+  }
+  c.save();
+  c.globalCompositeOperation = "soft-light";
+  c.drawImage(tmp, 0, 0, w, h);
+  c.restore();
+}
+
+// Tahy štětcem po celém porostu: krátké prohnuté šrafy ve třech odstínech
+// trávy. Rozbíjejí mřížku dlaždic a dávají terénu malovanou texturu. Kreslí se
+// dávkově — jedna cesta a jeden stroke() na odstín, takže i přes tisíce
+// segmentů je bake cache rychlý (běží jen při změně období / mapy).
+const BRUSH_TILES: readonly number[] = [TILE.GRASS, TILE.FLOWERS, TILE.TALL, TILE.BUSH];
+function brushStrokes(c: CanvasRenderingContext2D, pal: Pal) {
+  const tones = [shiftHex(pal.grass, 26), shiftHex(pal.grass, -22), shiftHex(pal.grassAlt, 12)];
+  c.save();
+  c.lineCap = "round";
+  c.globalAlpha = 0.42;
+  for (let k = 0; k < tones.length; k++) {
+    c.strokeStyle = tones[k];
+    c.lineWidth = k === 1 ? 2.6 : 2;
+    c.beginPath();
+    for (let ty = 0; ty < MAP.h; ty++)
+      for (let tx = 0; tx < MAP.w; tx++) {
+        if (!BRUSH_TILES.includes(MAP.get(tx, ty))) continue;
+        const r = tileHash(tx * 3 + k, ty * 5 - k);
+        for (let j = 0; j < 2; j++) {
+          if (Math.floor(r(j) * 3) !== k) continue; // odstín se vybírá dlaždicí, ne pořadím
+          const bx = tx * TS + 3 + r(j + 2) * 28;
+          const by = ty * TS + 3 + r(j + 4) * 28;
+          const len = 7 + r(j + 1) * 9;
+          const ang = -0.5 + r(j + 3) * 1.0; // převážně vodorovné tahy
+          const ex = bx + Math.cos(ang) * len;
+          const ey = by + Math.sin(ang) * len;
+          c.moveTo(bx, by);
+          c.quadraticCurveTo((bx + ex) / 2, (by + ey) / 2 - 2.5, ex, ey);
+        }
+      }
+    c.stroke();
+  }
+  c.restore();
+}
+
 // Celá mapa se jednou vyrenderuje do offscreen canvasu (na období) a každý
 // snímek se jen vystřihne viditelná část — místo stovek kreslení dlaždic je
 // to jediný drawImage (game-engine skill: „reduce draw calls").
@@ -275,7 +363,10 @@ function getGroundCache(season: Season): HTMLCanvasElement {
       drawBase(c, MAP.get(tx, ty), tx * TS, ty * TS, pal, tx, ty);
   // 2) ambientní okluze u lesa (hloubka mýtin)
   forestAO(c);
-  // 3) porost shora dolů (koruny správně překrývají dlaždice nad sebou)
+  // 3) malovaná textura na podkladu (pod porostem, ať stromy zůstanou čisté)
+  brushStrokes(c, pal);
+  paintedWash(c, cv.width, cv.height);
+  // 4) porost shora dolů (koruny správně překrývají dlaždice nad sebou)
   for (let ty = 0; ty < MAP.h; ty++)
     for (let tx = 0; tx < MAP.w; tx++)
       drawProp(c, MAP.get(tx, ty), tx * TS, ty * TS, pal, tx, ty, season);
@@ -362,51 +453,69 @@ export function drawPaddocks(
   }
 }
 
-// Třpyt na vodě (animovaný přes statickou cache terénu).
+// Třpyt na vodě — animovaně přes statickou cache terénu, jen viditelné
+// dlaždice. Tři vrstvy: měkké vlnky (protisměrné), třpytky odražené od hladiny
+// a lehký vlnový posun světla. Blob třpytky se vyrábí jednou (viz níž).
+let sparkleBlob: HTMLCanvasElement | null = null;
+function getSparkleBlob(): HTMLCanvasElement {
+  if (sparkleBlob) return sparkleBlob;
+  const S = 24;
+  const cv = document.createElement("canvas");
+  cv.width = S;
+  cv.height = S;
+  const c = cv.getContext("2d")!;
+  const g = c.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.4, "rgba(255,252,232,0.55)");
+  g.addColorStop(1, "rgba(255,252,232,0)");
+  c.fillStyle = g;
+  c.fillRect(0, 0, S, S);
+  sparkleBlob = cv;
+  return cv;
+}
+
 export function drawWaterShimmer(ctx: CanvasRenderingContext2D, camX: number, camY: number, vw: number, vh: number, time: number) {
+  if (!quality().waterShimmer) return;
+  const t = prefersReducedMotion() ? 0 : time;
   const x0 = Math.max(0, Math.floor(camX / TS));
   const y0 = Math.max(0, Math.floor(camY / TS));
   const x1 = Math.min(MAP.w - 1, Math.ceil((camX + vw) / TS));
   const y1 = Math.min(MAP.h - 1, Math.ceil((camY + vh) / TS));
+  const blob = getSparkleBlob();
+  ctx.save();
+  ctx.lineCap = "round";
   for (let ty = y0; ty <= y1; ty++)
     for (let tx = x0; tx <= x1; tx++) {
       if (MAP.get(tx, ty) !== TILE.WATER) continue;
       const sx = tx * TS - camX;
       const sy = ty * TS - camY;
-      const off = Math.sin(time * 0.002 + tx * 0.7 + ty) * 4;
-      ctx.strokeStyle = "rgba(255,255,255,0.45)";
+      const ph = tx * 0.7 + ty * 1.1;
+      const off = Math.sin(t * 0.002 + ph) * 4;
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = "rgba(255,255,255,0.34)";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(sx + TS / 2 + off, sy + TS / 2, 6, 0.2, Math.PI - 0.2);
       ctx.stroke();
-      ctx.strokeStyle = "rgba(255,255,255,0.2)";
+      ctx.strokeStyle = "rgba(255,255,255,0.16)";
       ctx.beginPath();
       ctx.arc(sx + TS / 2 - off * 0.6, sy + TS * 0.7, 4, 0.2, Math.PI - 0.2);
       ctx.stroke();
+      // třpytky: dvě jiskry na dlaždici, každá s vlastním rytmem mrknutí
+      ctx.globalCompositeOperation = "lighter";
+      for (let k = 0; k < 2; k++) {
+        const kp = ph + k * 2.3;
+        const tw = Math.sin(t * 0.0043 + kp * 1.9);
+        if (tw <= 0) continue;
+        const s = 5 + tw * 6;
+        const jx = sx + TS * (0.28 + 0.44 * ((tx * 5 + ty * 3 + k * 7) % 10) / 10);
+        const jy = sy + TS * (0.3 + 0.4 * ((tx * 3 + ty * 7 + k * 5) % 10) / 10) + Math.sin(t * 0.0016 + kp) * 2;
+        ctx.globalAlpha = tw * 0.7;
+        ctx.drawImage(blob, jx - s / 2, jy - s / 2, s, s);
+      }
+      ctx.globalAlpha = 1;
     }
-}
-
-// Teplé sluneční světlo z levého-horního rohu — sjednocuje směr osvětlení.
-export function drawSunlight(ctx: CanvasRenderingContext2D, vw: number, vh: number, phase: Phase, season: Season) {
-  if (phase === "vecer") return; // večer řeší chladný tint ve WorldCanvas
-  const g = ctx.createRadialGradient(vw * 0.22, vh * 0.12, 0, vw * 0.22, vh * 0.12, Math.max(vw, vh) * 0.95);
-  g.addColorStop(0, season === "zima" ? "rgba(255,255,255,0.12)" : "rgba(255,244,200,0.15)");
-  g.addColorStop(0.5, "rgba(255,244,200,0.04)");
-  g.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.save();
-  ctx.globalCompositeOperation = "lighter";
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, vw, vh);
   ctx.restore();
-}
-
-// Jemná vinětace pro hloubku.
-export function drawVignette(ctx: CanvasRenderingContext2D, vw: number, vh: number) {
-  const g = ctx.createRadialGradient(vw / 2, vh * 0.46, Math.min(vw, vh) * 0.34, vw / 2, vh / 2, Math.max(vw, vh) * 0.76);
-  g.addColorStop(0, "rgba(0,0,0,0)");
-  g.addColorStop(1, "rgba(16,26,15,0.34)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, vw, vh);
 }
 
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
