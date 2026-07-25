@@ -1,0 +1,301 @@
+/* ============================================
+   🌿 AAA LOUKA - Profesionální styly
+   Nature Games Studio
+   ============================================ */
+
+:root {
+    /* Paleta inspirovaná přírodou */
+    --color-primary: #4CAF50;
+    --color-primary-dark: #2E7D32;
+    --color-primary-light: #81C784;
+    --color-accent: #FFD54F;
+    --color-gold: #FFD700;
+    --color-forest: #1B5E20;
+    --color-meadow: #7CB342;
+    --color-sky: #87CEEB;
+    --color-sunset: #FF8F00;
+    --color-night: #1A237E;
+    --color-wood: #5D4037;
+    --color-parchment: #F5E6CC;
+
+    /* Stíny a efekty */
+    --shadow-soft: 0 4px 6px rgba(0,0,0,0.1);
+    --shadow-medium: 0 8px 16px rgba(0,0,0,0.2);
+    --shadow-golden: 0 0 20px rgba(255,215,0,0.5);
+    --shadow-magical: 0 0 30px rgba(76,175,80,0.6);
+
+    /* Fonty */
+    --font-title: 'Cinzel', serif;
+    --font-body: 'Lora', serif;
+    --font-game: 'MedievalSharp', cursive;
+
+    /* Animace */
+    --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bouncy: 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* AAA Menu Styling */
+.aaa-main-menu {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(
+        180deg,
+        var(--color-sky) 0%,
+        var(--color-meadow) 60%,
+        var(--color-forest) 100%
+    );
+    overflow: hidden;
+}
+
+/* Parallax vrstvy */
+.parallax-sky {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 40%;
+    background: linear-gradient(180deg, #87CEEB, #B0E0E6);
+    animation: skyShift 30s ease-in-out infinite;
+}
+
+.parallax-clouds {
+    position: absolute;
+    top: 5%;
+    width: 200%;
+    height: 30%;
+    animation: cloudDrift 60s linear infinite;
+}
+
+.parallax-hills {
+    position: absolute;
+    bottom: 30%;
+    width: 100%;
+    height: 40%;
+    background: url('assets/hills-silhouette.png') repeat-x;
+    animation: hillsScroll 20s linear infinite;
+}
+
+.parallax-meadow {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 50%;
+    background: url('assets/meadow-flowers.png') repeat-x;
+    animation: meadowWave 8s ease-in-out infinite;
+}
+
+/* Animované částice */
+.particles-container {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.firefly {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: #FFD700;
+    border-radius: 50%;
+    box-shadow: 0 0 10px #FFD700, 0 0 20px #FFA000;
+    animation: fireflyFloat 3s ease-in-out infinite;
+}
+
+/* Menu tlačítka */
+.aaa-button {
+    position: relative;
+    padding: 16px 32px;
+    font-family: var(--font-title);
+    font-size: 1.5rem;
+    color: var(--color-parchment);
+    background: linear-gradient(135deg, var(--color-forest), var(--color-primary-dark));
+    border: 2px solid var(--color-gold);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all var(--transition-bouncy);
+    box-shadow: var(--shadow-soft);
+    overflow: hidden;
+}
+
+.aaa-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s;
+}
+
+.aaa-button:hover {
+    transform: translateY(-4px) scale(1.05);
+    box-shadow: var(--shadow-golden);
+    border-color: #FFE082;
+}
+
+.aaa-button:hover::before {
+    left: 100%;
+}
+
+.aaa-button:active {
+    transform: translateY(0) scale(0.98);
+}
+
+/* Herbář - stará kniha */
+.herbarium-book {
+    background: linear-gradient(135deg, #8B4513, #654321);
+    border: 8px solid #3E2723;
+    border-radius: 8px;
+    box-shadow:
+        inset 0 0 50px rgba(0,0,0,0.5),
+        var(--shadow-golden);
+    padding: 40px;
+    position: relative;
+}
+
+.herbarium-book::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(90deg, #2C1810, transparent);
+}
+
+.herbarium-page {
+    background: var(--color-parchment);
+    padding: 30px;
+    border-radius: 4px;
+    font-family: var(--font-body);
+    color: #3E2723;
+    position: relative;
+}
+
+/* Cutscéna overlay */
+.cutscene-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.9);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.cutscene-letterbox {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 15%;
+    background: black;
+    animation: letterboxReveal 0.8s ease-out;
+}
+
+.cutscene-letterbox.top { top: 0; }
+.cutscene-letterbox.bottom { bottom: 0; }
+
+/* Dialogové okno */
+.dialog-box {
+    position: absolute;
+    bottom: 10%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+    max-width: 800px;
+    background: linear-gradient(135deg, rgba(30,30,30,0.95), rgba(20,20,20,0.95));
+    border: 2px solid var(--color-gold);
+    border-radius: 16px;
+    padding: 20px 30px;
+    color: white;
+    font-family: var(--font-body);
+    box-shadow: var(--shadow-golden);
+}
+
+.dialog-speaker {
+    color: var(--color-gold);
+    font-family: var(--font-title);
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+}
+
+.dialog-text {
+    font-size: 1.1rem;
+    line-height: 1.6;
+}
+
+/* Animace objevení rostliny */
+.discovery-animation {
+    animation: magicalReveal 2s ease-out;
+}
+
+@keyframes magicalReveal {
+    0% {
+        transform: scale(0) rotate(-180deg);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.2) rotate(10deg);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(1) rotate(0deg);
+        opacity: 1;
+    }
+}
+
+/* Progress bar - úroveň postavy */
+.level-progress {
+    width: 100%;
+    height: 12px;
+    background: #333;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.level-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--color-primary), var(--color-gold));
+    border-radius: 6px;
+    transition: width 0.5s ease-out;
+    position: relative;
+}
+
+.level-progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    animation: shimmer 2s infinite;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .aaa-button {
+        padding: 12px 24px;
+        font-size: 1.2rem;
+    }
+
+    .herbarium-book {
+        padding: 20px;
+    }
+
+    .dialog-box {
+        width: 95%;
+        padding: 15px;
+    }
+}
+
+/* Print styly pro herbář */
+@media print {
+    .herbarium-page {
+        background: white;
+        color: black;
+    }
+}

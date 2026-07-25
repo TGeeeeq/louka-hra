@@ -1,0 +1,23 @@
+{
+  "animals": {
+    "mammals": [
+      {
+        "id": "srnec_obecny",
+        "name": "Srnec obecný",
+        "scientificName": "Capreolus capreolus",
+        "description": "Náš nejhojnější volně žijící sudokopytník. Samci mají parůžky, které každoročně shazují.",
+        "habitat": "Lesy, pole, louky",
+        "activity": "Soumračný a denní",
+        "diet": "Býložravec - tráva, listy, výhonky",
+        "size": "Délka těla: 100-140 cm, Výška v kohoutku: 65-85 cm",
+        "funFacts": [
+          "Srnčata mají první dny života bílé skvrny na hřbetě pro maskování.",
+          "Srnec dokáže vyskočit až 2 metry vysoko.",
+          "Parůžky srncům rostou od února do května."
+        ],
+        "animations": ["graze", "alert_look", "bounding_run"],
+        "sounds": ["bark_warning", "doe_call"]
+      }
+    ]
+  }
+}

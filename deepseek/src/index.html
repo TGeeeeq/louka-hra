@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="🌿 Louka - AAA Edukativní hra o přírodě. Objevuj bylinky, pozoruj zvířata a staň se mistrem bylinkářem!">
+    <meta name="theme-color" content="#4CAF50">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Louka">
+
+    <title>🌿 Louka - AAA Edukativní hra</title>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/ui/logo-192.png">
+    <link rel="apple-touch-icon" href="/assets/ui/logo-192.png">
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Lora:ital,wght@0,400;0,700;1,400&family=MedievalSharp&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1B5E20;
+            overflow: hidden;
+            font-family: 'Lora', serif;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #game-container canvas {
+            display: block;
+            image-rendering: auto;
+        }
+
+        /* PWA Install Button */
+        .pwa-install-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #4CAF50, #2E7D32);
+            color: white;
+            border: 2px solid #FFD700;
+            border-radius: 12px;
+            font-family: 'Cinzel', serif;
+            font-size: 16px;
+            cursor: pointer;
+            z-index: 10000;
+            opacity: 0;
+            transform: translateY(100px);
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .pwa-install-btn.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .pwa-install-btn:hover {
+            transform: translateY(-4px) scale(1.05);
+            box-shadow: 0 8px 25px rgba(76,175,80,0.5);
+        }
+
+        /* PWA Toast */
+        .pwa-toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            padding: 12px 24px;
+            background: rgba(0,0,0,0.9);
+            color: #FFD700;
+            border-radius: 8px;
+            font-family: 'Lora', serif;
+            font-size: 14px;
+            z-index: 10001;
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+
+        .pwa-toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Google Play Games Achievement Popup */
+        .gpg-achievement-popup {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            padding: 16px 24px;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border: 2px solid #FFD700;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 10002;
+            opacity: 0;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            box-shadow: 0 0 30px rgba(255,215,0,0.5);
+        }
+
+        .gpg-achievement-popup.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .achievement-icon {
+            font-size: 40px;
+        }
+
+        .achievement-text {
+            color: white;
+        }
+
+        .achievement-title {
+            font-family: 'Cinzel', serif;
+            font-size: 14px;
+            color: #FFD700;
+        }
+
+        .achievement-name {
+            font-family: 'Lora', serif;
+            font-size: 16px;
+            color: white;
+        }
+
+        /* Google Play Games User Info */
+        .gpg-user-info {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            background: rgba(0,0,0,0.8);
+            border-radius: 25px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10000;
+        }
+
+        .gpg-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #FFD700;
+        }
+
+        .gpg-username {
+            color: white;
+            font-family: 'Cinzel', serif;
+            font-size: 14px;
+        }
+
+        .gpg-signout-btn {
+            padding: 4px 12px;
+            background: #c62828;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        /* Loading Screen */
+        .loading-screen {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(180deg, #1B5E20, #0D3B0F);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.5s;
+        }
+
+        .loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <div id="gpg-container"></div>
+
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-XXXXXXXXXX');
+    </script>
+</body>
+</html>

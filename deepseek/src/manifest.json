@@ -1,0 +1,81 @@
+{
+  "name": "Louka - AAA Edukativní hra",
+  "short_name": "Louka",
+  "description": "Objevuj kouzlo přírody v této AAA edukativní hře. Sbírej bylinky, pozoruj zvířata a staň se mistrem bylinkářem!",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#1B5E20",
+  "theme_color": "#4CAF50",
+  "categories": ["games", "education", "nature"],
+  "lang": "cs",
+  "icons": [
+    {
+      "src": "/assets/ui/logo-72.png",
+      "sizes": "72x72",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/ui/logo-96.png",
+      "sizes": "96x96",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/ui/logo-128.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/ui/logo-144.png",
+      "sizes": "144x144",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/ui/logo-152.png",
+      "sizes": "152x152",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/ui/logo-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/ui/logo-384.png",
+      "sizes": "384x384",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/ui/logo-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/assets/screenshots/gameplay-1.jpg",
+      "sizes": "1920x1080",
+      "type": "image/jpeg",
+      "platform": "wide"
+    },
+    {
+      "src": "/assets/screenshots/herbar.jpg",
+      "sizes": "1920x1080",
+      "type": "image/jpeg",
+      "platform": "wide"
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=com.naturegames.louka",
+      "id": "com.naturegames.louka"
+    }
+  ],
+  "prefer_related_applications": false,
+  "iarc_rating_id": "e10",
+  "scope": "/",
+  "display_override": ["window-controls-overlay", "standalone"]
+}
