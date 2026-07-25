@@ -31,6 +31,48 @@ export function canPlace(args: CanPlaceArgs): { ok: boolean; reason?: string } {
   return { ok: true };
 }
 
+// --- Dvorek zvířat ----------------------------------------------------------
+// Zvířecí příbytek si kolem sebe drží kus louky. Nejde tak postavit chlívek a
+// pak kolem něj obehnat ohradu pro někoho jiného ani nacpat dva výběhy na sebe
+// — každá parta zvířat musí mít svoje místo.
+
+/** Stavby, ve kterých bydlí zvířata (drží si dvorek). */
+export const ANIMAL_HOME_KINDS: readonly string[] = ["kurnik", "chlivek", "pastvina", "buda"];
+
+/** Kolik dlaždic kolem sebe si příbytek nárokuje. */
+export const HOME_CLAIM_MARGIN = 1;
+
+/** Minimum z `Buildable`, které pravidlo dvorku potřebuje znát. */
+export interface ClaimDef {
+  kind: string;
+  category: string;
+  fw: number;
+  fh: number;
+}
+
+interface ClaimArgs {
+  structures: Placed[];
+  defOf: (defId: string) => ClaimDef | undefined;
+  def: ClaimDef;
+  tx: number;
+  ty: number;
+}
+
+/** Zabírá tahle stavba dvorek nějakého příbytku? Vrací ten příbytek, jinak `null`. */
+export function claimedBy({ structures, defOf, def, tx, ty }: ClaimArgs): Placed | null {
+  // Dvorek respektují jen další příbytky a ohrady — studna, cedule nebo
+  // dekorace u výběhu nikomu nevadí.
+  const respects = ANIMAL_HOME_KINDS.includes(def.kind) || def.category === "ohrada";
+  if (!respects) return null;
+  const m = HOME_CLAIM_MARGIN;
+  for (const s of structures) {
+    const d = defOf(s.defId);
+    if (!d || !ANIMAL_HOME_KINDS.includes(d.kind)) continue;
+    if (overlaps(tx, ty, def.fw, def.fh, s.tx - m, s.ty - m, d.fw + m * 2, d.fh + m * 2)) return s;
+  }
+  return null;
+}
+
 export function structureAt(structures: Placed[], tx: number, ty: number, footprintOf: FootprintOf): Placed | null {
   for (const s of structures) {
     const f = footprintOf(s.defId);

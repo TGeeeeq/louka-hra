@@ -53,6 +53,7 @@ import { layoutComfortFor } from "./comfort";
 import { TUTORIAL_STEPS, currentStep, tutorialActive } from "../content/tutorial";
 import { BUILDABLE_BY_ID } from "../content/buildables";
 import { canPlace, hasBuilt } from "../build/placement";
+import { homeClaimIssue } from "../build/preview";
 import { isSolidTile } from "../../world/tiles";
 import {
   addLog,
@@ -722,6 +723,10 @@ function core(state: GameState, action: Action): GameState {
       };
       const check = canPlace({ structures: state.structures, isSolid: isSolidTile, def, tx: action.tx, ty: action.ty, footprintOf });
       if (!check.ok) return warnReturn(state, check.reason ?? "Sem stavět nejde.");
+      // Zvířata mají kolem svého příbytku dvorek — nesmí se tam nastěhovat
+      // cizí výběh ani se kolem něj obehnat ohrada.
+      const claim = homeClaimIssue(state.structures, def.id, action.tx, action.ty);
+      if (claim) return warnReturn(state, claim.long);
       if (!tut) {
         if (def.cost.money && state.money < def.cost.money) return warnReturn(state, "Na tohle ti chybí peníze.");
         if (def.cost.wood && (state.inventory.drevo ?? 0) < def.cost.wood) return warnReturn(state, "Na tohle ti chybí dřevo.");
@@ -785,6 +790,8 @@ function core(state: GameState, action: Action): GameState {
       const others = state.structures.filter((x) => x.uid !== action.uid);
       const check = canPlace({ structures: others, isSolid: isSolidTile, def: { fw: def?.fw ?? 1, fh: def?.fh ?? 1 }, tx: action.tx, ty: action.ty, footprintOf });
       if (!check.ok) return warnReturn(state, check.reason ?? "Sem to nejde.");
+      const claim = homeClaimIssue(others, inst.defId, action.tx, action.ty);
+      if (claim) return warnReturn(state, claim.long);
       const s = cloneState(state);
       s.structures = s.structures.map((x) => (x.uid === action.uid ? { ...x, tx: action.tx, ty: action.ty } : x));
       return s;

@@ -21,7 +21,7 @@ import { PERSON_BY_ID } from "./game/content/people";
 import { reactionFor } from "./game/content/npcReactions";
 import { NPC_LIFE } from "./game/content/npcLife";
 import { BUILDABLE_BY_ID } from "./game/content/buildables";
-import { nudgeWithinMap, placementValid } from "./game/build/preview";
+import { nudgeWithinMap, placementIssue } from "./game/build/preview";
 import { NpcPanel } from "./ui/world/NpcPanel";
 import { HerbQuiz } from "./ui/minigames/HerbQuiz";
 import { ChopWood } from "./ui/minigames/ChopWood";
@@ -277,9 +277,10 @@ export default function App() {
   // (viz WorldCanvas → arrowsOwnedByPlacement).
   const pendingRef = useRef<PendingPlacement | null>(null);
   pendingRef.current = pending;
-  const pendingValid = pending
-    ? placementValid(state.structures, pending.defId, pending.tx, pending.ty, pending.uid)
-    : false;
+  const pendingIssue = pending
+    ? placementIssue(state.structures, pending.defId, pending.tx, pending.ty, pending.uid)
+    : null;
+  const pendingValid = !!pending && !pendingIssue;
 
   const nudgePending = (dx: number, dy: number) =>
     setPending((p) => (p ? { ...p, ...nudgeWithinMap(p.defId, p.tx, p.ty, dx, dy) } : p));
@@ -287,7 +288,7 @@ export default function App() {
   const commitPending = () => {
     const p = pendingRef.current;
     if (!p) return;
-    if (!placementValid(state.structures, p.defId, p.tx, p.ty, p.uid)) {
+    if (placementIssue(state.structures, p.defId, p.tx, p.ty, p.uid)) {
       sound.error();
       return;
     }
@@ -607,7 +608,7 @@ export default function App() {
         }}
         pending={pending}
         onDemolishStructure={(uid) => { sound.build(); dispatch({ type: "DEMOLISH_STRUCTURE", uid }); }}
-        onEditReject={() => dispatch({ type: "PUSH_DIALOG", speaker: "Stavění", lines: ["Sem se to nevejde — je tam les, voda nebo jiná stavba."] })}
+        onEditReject={(reason) => dispatch({ type: "PUSH_DIALOG", speaker: "Stavění", lines: [reason ?? "Sem se to nevejde — je tam les, voda nebo jiná stavba."] })}
         onInteract={onInteract} onEvent={onWorldEvent}
       />
       <Hud onOpen={(p) => { if (p === "plna") setDemoGateOpen(false); setOverlay(p); }} onDevUnlock={unlockDev} editMode={editMode} onToggleEdit={() => setEditMode((v) => { const next = !v; if (!next) setBuildSelection(null); return next; })} />
@@ -627,12 +628,15 @@ export default function App() {
       )}
       {pending && (
         <div className="place-bar" role="dialog" aria-live="polite">
+          {/* Hlavička roste nahoru (lišta je ukotvená spodkem) a lišta má pevnou
+              šířku — hláška „sem to nejde" tak nikdy nepohne šipkami ani
+              tlačítky pod sebou. */}
           <div className="place-bar-head">
             {/* Název je v 1. pádu (katalog), tak ho nechávám vepředu — jinak by
                 z toho lezlo „Postavit Chalupa sem?". */}
             <b>{pendingLabel}</b>
             <span>— {pending.kind === "move" ? "přesunout" : "postavit"} sem?</span>
-            {!pendingValid && <span className="place-bar-warn">⚠ Sem se to nevejde</span>}
+            {pendingIssue && <span className="place-bar-warn">⚠ {pendingIssue.short}</span>}
           </div>
           <div className="place-bar-row">
             <div className="nudge-pad" role="group" aria-label="Posunout stavbu">

@@ -442,15 +442,18 @@ button:disabled { cursor: not-allowed; }
    posouvá půdorys po dlaždicích (totéž dělají šipky na klávesnici). */
 .place-bar {
   /* left+right+margin auto místo translateX(-50%): u fixed prvku by mu jinak
-     „dostupná šířka" končila u pravého kraje a lišta by se zbytečně lámala. */
-  position: fixed; left: 8px; right: 8px; margin: 0 auto; width: fit-content;
+     „dostupná šířka" končila u pravého kraje a lišta by se zbytečně lámala.
+     Šířka je PEVNÁ a lišta je ukotvená spodkem — když nahoře přibude hláška
+     „sem to nejde", roste nahoru a šipky ani tlačítka se nehnou. */
+  position: fixed; left: 8px; right: 8px; margin: 0 auto;
+  width: min(340px, calc(100vw - 16px));
   bottom: calc(var(--touch-pad) + 10px + env(safe-area-inset-bottom, 0px)); z-index: 42;
   display: flex; flex-direction: column; gap: 4px; align-items: center;
   background: var(--moss-deep); color: var(--cream);
   padding: 7px 12px 8px; border-radius: var(--r); box-shadow: var(--shadow-lg);
-  max-width: calc(100vw - 16px); animation: rise 0.16s ease;
+  animation: rise 0.16s ease;
 }
-.place-bar-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; justify-content: center; font-size: 0.86rem; }
+.place-bar-head { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; justify-content: center; font-size: 0.86rem; text-align: center; }
 .place-bar-head b { font-family: var(--font-serif); color: var(--cream); white-space: nowrap; }
 .place-bar-warn { font-size: 0.72rem; font-weight: 700; color: #ffd0c2; white-space: nowrap; }
 .place-bar-row { display: flex; align-items: center; gap: 12px; }
@@ -476,7 +479,13 @@ button:disabled { cursor: not-allowed; }
 
 /* Nízké okno (mobil na ležato): lišta do jediného řádku, ať nezakryje louku. */
 @media (max-height: 460px) {
-  .place-bar { flex-direction: row; align-items: center; gap: 10px; padding: 6px 10px; }
+  .place-bar {
+    flex-direction: row; align-items: center; gap: 10px; padding: 6px 10px;
+    width: min(520px, calc(100vw - 16px));
+  }
+  /* Hlavička má pevný podíl šířky i vyhrazené dva řádky, takže se ani po
+     přidání hlášky nezmění a křížek šipek zůstane, kde byl. */
+  .place-bar-head { flex: 1 1 0; min-width: 0; min-height: 2.6em; justify-content: flex-start; text-align: left; }
   .place-bar-hint { display: none; }
   .nudge-pad { width: 92px; height: 59px; }
   .nudge { width: 28px; height: 28px; font-size: 0.7rem; }
