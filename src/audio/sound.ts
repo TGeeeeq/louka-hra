@@ -108,6 +108,37 @@ const KEY_ROOT: Record<Season, number> = { jaro: 261.6, leto: 293.7, podzim: 220
 // Tercie modu: dur pro jaro/léto, moll pro podzim/zimu.
 const KEY_THIRD: Record<Season, number> = { jaro: 1.26, leto: 1.26, podzim: 1.19, zima: 1.19 };
 
+// ─── SAMPLE LAYER (nahrané SFX, viz public/audio/sfx/) ──────────────────────
+// Assety dorazí postupně (ZeroGPU kvóta) — dokud soubor chybí, engine tiše
+// jede na dosavadní FM syntéze. Jednou zjištěné selhání (404/dekódování) se
+// pamatuje na celou session, žádný opakovaný fetch ani spam v konzoli.
+type SampleState = AudioBuffer | "failed";
+
+// Kterou konkrétní zvířecí vzorku zahrát za danou skupinu krmení (feedGroup).
+// Voláme jen s feedGroup (App.tsx/PlayBar.tsx nevědí o konkrétním druhu), tak
+// z možných druhů skupiny náhodně vybíráme — druhy bez vzorku (holub, osel,
+// muflon, králík) tak přirozeně dál zůstávají jen na syntéze.
+const GROUP_SAMPLES: Record<string, { species: string; sample?: string }[]> = {
+  drubez: [
+    { species: "slepice", sample: "chicken" },
+    { species: "husa", sample: "goose" },
+    { species: "kachna", sample: "duck" },
+    { species: "holub" },
+  ],
+  prasata: [{ species: "prase", sample: "pig" }],
+  stado: [
+    { species: "osel" },
+    { species: "muflon" },
+    { species: "krava", sample: "cow" },
+    { species: "ovce", sample: "sheep" },
+  ],
+  mazlici: [
+    { species: "pes", sample: "dog" },
+    { species: "kocka", sample: "cat" },
+    { species: "kralik" },
+  ],
+};
+
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -169,6 +200,12 @@ class SoundEngine {
   private lastNpcSpeak: Record<string, number> = {};
   private NPC_SPEAK_COOLDOWN = 1800; // ms
   private lastLowEnergy = 0;
+  private stepThrottleUntil = 0; // interní pojistka pro step() (viz níže)
+
+  // Nahrané SFX vzorky (public/audio/sfx/<name>.ogg) — lazy fetch+decode,
+  // cache úspěchu i selhání per session.
+  private sampleCache = new Map<string, SampleState>();
+  private samplePending = new Set<string>();
 
   // ─── INIT ──────────────────────────────────────────────────────────────────
 
@@ -370,6 +407,57 @@ class SoundEngine {
     src.start(t0, Math.random()); src.stop(t0 + dur + 0.05);
   }
 
+  // Spustí fetch+decode vzorku, pokud ještě neběží a výsledek není v cache.
+  // Fire-and-forget — chyby se tiše zapamatují jako "failed", nic nehlásí do
+  // konzole a nezkouší to znovu (dokud nedojde k reloadu stránky).
+  private loadSample(name: string): void {
+    if (!this.ctx || this.sampleCache.has(name) || this.samplePending.has(name)) return;
+    this.samplePending.add(name);
+    const url = `${import.meta.env.BASE_URL}audio/sfx/${name}.ogg`;
+    fetch(url)
+      .then((r) => {
+        if (!r.ok) throw new Error(`sfx ${name}: HTTP ${r.status}`);
+        return r.arrayBuffer();
+      })
+      .then((buf) => this.ctx!.decodeAudioData(buf))
+      .then((decoded) => {
+        this.sampleCache.set(name, decoded);
+      })
+      .catch(() => {
+        this.sampleCache.set(name, "failed");
+      })
+      .finally(() => {
+        this.samplePending.delete(name);
+      });
+  }
+
+  // Přehraje nahraný vzorek (pokud je už načtený) přes stejnou master/limiter
+  // větev jako ostatní SFX, s drobnou náhodnou obměnou výšky. Vrací, jestli se
+  // opravdu něco přehrálo — voláno vždy s fallbackem na syntézu v případě false.
+  private playSample(name: string, opts: { gain?: number; rate?: number; rateJitter?: number; pan?: number } = {}): boolean {
+    this.loadSample(name); // ať je příště (nebo hned) po síti co přehrát
+    const buf = this.sampleCache.get(name);
+    if (!this.ctx || !this.master || this.muted || !buf || buf === "failed") return false;
+    const { gain = 0.12, rate = 1, rateJitter = 0.16, pan = 0 } = opts;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate * (1 + (Math.random() - 0.5) * rateJitter);
+    const g = this.ctx.createGain();
+    g.gain.value = gain;
+    src.connect(g);
+    this.panTo(g, this.master, pan);
+    src.start();
+    return true;
+  }
+
+  // Náhodně vybere vzorek druhu ze skupiny krmení (viz GROUP_SAMPLES) —
+  // voláme jen s feedGroup, takže konkrétní druh nevolíme, ale losujeme.
+  private pickGroupSample(kind: string): string | undefined {
+    const entries = GROUP_SAMPLES[kind];
+    if (!entries || !entries.length) return undefined;
+    return entries[Math.floor(Math.random() * entries.length)].sample;
+  }
+
   // ─── PERKUSE (plánované v absolutním čase, suché — bez dozvuku) ─────────────
 
   private percKick(t: number, g: number) {
@@ -433,7 +521,34 @@ class SoundEngine {
 
   // ─── SFX — základní (zpětná kompatibilita) ─────────────────────────────────
 
-  step() {} // záměrně tiché
+  // Krok postavy — dokud public/audio/sfx/footsteps-grass.ogg neexistuje,
+  // zůstává tiché (přesně jako dřív). Volající (WorldCanvas) už throttluje na
+  // ~300 ms akumulovaného pohybu; tady je jen tenká pojistka navíc.
+  step() {
+    this.ensure();
+    const now = Date.now();
+    if (now < this.stepThrottleUntil) return;
+    this.stepThrottleUntil = now + 220;
+    this.loadSample("footsteps-grass");
+    const buf = this.sampleCache.get("footsteps-grass");
+    if (!this.ctx || !this.master || this.muted || !buf || buf === "failed") return;
+    const dur = 0.25 + Math.random() * 0.15;
+    const maxStart = Math.max(0, buf.duration - dur);
+    const offset = maxStart > 0 ? Math.random() * maxStart : 0;
+    const t0 = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 1 + (Math.random() - 0.5) * 0.16;
+    const g = this.ctx.createGain();
+    const vol = 0.045 + Math.random() * 0.015;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + 0.02);
+    g.gain.setValueAtTime(vol, t0 + Math.max(0.02, dur - 0.05));
+    g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(g);
+    g.connect(this.master);
+    src.start(t0, offset, dur);
+  }
   move() {}
 
   select() {
@@ -540,6 +655,8 @@ class SoundEngine {
 
   animal(kind: string) {
     this.ensure();
+    const sample = this.pickGroupSample(kind);
+    if (sample && this.playSample(sample, { gain: 0.10, rate: 1.0, rateJitter: 0.16, pan: (Math.random() - 0.5) * 0.3 })) return;
     switch (kind) {
       case "drubez":
         this.fm(340 + Math.random() * 40, 6.0, 0.8, 0.07, 0.08, "sine", 0);
@@ -569,6 +686,8 @@ class SoundEngine {
 
   animalPanic(kind: string) {
     this.ensure();
+    const sample = this.pickGroupSample(kind);
+    if (sample && this.playSample(sample, { gain: 0.16, rate: 1.15, rateJitter: 0.14, pan: (Math.random() - 0.5) * 0.4 })) return;
     switch (kind) {
       case "drubez":
         for (let i = 0; i < 4; i++) {
@@ -606,6 +725,8 @@ class SoundEngine {
 
   animalHappy(kind: string) {
     this.ensure();
+    const sample = this.pickGroupSample(kind);
+    if (sample && this.playSample(sample, { gain: 0.11, rate: 1.05, rateJitter: 0.16, pan: (Math.random() - 0.5) * 0.3 })) return;
     switch (kind) {
       case "drubez":
         this.fm(350, 5.0, 0.5, 0.10, 0.07, "sine", 0);

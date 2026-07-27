@@ -3,6 +3,8 @@ import type { AnimalDef } from "../../game/types";
 import { AnimalSprite } from "../sprites/AnimalSprite";
 import { PLAY_KIND, playKindFor } from "../../game/content/play";
 import { sound } from "../../audio/sound";
+import { Icon } from "../icons/Icon";
+import { EmojiIcon } from "../icons/emojiMap";
 
 // Lehká „ve světě" timing lišta dole přes obrazovku — zachyť okamžik ve správný
 // čas (uhýbání/trkání/mazlení). 3 kola, ke každému se něco poučného řekne.
@@ -74,11 +76,11 @@ export function PlayBar({ animal, onDone, onClose }: { animal: AnimalDef; onDone
           <div className="play-result">
             <AnimalSprite animal={animal} size={56} />
             <div>
-              <b>{good ? "Krásně jste si pohráli! 🎉" : "Trochu nešikovně, ale legrace byla!"}</b>
+              <b>{good ? <>Krásně jste si pohráli! <EmojiIcon emoji="🎉" size={17} /></> : "Trochu nešikovně, ale legrace byla!"}</b>
               <p>{def.win(animal)}</p>
             </div>
           </div>
-          <button className="big-btn" onClick={onDone}>Hotovo ✓</button>
+          <button className="big-btn" onClick={onDone}>Hotovo <Icon name="check" size={14} /></button>
         </div>
       </div>
     );
@@ -95,14 +97,14 @@ export function PlayBar({ animal, onDone, onClose }: { animal: AnimalDef; onDone
             <b>{def.title}</b>
             <p>{def.prompt}</p>
           </div>
-          <button className="play-x" onClick={onClose} aria-label="Zavřít">×</button>
+          <button className="play-x" onClick={onClose} aria-label="Zavřít"><Icon name="close" size={16} /></button>
         </div>
         <div className={`play-track ${res === true ? "good" : ""} ${res === false ? "bad" : ""}`}>
           <div className="play-zone" style={{ left: `${zoneLeft}%`, width: `${zoneWidth}%` }} />
           <div className="play-marker" style={{ left: `${pos * 100}%` }} />
         </div>
         <div className="play-foot">
-          <span className="play-rounds">Kolo {Math.min(round + 1, ROUNDS)}/{ROUNDS} · ✅ {hits}</span>
+          <span className="play-rounds">Kolo {Math.min(round + 1, ROUNDS)}/{ROUNDS} · <Icon name="check" size={13} /> {hits}</span>
           <button className="big-btn play-tap" onClick={tap}>Teď!</button>
         </div>
         <small className="play-hint">{def.hint}</small>

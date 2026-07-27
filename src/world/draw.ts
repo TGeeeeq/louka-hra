@@ -1,7 +1,7 @@
 import { MAP, TILE, TS } from "./tiles";
 import type { Season } from "../game/types";
 import { PADDOCKS, type InteractKind, type Interactable } from "./entities";
-import { prefersReducedMotion, quality } from "./perf";
+import { getQualityTier, prefersReducedMotion, quality } from "./perf";
 
 interface Pal {
   grass: string;
@@ -877,6 +877,118 @@ function drawStructure(ctx: CanvasRenderingContext2D, kind: InteractKind, x: num
   }
 }
 
+// =========================================================================
+//  MALOVANÝ PŘELAK STAVEB — sjednotí "vektorové" budovy s akvarelovým terénem
+//  (paintedWash/brushStrokes výše). Pár nepravidelných šmouh štětce ve stejném
+//  teple/chladu jako louka + jemné ztmavení (pooling pigmentu) podél siluety
+//  stavby. Peče se JEDNOU na kombinaci (druh stavby, w, h) do offscreen
+//  cache — druhů staveb je pár desítek a většina je ve hře unikátní (jedna
+//  chalupa, jeden kurník…), takže cache má v praxi jen několik málo malých
+//  bitmap. Za běhu tak stojí navíc jen jeden `drawImage` na stavbu/snímek,
+//  řádově levnější než samotné kreslení geometrie stavby (gradienty, oblouky).
+//  Deterministické (vlastní hash ze jména druhu — ŽÁDNÝ Math.random()), takže
+//  vzor šmouh je stabilní snímek od snímku i po znovunačtení.
+// =========================================================================
+function strSeed(s: string): () => number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  let seed = (h >>> 0) || 1;
+  return () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+}
+
+const structOverlayCache = new Map<string, { cv: HTMLCanvasElement; ox: number; oy: number }>();
+
+function buildStructureOverlay(kind: InteractKind, w: number, h: number): { cv: HTMLCanvasElement; ox: number; oy: number } {
+  const D = Math.max(12, w * 0.26);
+  const padT = Math.ceil(h * 1.3 + 14); // komín / hřeben střechy přesahuje nad y
+  const padR = Math.ceil(D + 16);       // 3D bok a přesah střechy vpravo
+  const padL = 10;
+  const padB = 10;
+  const ox = padL, oy = padT;
+  const cw = Math.ceil(w + padL + padR);
+  const ch = Math.ceil(h + padT + padB);
+
+  // 1) stavba se vykreslí do dočasného plátna jen kvůli siluetě (masce alfy).
+  //    time=0 → statická poloha ohně/kouře, nevadí, používá se jen tvar.
+  const base = document.createElement("canvas");
+  base.width = cw; base.height = ch;
+  const bc = base.getContext("2d")!;
+  drawStructure(bc, kind, ox, oy, w, h, 0);
+
+  // 2) siluetu převeď na plnou (teplou tmavou) barvu — alfa kanál = tvar stavby
+  bc.globalCompositeOperation = "source-in";
+  bc.fillStyle = "rgba(38,26,16,1)";
+  bc.fillRect(0, 0, cw, ch);
+  bc.globalCompositeOperation = "source-over";
+
+  // 3) mírně zmenšená (erodovaná) kopie siluety → rozdíl dá tenký lem u kraje
+  //    (klasický trik na "watercolor edge" bez nutnosti znát vektorový obrys)
+  const eroded = document.createElement("canvas");
+  eroded.width = cw; eroded.height = ch;
+  const ec = eroded.getContext("2d")!;
+  ec.translate(cw / 2, ch / 2);
+  ec.scale(0.93, 0.93);
+  ec.translate(-cw / 2, -ch / 2);
+  ec.drawImage(base, 0, 0);
+
+  const rim = document.createElement("canvas");
+  rim.width = cw; rim.height = ch;
+  const rc = rim.getContext("2d")!;
+  rc.drawImage(base, 0, 0);
+  rc.globalCompositeOperation = "destination-out";
+  rc.drawImage(eroded, 0, 0);
+
+  // 4) finální přelak: pár šmouh štětce (teplý/chladný tón — stejný slovník
+  //    jako paintedWash) + lem, vše nakonec ořízlé maskou siluety.
+  const ov = document.createElement("canvas");
+  ov.width = cw; ov.height = ch;
+  const oc = ov.getContext("2d")!;
+  const rnd = strSeed(`${kind}:${w}x${h}`);
+  const n = 4 + Math.floor(rnd() * 3); // 4–6 šmouh, ať je efekt subtilní
+  for (let i = 0; i < n; i++) {
+    const bx = padL + rnd() * w;
+    const by = padT + rnd() * h;
+    const r = Math.min(w, h) * (0.22 + rnd() * 0.22);
+    const warm = rnd() > 0.45;
+    const a = 0.04 + rnd() * 0.06; // nízká alfa (0.04–0.10) — subtilnost je záměr
+    const g = oc.createRadialGradient(bx, by, 0, bx, by, r);
+    g.addColorStop(0, warm ? `rgba(255,238,178,${a})` : `rgba(70,96,110,${a})`);
+    g.addColorStop(1, warm ? "rgba(255,238,178,0)" : "rgba(70,96,110,0)");
+    oc.fillStyle = g;
+    oc.fillRect(bx - r, by - r, r * 2, r * 2);
+  }
+  // okrajové ztmavení — pigment se u kraje malby hromadí (watercolor pooling)
+  oc.globalAlpha = 0.3;
+  oc.drawImage(rim, 0, 0);
+  oc.globalAlpha = 1;
+
+  // ořízni přelak jen na tvar stavby (jinak by šmouhy přesahovaly do vzduchu)
+  oc.globalCompositeOperation = "destination-in";
+  oc.drawImage(base, 0, 0);
+  oc.globalCompositeOperation = "source-over";
+
+  return { cv: ov, ox, oy };
+}
+
+function getStructureOverlay(kind: InteractKind, w: number, h: number) {
+  const key = `${kind}|${w}|${h}`;
+  let entry = structOverlayCache.get(key);
+  if (!entry) {
+    entry = buildStructureOverlay(kind, w, h);
+    structOverlayCache.set(key, entry);
+  }
+  return entry;
+}
+
+/** Vykreslí napečený akvarelový přelak nad již vykreslenou stavbou (respektuje
+ * aktuální ctx.globalAlpha volajícího — funguje i pro ducha/plán). Na "low"
+ * kvalitě se přeskočí (slabé zařízení), zbytek stavby zůstává beze změny. */
+function drawStructureOverlay(ctx: CanvasRenderingContext2D, kind: InteractKind, x: number, y: number, w: number, h: number) {
+  if (getQualityTier() === "low") return;
+  const entry = getStructureOverlay(kind, w, h);
+  ctx.drawImage(entry.cv, x - entry.ox, y - entry.oy);
+}
+
 export function drawBuilding(
   ctx: CanvasRenderingContext2D,
   it: Interactable,
@@ -911,6 +1023,7 @@ export function drawBuilding(
   }
 
   drawStructure(ctx, it.kind, x, y, w, h, time);
+  drawStructureOverlay(ctx, it.kind, x, y, w, h);
 
   // jmenovka
   ctx.font = '600 12px "Plus Jakarta Sans", sans-serif';
@@ -952,6 +1065,7 @@ export function drawGhost(
   ctx.save();
   ctx.globalAlpha = 0.35;
   drawStructure(ctx, it.kind, x, y, w, h, time);
+  drawStructureOverlay(ctx, it.kind, x, y, w, h);
   ctx.globalAlpha = 1;
   ctx.lineWidth = 2;
   ctx.setLineDash([6, 4]);
@@ -996,6 +1110,7 @@ export function drawBlueprint(
   // poloprůhledná silueta budoucí stavby
   ctx.globalAlpha = 0.22 + pulse * 0.08;
   drawStructure(ctx, it.kind, x, y, w, h, time);
+  drawStructureOverlay(ctx, it.kind, x, y, w, h);
   ctx.restore();
 
   // popiska „Postav: …"

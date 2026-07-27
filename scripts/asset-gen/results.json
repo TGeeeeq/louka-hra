@@ -1,0 +1,36 @@
+{
+  "f_hermanek": {
+    "prompt": "Hand-painted watercolor botanical illustration of a chamomile plant (Matricaria chamomilla), storybook herbarium style, single plant centered on plain cream background, hand-painted watercolor, storybook style, soft brush strokes, muted natural earth tones, moss green #2d5a3d, cream background #f7f2e7, terracotta accents, gentle children's book illustration, no text",
+    "seed": 912365187,
+    "raw": "/tmp/claude-1000/-home-tonyfg-Desktop-projekty-hra/05d604a2-e8c3-44e7-984b-052c8e30ae32/scratchpad/flux-prod/herbs/f_hermanek.png"
+  },
+  "f_rebricek": {
+    "prompt": "Hand-painted watercolor botanical illustration of a yarrow plant (Achillea millefolium), storybook herbarium style, single plant centered on plain cream background, hand-painted watercolor, storybook style, soft brush strokes, muted natural earth tones, moss green #2d5a3d, cream background #f7f2e7, terracotta accents, gentle children's book illustration, no text",
+    "seed": 1699578902,
+    "raw": "/tmp/claude-1000/-home-tonyfg-Desktop-projekty-hra/05d604a2-e8c3-44e7-984b-052c8e30ae32/scratchpad/flux-prod/herbs/f_rebricek.png"
+  },
+  "f_mesicek": {
+    "prompt": "Hand-painted watercolor botanical illustration of a pot marigold plant (Calendula officinalis), storybook herbarium style, single plant centered on plain cream background, hand-painted watercolor, storybook style, soft brush strokes, muted natural earth tones, moss green #2d5a3d, cream background #f7f2e7, terracotta accents, gentle children's book illustration, no text",
+    "error": "You have exceeded your free ZeroGPU quota (90s requested vs. 0s left). Try again in 0:00:00. Subscribe to Hugging Face PRO to get 40 min of ZeroGPU quota a day - https://huggingface.co/subscribe/pro?from=ZeroGPU"
+  },
+  "f_trezalka": {
+    "prompt": "Hand-painted watercolor botanical illustration of a St. John's wort plant (Hypericum perforatum), storybook herbarium style, single plant centered on plain cream background, hand-painted watercolor, storybook style, soft brush strokes, muted natural earth tones, moss green #2d5a3d, cream background #f7f2e7, terracotta accents, gentle children's book illustration, no text",
+    "error": "You have exceeded your free ZeroGPU quota (90s requested vs. 0s left). Try again in 0:00:00. Subscribe to Hugging Face PRO to get 40 min of ZeroGPU quota a day - https://huggingface.co/subscribe/pro?from=ZeroGPU"
+  },
+  "f_kopriva": {
+    "prompt": "Hand-painted watercolor botanical illustration of a stinging nettle plant (Urtica dioica), storybook herbarium style, single plant centered on plain cream background, hand-painted watercolor, storybook style, soft brush strokes, muted natural earth tones, moss green #2d5a3d, cream background #f7f2e7, terracotta accents, gentle children's book illustration, no text",
+    "error": "You have exceeded your free ZeroGPU quota (90s requested vs. 0s left). Try again in 0:00:00. Subscribe to Hugging Face PRO to get 40 min of ZeroGPU quota a day - https://huggingface.co/subscribe/pro?from=ZeroGPU"
+  },
+  "f_podbel": {
+    "prompt": "Hand-painted watercolor botanical illustration of a coltsfoot plant (Tussilago farfara), storybook herbarium style, single plant centered on plain cream background, hand-painted watercolor, storybook style, soft brush strokes, muted natural earth tones, moss green #2d5a3d, cream background #f7f2e7, terracotta accents, gentle children's book illustration, no text",
+    "error": "You have exceeded your free ZeroGPU quota (90s requested vs. 0s left). Try again in 0:00:00. Subscribe to Hugging Face PRO to get 40 min of ZeroGPU quota a day - https://huggingface.co/subscribe/pro?from=ZeroGPU"
+  },
+  "f_mata": {
+    "prompt": "Hand-painted watercolor botanical illustration of a peppermint plant (Mentha piperita), storybook herbarium style, single plant centered on plain cream background, hand-painted watercolor, storybook style, soft brush strokes, muted natural earth tones, moss green #2d5a3d, cream background #f7f2e7, terracotta accents, gentle children's book illustration, no text",
+    "error": "You have exceeded your free ZeroGPU quota (90s requested vs. 0s left). Try again in 0:00:00. Subscribe to Hugging Face PRO to get 40 min of ZeroGPU quota a day - https://huggingface.co/subscribe/pro?from=ZeroGPU"
+  },
+  "f_medunka": {
+    "prompt": "Hand-painted watercolor botanical illustration of a lemon balm plant (Melissa officinalis), storybook herbarium style, single plant centered on plain cream background, hand-painted watercolor, storybook style, soft brush strokes, muted natural earth tones, moss green #2d5a3d, cream background #f7f2e7, terracotta accents, gentle children's book illustration, no text",
+    "error": "You have exceeded your free ZeroGPU quota (90s requested vs. 0s left). Try again in 0:00:00. Subscribe to Hugging Face PRO to get 40 min of ZeroGPU quota a day - https://huggingface.co/subscribe/pro?from=ZeroGPU"
+  }
+}

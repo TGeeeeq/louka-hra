@@ -3,6 +3,7 @@ import { useGame } from "../store";
 import { SEASON_LABEL } from "../labels";
 import { sound, type TensionLevel } from "../../audio/sound";
 import { Icon } from "../icons/Icon";
+import { EmojiIcon } from "../icons/emojiMap";
 import { FULL_VERSION } from "../../game/content/fullVersion";
 import { grantFull, revokeFull } from "../../game/entitlement/entitlements";
 import {
@@ -74,7 +75,7 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
             checked={dev.godMode}
             onChange={() => dispatch({ type: "DEV_TOGGLE", key: "godMode" })}
           />
-          <span><b>💪 Godmód</b> — nesmrtelnost (plná energie, sytost, žízeň; žádný bankrot)</span>
+          <span><b><EmojiIcon emoji="💪" size={16} /> Godmód</b> — nesmrtelnost (plná energie, sytost, žízeň; žádný bankrot)</span>
         </label>
         <label className="dev-toggle">
           <input
@@ -82,12 +83,12 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
             checked={dev.turbo}
             onChange={() => dispatch({ type: "DEV_TOGGLE", key: "turbo" })}
           />
-          <span><b>⚡ Turbo pohyb</b> — postava chodí po mapě ~2,7× rychleji</span>
+          <span><b><EmojiIcon emoji="⚡" size={16} /> Turbo pohyb</b> — postava chodí po mapě ~2,7× rychleji</span>
         </label>
       </div>
 
       <div className="dev-section">
-        <div className="dev-label">⚡ Výkon</div>
+        <div className="dev-label"><EmojiIcon emoji="⚡" size={14} /> Výkon</div>
         <small className="dev-hint">
           {perf.fps.toFixed(0)} FPS · průměr {perf.avgMs.toFixed(1)} ms · p95{" "}
           {perf.p95Ms.toFixed(1)} ms · vykresleno {perf.drawn} objektů
@@ -112,7 +113,7 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
           <button onClick={() => dispatch({ type: "DEV_SKIP_PHASE" })}>▸ Další fáze</button>
           <button onClick={() => dispatch({ type: "DEV_SKIP_DAY" })}>⏭ Další den</button>
           <button onClick={() => dispatch({ type: "DEV_SKIP_SEASON" })}>
-            🗓️ Další období
+            <EmojiIcon emoji="📅" size={14} /> Další období
           </button>
         </div>
         <small className="dev-hint">
@@ -125,16 +126,16 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
         <div className="dev-label">Testovací pomůcky</div>
         <div className="dev-btn-row">
           <button onClick={() => dispatch({ type: "DEV_RESTOCK" })}>
-            📦 Doplnit zásoby + 5000 Kč
+            <EmojiIcon emoji="📦" size={14} /> Doplnit zásoby + 5000 Kč
           </button>
           <button onClick={() => dispatch({ type: "DEV_FOX" })}>
-            🦊 Posunout liščí příběh ({state.fox.stage}, důvěra {state.fox.trust})
+            <EmojiIcon emoji="🦊" size={14} /> Posunout liščí příběh ({state.fox.stage}, důvěra {state.fox.trust})
           </button>
         </div>
       </div>
 
       <div className="dev-section">
-        <div className="dev-label">🌾 Plná verze (testovací odemykání)</div>
+        <div className="dev-label"><EmojiIcon emoji="🌾" size={14} /> Plná verze (testovací odemykání)</div>
         <label className="dev-toggle">
           <input
             type="checkbox"
@@ -146,25 +147,25 @@ export function DevPanel({ onClose }: { onClose: () => void }) {
               })
             }
           />
-          <span><b>{FULL_VERSION.emoji} {FULL_VERSION.name}</b> — {FULL_VERSION.tagline}</span>
+          <span><b><EmojiIcon emoji={FULL_VERSION.emoji} size={16} /> {FULL_VERSION.name}</b> — {FULL_VERSION.tagline}</span>
         </label>
       </div>
 
       <div className="dev-section">
-        <div className="dev-label">🔊 Audio — napětí a motivy (poslechové QA)</div>
+        <div className="dev-label"><EmojiIcon emoji="🔊" size={14} /> Audio — napětí a motivy (poslechové QA)</div>
         <div className="dev-btn-row">
           {([0, 1, 2, 3] as const).map((t) => (
             <button key={t} className={tension === t ? "on" : ""} onClick={() => forceTension(t)}>
-              {["😌 klid", "⚠️ útěk", "🚨 poplach", "😮‍💨 úleva"][t]}
+              <EmojiIcon emoji={["😌", "⚠️", "🚨", "😮‍💨"][t]} size={14} /> {["klid", "útěk", "poplach", "úleva"][t]}
             </button>
           ))}
         </div>
         <div className="dev-btn-row">
-          <button onClick={() => sound.foxAlert()}>🦊 alert</button>
-          <button onClick={() => sound.foxTrustMotif(3)}>🦊 důvěra</button>
-          <button onClick={() => sound.foxLullaby()}>🦊 mazlení</button>
-          <button onClick={() => sound.lowEnergy()}>🥱 únava</button>
-          <button onClick={() => sound.questDone()}>🎉 quest</button>
+          <button onClick={() => sound.foxAlert()}><EmojiIcon emoji="🦊" size={14} /> alert</button>
+          <button onClick={() => sound.foxTrustMotif(3)}><EmojiIcon emoji="🦊" size={14} /> důvěra</button>
+          <button onClick={() => sound.foxLullaby()}><EmojiIcon emoji="🦊" size={14} /> mazlení</button>
+          <button onClick={() => sound.lowEnergy()}><EmojiIcon emoji="🥱" size={14} /> únava</button>
+          <button onClick={() => sound.questDone()}><EmojiIcon emoji="🎉" size={14} /> quest</button>
         </div>
       </div>
 

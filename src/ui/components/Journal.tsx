@@ -29,6 +29,29 @@ const CAT_ICON: Record<FactCategory, IconName> = {
   azyl: "home",
 };
 
+// Bylinné ilustrace (public/herbs/<id>.webp) dorazí postupně — dokud soubor
+// chybí, jednoduše nic nezobraz (přesně dosavadní vzhled deníku). Selhání se
+// pamatuje napříč rendery, ať se nezkouší donekonečna.
+const failedHerbThumbs = new Set<string>();
+
+function HerbThumb({ id }: { id: string }) {
+  const [broken, setBroken] = useState(() => failedHerbThumbs.has(id));
+  if (broken) return null;
+  return (
+    <img
+      className="fact-herb-thumb"
+      src={`${import.meta.env.BASE_URL}herbs/${id}.webp`}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      onError={() => {
+        failedHerbThumbs.add(id);
+        setBroken(true);
+      }}
+    />
+  );
+}
+
 const TAB_META: { id: Tab; label: string; icon: IconName }[] = [
   { id: "zvirata", label: "Zvířata", icon: "paw" },
   { id: "ukoly", label: "Úkoly", icon: "clipboard" },
@@ -169,7 +192,10 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
                   <div key={f.id} className={`fact-row ${known.has(f.id) ? "" : "locked"}`}>
                     {known.has(f.id) ? (
                       <>
-                        <b>{f.title}</b>
+                        <div className="fact-herb-head">
+                          {c === "byliny" && <HerbThumb id={f.id} />}
+                          <b>{f.title}</b>
+                        </div>
                         <p>{f.text}</p>
                         {f.more?.map((m, mi) => (
                           <p key={mi} className="fact-more">

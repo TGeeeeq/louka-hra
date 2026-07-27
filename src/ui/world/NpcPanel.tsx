@@ -9,13 +9,11 @@ export function NpcPanel({
   taught,
   mood,
   onPlay,
-  onClose,
 }: {
   person: PersonDef;
   taught: boolean;
   mood?: string;
   onPlay: () => void;
-  onClose: () => void;
 }) {
   const tips = person.tips ?? [];
   const [ti, setTi] = useState(0);
@@ -61,7 +59,6 @@ export function NpcPanel({
         <button className="big-btn" onClick={onPlay}>
           <Icon name="gamepad" size={18} /> {taught ? "Procvičit znovu" : "Pojď na to!"}
         </button>
-        <button className="ghost-btn" onClick={onClose}>Možná později</button>
       </div>
     </div>
   );

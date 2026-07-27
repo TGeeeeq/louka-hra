@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { sound } from "../../audio/sound";
+import { EmojiIcon } from "../icons/emojiMap";
 
 // Tonyho technika: spoj každý vynález s tím, co dělá. Učí, jaká technika
 // Louce reálně pomáhá (solár, pumpa, vyhřívaná napáječka, ohradník).
@@ -20,7 +21,7 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-export function TechFix({ onWin, onClose }: { onWin: () => void; onClose: () => void }) {
+export function TechFix({ onWin }: { onWin: () => void }) {
   const [rights] = useState(() => shuffle(GADGETS));
   const [sel, setSel] = useState<string | null>(null); // vybraný vynález (levý sloupec)
   const [done, setDone] = useState<string[]>([]);
@@ -52,16 +53,16 @@ export function TechFix({ onWin, onClose }: { onWin: () => void; onClose: () => 
   if (win) {
     return (
       <div className="mg">
-        <h3>🔌 Zapojeno!</h3>
+        <h3><EmojiIcon emoji="🔌" size={22} /> Zapojeno!</h3>
         <p className="mg-result">Všechno běží, jak má. S Tonyho vychytávkami si Louka skoro pomáhá sama — a tobě zbude víc sil na zvířata.</p>
-        <div className="mg-actions"><button className="big-btn" onClick={onWin}>Hotovo ⚡</button></div>
+        <div className="mg-actions"><button className="big-btn" onClick={onWin}>Hotovo <EmojiIcon emoji="⚡" size={15} /></button></div>
       </div>
     );
   }
 
   return (
     <div className="mg">
-      <p className="mg-q">Spoj vynález s tím, co umí 🔧</p>
+      <p className="mg-q">Spoj vynález s tím, co umí <EmojiIcon emoji="🔧" size={15} /></p>
       <p className="mg-progress">{done.length}/{GADGETS.length} zapojeno</p>
       <div className="tech-cols">
         <div className="tech-col">
@@ -72,7 +73,7 @@ export function TechFix({ onWin, onClose }: { onWin: () => void; onClose: () => 
               disabled={done.includes(g.id)}
               onClick={() => pickLeft(g.id)}
             >
-              <span className="tech-ico">{g.icon}</span>
+              <span className="tech-ico"><EmojiIcon emoji={g.icon} size={20} /></span>
               <b>{g.name}</b>
             </button>
           ))}
@@ -90,7 +91,6 @@ export function TechFix({ onWin, onClose }: { onWin: () => void; onClose: () => 
           ))}
         </div>
       </div>
-      <div className="mg-actions"><button className="ghost-btn" onClick={onClose}>Zavřít</button></div>
     </div>
   );
 }

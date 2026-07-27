@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ANIMAL_BY_ID } from "../../game/content/animals";
 import { AnimalSprite } from "../sprites/AnimalSprite";
 import { sound } from "../../audio/sound";
+import { EmojiIcon } from "../icons/emojiMap";
 
 interface Card {
   key: number;
@@ -57,10 +58,10 @@ export function AnimalMemory({ onWin, onClose }: { onWin: () => void; onClose: (
   if (allMatched) {
     return (
       <div className="mg">
-        <h3>🧠 Paráda!</h3>
+        <h3><EmojiIcon emoji="🧠" size={22} /> Paráda!</h3>
         <p className="mg-result">Všechny páry máš na {moves} tahů. Tony uznale píská — a hází pár korun do kasy.</p>
         <div className="mg-actions">
-          <button className="big-btn" onClick={onWin}>Vzít odměnu 💰</button>
+          <button className="big-btn" onClick={onWin}>Vzít odměnu <EmojiIcon emoji="💰" size={15} /></button>
         </div>
       </div>
     );
@@ -81,7 +82,7 @@ export function AnimalMemory({ onWin, onClose }: { onWin: () => void; onClose: (
                   <em>{a.name}</em>
                 </span>
               ) : (
-                <span className="mem-back">🐾</span>
+                <span className="mem-back"><EmojiIcon emoji="🐾" size={26} /></span>
               )}
             </button>
           );

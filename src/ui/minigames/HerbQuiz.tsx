@@ -13,10 +13,32 @@ function shuffle<T>(a: T[]): T[] {
   return r;
 }
 
+// Ilustrace bylin dorazí postupně (viz public/herbs/) — chybějící soubor se
+// tiše nahradí emoji, bez opakovaných 404 při dalších renderech.
+const failedHerbImgs = new Set<string>();
+
+function HerbThumb({ id }: { id: string }) {
+  const [broken, setBroken] = useState(() => failedHerbImgs.has(id));
+  if (broken) return <span className="mg-opt-emoji" aria-hidden>🌿</span>;
+  return (
+    <img
+      className="mg-opt-img"
+      src={`${import.meta.env.BASE_URL}herbs/${id}.webp`}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      onError={() => {
+        failedHerbImgs.add(id);
+        setBroken(true);
+      }}
+    />
+  );
+}
+
 const ROUNDS = 5;
 const PASS = 3;
 
-export function HerbQuiz({ onWin, onClose }: { onWin: () => void; onClose: () => void }) {
+export function HerbQuiz({ onWin }: { onWin: () => void }) {
   const { dispatch } = useGame();
   const questions = useMemo(() => shuffle(HERBS).slice(0, ROUNDS), []);
   const [i, setI] = useState(0);
@@ -42,10 +64,7 @@ export function HerbQuiz({ onWin, onClose }: { onWin: () => void; onClose: () =>
           {win ? (
             <button className="big-btn" onClick={onWin}>Vzít odměnu 🌿</button>
           ) : (
-            <>
-              <button className="big-btn" onClick={() => { setI(0); setScore(0); setPicked(null); }}>Zkusit znovu</button>
-              <button className="ghost-btn" onClick={onClose}>Zavřít</button>
-            </>
+            <button className="big-btn" onClick={() => { setI(0); setScore(0); setPicked(null); }}>Zkusit znovu</button>
           )}
         </div>
       </div>
@@ -77,7 +96,8 @@ export function HerbQuiz({ onWin, onClose }: { onWin: () => void; onClose: () =>
                 }
               }}
             >
-              🌿 {o.title}
+              <HerbThumb id={o.id} />
+              <span className="mg-opt-label">{o.title}</span>
             </button>
           );
         })}

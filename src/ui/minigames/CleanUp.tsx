@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type { FeedGroup } from "../../game/types";
 import { GROUP_LABEL } from "../labels";
 import { sound } from "../../audio/sound";
+import { Icon } from "../icons/Icon";
+import { EmojiIcon } from "../icons/emojiMap";
 
 // „Vyhrabej podestýlku" — špinavá místa naskakují, naťukej je dřív, než vyprší čas.
 const CELLS = 9;
@@ -15,7 +17,7 @@ function seed(): (string | null)[] {
   return cells;
 }
 
-export function CleanUp({ group, onWin, onClose }: { group: FeedGroup; onWin: () => void; onClose: () => void }) {
+export function CleanUp({ group, onWin }: { group: FeedGroup; onWin: () => void }) {
   const [dirty, setDirty] = useState<(string | null)[]>(seed);
   const [score, setScore] = useState(0);
   const [left, setLeft] = useState(TIME);
@@ -75,7 +77,7 @@ export function CleanUp({ group, onWin, onClose }: { group: FeedGroup; onWin: ()
     const win = phase === "win";
     return (
       <div className="mg">
-        <h3>{win ? "🧹 Uklizeno!" : "🙂 Skoro!"}</h3>
+        <h3><EmojiIcon emoji={win ? "🧹" : "🙂"} size={22} /> {win ? "Uklizeno!" : "Skoro!"}</h3>
         <p className="mg-result">
           {win
             ? `Podestýlka u ${GROUP_LABEL[group].toLowerCase()} je čistá a suchá. Zvířata budou zdravější a spokojenější.`
@@ -83,12 +85,9 @@ export function CleanUp({ group, onWin, onClose }: { group: FeedGroup; onWin: ()
         </p>
         <div className="mg-actions">
           {win ? (
-            <button className="big-btn" onClick={onWin}>Hotovo ✓</button>
+            <button className="big-btn" onClick={onWin}>Hotovo <Icon name="check" size={14} /></button>
           ) : (
-            <>
-              <button className="big-btn" onClick={reset}>Zkusit znovu</button>
-              <button className="ghost-btn" onClick={onClose}>Nechat být</button>
-            </>
+            <button className="big-btn" onClick={reset}>Zkusit znovu</button>
           )}
         </div>
       </div>
@@ -97,7 +96,10 @@ export function CleanUp({ group, onWin, onClose }: { group: FeedGroup; onWin: ()
 
   return (
     <div className="mg">
-      <p className="mg-progress">Úklid u {GROUP_LABEL[group].toLowerCase()} · ⏱ {left.toFixed(0)} s · 🧹 {score}/{TARGET}</p>
+      <p className="mg-progress">
+        Úklid u {GROUP_LABEL[group].toLowerCase()} · <EmojiIcon emoji="⏱" size={14} /> {left.toFixed(0)} s ·{" "}
+        <EmojiIcon emoji="🧹" size={14} /> {score}/{TARGET}
+      </p>
       <p className="mg-q">Naťukej špinavá místa, než se rozmáznou!</p>
       <div className="clean-grid">
         {dirty.map((d, i) => (
@@ -107,11 +109,10 @@ export function CleanUp({ group, onWin, onClose }: { group: FeedGroup; onWin: ()
             onClick={() => wipe(i)}
             aria-label={d ? "uklidit" : "čisto"}
           >
-            {d ?? ""}
+            {d && <EmojiIcon emoji={d} size={22} />}
           </button>
         ))}
       </div>
-      <button className="ghost-btn" onClick={onClose}>Nechat být</button>
     </div>
   );
 }

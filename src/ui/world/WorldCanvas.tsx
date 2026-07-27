@@ -35,6 +35,7 @@ import type { Facing } from "../sprites/PersonSprite";
 import { PEOPLE } from "../../game/content/people";
 import { consumeAction, input } from "../../world/input";
 import { sound } from "../../audio/sound";
+import { StructureActionBar } from "./StructureActionBar";
 
 /**
  * Rozestavěná stavba čekající na potvrzení — buď nová z katalogu (`new`),
@@ -1097,26 +1098,14 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
     <div className="world-wrap" ref={wrapRef}>
       <canvas ref={canvasRef} className="world-canvas" />
       {editMode && selected && !pending && (
-        <div className="build-select-bar">
-          {!moving ? (
-            <>
-              <span className="build-select-label">{BUILDABLE_BY_ID[selected.defId]?.label ?? selected.defId}</span>
-              <button className="build-select-btn move" onClick={() => setMoving(true)}>↔️ Přesunout</button>
-              <button
-                className="build-select-btn demolish"
-                onClick={() => { onDemolishStructure(selected.uid); setSelected(null); }}
-              >
-                🗑️ Zbořit
-              </button>
-              <button className="build-select-btn cancel" onClick={() => setSelected(null)} aria-label="Zrušit výběr">✕</button>
-            </>
-          ) : (
-            <>
-              <span className="build-select-label">Klepni na louku, kam ji přesunout</span>
-              <button className="build-select-btn cancel" onClick={() => setMoving(false)}>✕ Zrušit</button>
-            </>
-          )}
-        </div>
+        <StructureActionBar
+          mode="select"
+          label={BUILDABLE_BY_ID[selected.defId]?.label ?? selected.defId}
+          moving={moving}
+          onMove={() => setMoving(true)}
+          onDemolish={() => { onDemolishStructure(selected.uid); setSelected(null); }}
+          onCancel={() => { if (moving) setMoving(false); else setSelected(null); }}
+        />
       )}
     </div>
   );

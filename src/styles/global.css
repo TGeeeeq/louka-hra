@@ -105,6 +105,24 @@
 
   /* Zrno papíru — inline SVG (žádný externí obrázek), dlaždice 90×90. */
   --paper-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='90' height='90' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+
+  /* Vrstvení (z-index) — jedna škála pro věci, co soupeří o stejnou vrstvu
+     (HUD, lišty, dialog, modály, dev nástroje). Malá čísla (0,1,2,5…) uvnitř
+     izolovaných scén (louka/meadow s `isolation:isolate`, intro/menu) do téhle
+     škály záměrně nepatří — jsou to lokální vrstvy jen samy pro sebe, proto
+     zůstávají numerické. */
+  --z-hud: 20;
+  --z-touch: 22;
+  --z-actionbar: 30;
+  --z-popover: 40;
+  --z-select-bar: 41;
+  --z-place-bar: 42;
+  --z-dialog: 45;
+  --z-toast: 50;
+  --z-play-bar: 58;
+  --z-modal: 60;
+  --z-dev: 70;
+  --z-fade: 90;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -263,7 +281,7 @@ button:disabled { cursor: not-allowed; }
 .topbar {
   position: sticky;
   top: 0;
-  z-index: 30;
+  z-index: var(--z-actionbar);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -511,7 +529,7 @@ button:disabled { cursor: not-allowed; }
    ------------------------------------------------------------------------ */
 .build-panel {
   position: fixed; left: 8px; right: 8px; margin: 0 auto;
-  bottom: calc(var(--touch-pad) + env(safe-area-inset-bottom, 0px)); z-index: 30;
+  bottom: calc(var(--touch-pad) + env(safe-area-inset-bottom, 0px)); z-index: var(--z-actionbar);
   width: max-content; min-width: min(300px, calc(100vw - 16px)); max-width: min(720px, calc(100vw - 16px));
   display: flex; flex-direction: column; gap: 6px;
   background: var(--cream); border-radius: var(--r-lg); box-shadow: var(--shadow-lg);
@@ -562,7 +580,7 @@ button:disabled { cursor: not-allowed; }
 /* Lišta pro výběr/přesun/zboření existující stavby ve stavebním módu. */
 .build-select-bar {
   position: fixed; left: 8px; right: 8px; margin: 0 auto; width: fit-content;
-  bottom: calc(var(--touch-pad) + 14px + env(safe-area-inset-bottom, 0px)); z-index: 41;
+  bottom: calc(var(--touch-pad) + 14px + env(safe-area-inset-bottom, 0px)); z-index: var(--z-select-bar);
   display: flex; align-items: center; gap: 8px; background: var(--moss-deep); color: var(--cream);
   padding: 9px 12px; border-radius: 999px; box-shadow: var(--shadow-lg); font-size: 0.84rem; font-weight: 600;
   max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center;
@@ -585,7 +603,7 @@ button:disabled { cursor: not-allowed; }
      „sem to nejde", roste nahoru a šipky ani tlačítka se nehnou. */
   position: fixed; left: 8px; right: 8px; margin: 0 auto;
   width: min(340px, calc(100vw - 16px));
-  bottom: calc(var(--touch-pad) + 10px + env(safe-area-inset-bottom, 0px)); z-index: 42;
+  bottom: calc(var(--touch-pad) + 10px + env(safe-area-inset-bottom, 0px)); z-index: var(--z-place-bar);
   display: flex; flex-direction: column; gap: 4px; align-items: center;
   background: var(--moss-deep); color: var(--cream);
   padding: 7px 12px 8px; border-radius: var(--r); box-shadow: var(--shadow-lg);
@@ -687,6 +705,13 @@ button:disabled { cursor: not-allowed; }
 /* Doplňkové zajímavosti herbáře (Fact.more) */
 .fact-row p.fact-more { font-size: 0.74rem; color: var(--text-dim, #9db59f); font-style: italic; }
 .fact-row .lock { color: var(--muted); font-weight: 500; }
+/* Bylinná ilustrace u zajímavosti (public/herbs/<id>.webp) — dokud chybí,
+   HerbThumb nic nevykreslí a řádek vypadá přesně jako dnes. */
+.fact-herb-head { display: flex; align-items: center; gap: 8px; }
+.fact-herb-thumb {
+  display: block; width: 34px; height: 34px; flex-shrink: 0; object-fit: cover;
+  border-radius: 8px; border: 2px solid #fff; box-shadow: var(--shadow-sm); background: #fff;
+}
 
 .about { font-size: 0.88rem; max-height: 60vh; overflow-y: auto; }
 .about h3 { margin-bottom: 6px; }
@@ -709,6 +734,13 @@ button:disabled { cursor: not-allowed; }
 .fullver-hill-back { bottom: -30px; background: var(--moss-soft); opacity: 0.55; }
 .fullver-hill-front { bottom: -38px; background: var(--moss); }
 .fullver-flower { position: absolute; bottom: 6px; font-size: 1.1rem; }
+/* Ilustrovaný banner (public/ui/fullversion-banner.webp) přeleze CSS kopce,
+   jakmile načte — do té doby zůstává CSS náhrada beze změny (opacity 0). */
+.fullver-banner-img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  opacity: 0; transition: opacity 0.5s ease; border-radius: inherit;
+}
+.fullver-banner-img.on { opacity: 1; }
 .fullver-card {
   background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--r);
   padding: 14px; margin: 10px 0;
@@ -744,7 +776,7 @@ button:disabled { cursor: not-allowed; }
 
 /* ===== Modals ============================================================ */
 .modal-backdrop {
-  position: fixed; inset: 0; z-index: 60;
+  position: fixed; inset: 0; z-index: var(--z-modal);
   /* radiální scrim: pozornost do středu, okraje scény zůstanou tušené */
   background:
     radial-gradient(120% 100% at 50% 45%, rgba(26, 31, 28, 0.42) 0%, rgba(18, 26, 20, 0.68) 100%);
@@ -807,6 +839,17 @@ button:disabled { cursor: not-allowed; }
 
 .over-modal { text-align: center; max-width: 420px; }
 .over-modal h2 { font-size: 1.8rem; }
+/* Akvarelová scéna nad statistikami (public/ui/gameover.webp) — dokud chybí,
+   onError skryje wrap a modál vypadá přesně jako dnes. */
+.over-banner-wrap {
+  position: relative; margin: -4px -4px 14px; border-radius: var(--r); overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.over-banner-wrap img { display: block; width: 100%; height: 130px; object-fit: cover; }
+.over-banner-wrap::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to bottom, rgba(247, 242, 231, 0) 50%, var(--cream) 100%);
+}
 .over-msg { margin: 10px 0 16px; color: var(--text); }
 .over-stats { display: flex; justify-content: center; gap: 22px; margin-bottom: 18px; }
 .over-stats div { display: flex; flex-direction: column; }
@@ -816,7 +859,7 @@ button:disabled { cursor: not-allowed; }
 /* ===== Toast ============================================================= */
 .toast {
   position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
-  z-index: 50; max-width: 440px; width: calc(100% - 32px);
+  z-index: var(--z-toast); max-width: 440px; width: calc(100% - 32px);
   background: var(--surface); border-radius: var(--r); box-shadow: var(--shadow-lg);
   padding: 12px 16px; cursor: pointer; border-left: 5px solid var(--moss);
   animation: rise 0.22s ease;
@@ -1024,7 +1067,7 @@ button:disabled { cursor: not-allowed; }
 
 /* měkký nástup do světa po startu hry */
 .game-fade-in {
-  position: absolute; inset: 0; z-index: 90; pointer-events: none;
+  position: absolute; inset: 0; z-index: var(--z-fade); pointer-events: none;
   background: linear-gradient(#dcf1e4 0%, #a9d68f 55%, #8cc270 100%);
   animation: game-fade 0.7s ease 0.05s forwards;
 }
@@ -1168,7 +1211,7 @@ button:disabled { cursor: not-allowed; }
 
 /* --- HUD horní lišta --- */
 .hud-stack {
-  position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+  position: absolute; top: 0; left: 0; right: 0; z-index: var(--z-hud);
   display: flex; flex-direction: column; pointer-events: none;
 }
 /* HUD = plovoucí ostrůvky z ručáku nad canvasem, ne jedna tmavá lišta.
@@ -1334,7 +1377,7 @@ button:disabled { cursor: not-allowed; }
 
 /* --- Phase / sleep tlačítko --- */
 .phase-fab {
-  position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 20;
+  position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: var(--z-hud);
   background: linear-gradient(165deg, #f7f0ab, var(--accent)); color: #43380e;
   font-weight: 700; font-size: 1rem; letter-spacing: 0.01em;
   padding: 11px 24px; border-radius: 999px;
@@ -1358,7 +1401,7 @@ button:disabled { cursor: not-allowed; }
 
 /* --- Batoh popover --- */
 .bag-pop {
-  position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,0.25); display: flex; align-items: flex-start; justify-content: center;
+  position: fixed; inset: 0; z-index: var(--z-popover); background: rgba(0,0,0,0.25); display: flex; align-items: flex-start; justify-content: center;
   padding-top: calc(70px + env(safe-area-inset-top, 0px));
   padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -1371,7 +1414,7 @@ button:disabled { cursor: not-allowed; }
 
 /* --- Dialog box (Pokémon styl) --- */
 .dialog-layer {
-  position: fixed; inset: 0; z-index: 45; display: flex; align-items: flex-end;
+  position: fixed; inset: 0; z-index: var(--z-dialog); display: flex; align-items: flex-end;
   padding: 16px calc(16px + env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
 }
 .dialog-box {
@@ -1379,17 +1422,28 @@ button:disabled { cursor: not-allowed; }
   background: var(--cream); border: 4px solid var(--moss-deep); border-radius: 16px;
   padding: 16px 18px 14px; box-shadow: var(--shadow-lg); animation: rise 0.18s ease;
 }
+.dialog-head {
+  position: absolute; top: -20px; left: 16px; display: flex; align-items: center; gap: 8px;
+}
 .dialog-speaker {
-  position: absolute; top: -14px; left: 16px; background: var(--terracotta); color: #fff;
+  background: var(--terracotta); color: #fff;
   font-weight: 700; font-size: 0.82rem; padding: 2px 12px; border-radius: 999px; border: 2px solid var(--cream);
 }
+/* Portrét mluvčího — malý "papírový" medailon (akvarel styl), postavička
+   nebo skutečná stylizovaná fotka (Tomáš/Maruška/Tony), viz DialogBox. */
+.dialog-portrait {
+  flex: none; width: 40px; height: 40px; border-radius: 50%; overflow: hidden;
+  background: var(--cream); border: 3px solid var(--terracotta); box-shadow: var(--shadow-sm);
+  display: grid; place-items: center;
+}
+.dialog-portrait img, .dialog-portrait svg { display: block; width: 100%; height: 100%; object-fit: cover; }
 .dialog-text { font-size: 1.02rem; line-height: 1.45; color: var(--text); min-height: 1.4em; }
 .dialog-next { position: absolute; right: 14px; bottom: 8px; font-size: 0.8rem; font-weight: 700; color: var(--moss); animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: 0.3; } }
 
 /* --- Touch ovládání (mobil) --- */
 .touch-controls { display: none; }
-.dpad { position: fixed; left: calc(14px + env(safe-area-inset-left, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 22; width: 132px; height: 132px; }
+.dpad { position: fixed; left: calc(14px + env(safe-area-inset-left, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: var(--z-touch); width: 132px; height: 132px; }
 .dp {
   position: absolute; width: 44px; height: 44px; font-size: 1rem; color: var(--moss-deep);
   background: rgba(247,242,231,0.85); border-radius: 12px; box-shadow: var(--shadow); display: grid; place-items: center;
@@ -1400,7 +1454,7 @@ button:disabled { cursor: not-allowed; }
 .dp.right { left: 88px; top: 44px; }
 .dp.down { left: 44px; top: 88px; }
 .abtn {
-  position: fixed; right: calc(20px + env(safe-area-inset-right, 0px)); bottom: calc(34px + env(safe-area-inset-bottom, 0px)); z-index: 22; width: 68px; height: 68px; border-radius: 50%;
+  position: fixed; right: calc(20px + env(safe-area-inset-right, 0px)); bottom: calc(34px + env(safe-area-inset-bottom, 0px)); z-index: var(--z-touch); width: 68px; height: 68px; border-radius: 50%;
   background: var(--terracotta); color: #fff; font-size: 1.5rem; font-weight: 800; box-shadow: var(--shadow-lg);
 }
 .abtn:active { filter: brightness(1.12); transform: scale(0.96); }
@@ -1538,11 +1592,23 @@ button:disabled { cursor: not-allowed; }
 .mg-result { color: var(--text); }
 .mg-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .mg-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
-.mg-opt { padding: 12px; border-radius: var(--r-sm); background: var(--surface-alt); border: 2px solid var(--border); font-weight: 600; transition: all 0.12s ease; }
+.mg-opt {
+  padding: 12px; border-radius: var(--r-sm); background: var(--surface-alt); border: 2px solid var(--border);
+  font-weight: 600; transition: all 0.12s ease;
+  display: flex; align-items: center; gap: 9px; text-align: left;
+}
 .mg-opt:hover:not(:disabled) { border-color: var(--moss-soft); background: #fff; }
 .mg-opt.ok { background: #d6efce; border-color: var(--good); color: #2f6b2c; }
 .mg-opt.bad { background: #f3c8bd; border-color: var(--bad); color: #8a2f1c; }
 .mg-next { margin-top: 4px; }
+/* Bylinná ilustrace v kvízu — rámovaná akvarelová kartička; dokud obrázek
+   (public/herbs/<id>.webp) nedorazí, HerbThumb tiše vykreslí emoji náhradu. */
+.mg-opt-img {
+  display: block; width: 42px; height: 42px; flex-shrink: 0; object-fit: cover;
+  border-radius: 8px; border: 2px solid #fff; box-shadow: var(--shadow-sm); background: #fff;
+}
+.mg-opt-emoji { display: inline-flex; width: 42px; flex-shrink: 0; justify-content: center; font-size: 1.5rem; line-height: 1; }
+.mg-opt-label { flex: 1; }
 
 /* sekání dřeva */
 .chop-bar { position: relative; width: 100%; height: 38px; background: var(--surface-alt); border: 2px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
@@ -1610,7 +1676,7 @@ button:disabled { cursor: not-allowed; }
 
 /* přátelský souboj / mazlení — lišta dole přes svět */
 .play-bar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 58;
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: var(--z-play-bar);
   display: flex; justify-content: center; pointer-events: none;
   padding: 12px calc(12px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px));
   animation: rise 0.2s ease;
@@ -1624,7 +1690,7 @@ button:disabled { cursor: not-allowed; }
 .play-copy { flex: 1; }
 .play-copy b { font-family: var(--font-serif); color: var(--moss-deep); font-size: 1.05rem; }
 .play-copy p { font-size: 0.84rem; color: var(--text); line-height: 1.35; }
-.play-x { font-size: 1.5rem; line-height: 1; color: var(--muted); width: 30px; height: 30px; border-radius: 999px; flex-shrink: 0; }
+.play-x { display: grid; place-items: center; color: var(--muted); width: 30px; height: 30px; border-radius: 999px; flex-shrink: 0; }
 .play-x:hover { background: rgba(0,0,0,0.06); color: var(--text); }
 .play-track {
   position: relative; width: 100%; height: 40px; background: var(--surface-alt);
@@ -1692,7 +1758,7 @@ button:disabled { cursor: not-allowed; }
   position: fixed;
   right: calc(14px + env(safe-area-inset-right, 0px));
   bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  z-index: 60;
+  z-index: var(--z-modal); /* sdílí vrstvu s modály */
   width: 46px;
   height: 46px;
   border-radius: 50%;
@@ -1709,7 +1775,7 @@ button:disabled { cursor: not-allowed; }
   position: fixed;
   right: calc(14px + env(safe-area-inset-right, 0px));
   bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  z-index: 70;
+  z-index: var(--z-dev);
   width: min(340px, calc(100vw - 28px));
   max-height: min(78vh, 640px);
   overflow-y: auto;

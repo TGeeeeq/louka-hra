@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { sound } from "../../audio/sound";
+import { Icon } from "../icons/Icon";
+import { EmojiIcon } from "../icons/emojiMap";
 
 const NEED = 5;
 const MAX_TRY = 9;
 const ZONE_HALF = 0.1; // poloviční šířka zásahové zóny kolem středu
 
-export function ChopWood({ onWin, onClose }: { onWin: () => void; onClose: () => void }) {
+export function ChopWood({ onWin }: { onWin: () => void }) {
   const [pos, setPos] = useState(0);
   const [hits, setHits] = useState(0);
   const [tries, setTries] = useState(0);
@@ -65,18 +67,15 @@ export function ChopWood({ onWin, onClose }: { onWin: () => void; onClose: () =>
     const win = result === "win";
     return (
       <div className="mg">
-        <h3>{win ? "🪓 Pecka!" : "😅 Vedle."}</h3>
+        <h3><EmojiIcon emoji={win ? "🪓" : "😅"} size={22} /> {win ? "Pecka!" : "Vedle."}</h3>
         <p className="mg-result">
           {win ? "Trefil jsi to do špalku jako profík. Tomáš ti dává plnou náruč dřeva." : "Sekal jsi do prázdna. Zkus chytit rytmus."}
         </p>
         <div className="mg-actions">
           {win ? (
-            <button className="big-btn" onClick={onWin}>Vzít dřevo 🪵</button>
+            <button className="big-btn" onClick={onWin}>Vzít dřevo <Icon name="log" size={15} /></button>
           ) : (
-            <>
-              <button className="big-btn" onClick={reset}>Zkusit znovu</button>
-              <button className="ghost-btn" onClick={onClose}>Zavřít</button>
-            </>
+            <button className="big-btn" onClick={reset}>Zkusit znovu</button>
           )}
         </div>
       </div>
@@ -91,7 +90,7 @@ export function ChopWood({ onWin, onClose }: { onWin: () => void; onClose: () =>
         <div className="chop-zone" style={{ left: `${(0.5 - ZONE_HALF) * 100}%`, width: `${ZONE_HALF * 200}%` }} />
         <div className="chop-marker" style={{ left: `${pos * 100}%` }} />
       </div>
-      <button className="big-btn mg-next" onClick={chop}>🪓 Seknout!</button>
+      <button className="big-btn mg-next" onClick={chop}><Icon name="axe" size={16} /> Seknout!</button>
     </div>
   );
 }

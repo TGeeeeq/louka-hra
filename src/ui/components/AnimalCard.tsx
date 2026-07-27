@@ -9,6 +9,7 @@ import { MOOD_EMOJI, MOOD_LABEL, MOOD_TONE, bondTier } from "../../game/content/
 import { Icon, type IconName } from "../icons/Icon";
 import { EmojiIcon } from "../icons/emojiMap";
 import { useTween } from "../hud/useTween";
+import { Modal } from "./Modal";
 
 /** Malý ukazatel potřeby (kopíruje styl HUD StatBar). */
 function NeedBar({ icon, label, value, tone }: { icon: IconName; label: string; value: number; tone: string }) {
@@ -48,11 +49,7 @@ export function AnimalCard({ animal, onClose, onPlay }: { animal: AnimalDef; onC
   const photo = photoUrl(animal);
   const [photoOk, setPhotoOk] = useState(true);
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal animal-modal paper" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose} aria-label="Zavřít">
-          <Icon name="close" size={18} />
-        </button>
+    <Modal title={animal.name} onClose={onClose} className="animal-modal">
         <div className="animal-modal-top">
           <div className="animal-portrait">
             <AnimalSprite animal={animal} size={130} />
@@ -109,7 +106,6 @@ export function AnimalCard({ animal, onClose, onPlay }: { animal: AnimalDef; onC
             <button className="big-btn" onClick={onPlay}>{PLAY_KIND[playKind].cta}</button>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

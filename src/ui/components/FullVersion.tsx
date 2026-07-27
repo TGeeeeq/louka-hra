@@ -17,6 +17,8 @@ import { EmojiIcon } from "../icons/emojiMap";
 export function FullVersion({ demo = false }: { demo?: boolean }) {
   const { state, dispatch } = useGame();
   const [note, setNote] = useState<string | null>(null);
+  const [bannerImgLoaded, setBannerImgLoaded] = useState(false);
+  const [bannerImgFailed, setBannerImgFailed] = useState(false);
   const provider = getPurchaseProvider(state.dev.enabled);
   const owned = state.fullVersion;
 
@@ -45,6 +47,8 @@ export function FullVersion({ demo = false }: { demo?: boolean }) {
         </h3>
       )}
       <div className="fullver-banner" aria-hidden>
+        {/* CSS slunce+kopce zůstávají jako fallback, dokud nedorazí ilustrace
+            (public/ui/fullversion-banner.webp) — nemazat. */}
         <span className="fullver-sun" />
         <span className="fullver-hill fullver-hill-back" />
         <span className="fullver-hill fullver-hill-front" />
@@ -52,6 +56,17 @@ export function FullVersion({ demo = false }: { demo?: boolean }) {
         <span className="fullver-flower" style={{ left: "38%" }}><Icon name="wheat" size={20} /></span>
         <span className="fullver-flower" style={{ left: "58%" }}><Icon name="flower" size={18} /></span>
         <span className="fullver-flower" style={{ left: "78%" }}><Icon name="leaf" size={20} /></span>
+        {!bannerImgFailed && (
+          <img
+            className={`fullver-banner-img ${bannerImgLoaded ? "on" : ""}`}
+            src={`${import.meta.env.BASE_URL}ui/fullversion-banner.webp`}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            onLoad={() => setBannerImgLoaded(true)}
+            onError={() => setBannerImgFailed(true)}
+          />
+        )}
       </div>
 
       <p className="panel-lead">

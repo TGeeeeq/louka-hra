@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { sound } from "../../audio/sound";
+import { EmojiIcon } from "../icons/emojiMap";
 
 // Simon: ptáci zazpívají pořadí, ty ho zopakuješ. Vyřešení otevře bránu.
 const PADS = [
@@ -12,7 +13,7 @@ const LEN = 4;
 
 const randSeq = (n: number) => Array.from({ length: n }, () => Math.floor(Math.random() * 4));
 
-export function ForestGate({ onWin, onClose }: { onWin: () => void; onClose: () => void }) {
+export function ForestGate({ onWin }: { onWin: () => void }) {
   const [seq, setSeq] = useState<number[]>(() => randSeq(LEN));
   const [phase, setPhase] = useState<"watch" | "input" | "win" | "lose">("watch");
   const [lit, setLit] = useState(-1);
@@ -74,20 +75,19 @@ export function ForestGate({ onWin, onClose }: { onWin: () => void; onClose: () 
   if (phase === "win") {
     return (
       <div className="mg">
-        <h3>🚪 Brána povolila!</h3>
+        <h3><EmojiIcon emoji="🚪" size={22} /> Brána povolila!</h3>
         <p className="mg-result">Zopakoval jsi ptačí píseň správně. Cesta k hájku je volná — a čeká tam truhla se zásobami.</p>
-        <div className="mg-actions"><button className="big-btn" onClick={onWin}>Otevřít cestu 🌲</button></div>
+        <div className="mg-actions"><button className="big-btn" onClick={onWin}>Otevřít cestu <EmojiIcon emoji="🌲" size={15} /></button></div>
       </div>
     );
   }
   if (phase === "lose") {
     return (
       <div className="mg">
-        <h3>🙉 Skoro!</h3>
+        <h3><EmojiIcon emoji="🙉" size={22} /> Skoro!</h3>
         <p className="mg-result">Pořadí ti uteklo. Zaposlouchej se znovu.</p>
         <div className="mg-actions">
           <button className="big-btn" onClick={reset}>Poslechnout znovu</button>
-          <button className="ghost-btn" onClick={onClose}>Zavřít</button>
         </div>
       </div>
     );
@@ -95,7 +95,9 @@ export function ForestGate({ onWin, onClose }: { onWin: () => void; onClose: () 
 
   return (
     <div className="mg">
-      <p className="mg-q">{phase === "watch" ? "🎵 Poslouchej, jak ptáci zpívají…" : "Teď to zopakuj!"}</p>
+      <p className="mg-q">
+        {phase === "watch" ? <><EmojiIcon emoji="🎵" size={15} /> Poslouchej, jak ptáci zpívají…</> : "Teď to zopakuj!"}
+      </p>
       <div className="gate-pads">
         {PADS.map((pad, i) => (
           <button
@@ -105,7 +107,7 @@ export function ForestGate({ onWin, onClose }: { onWin: () => void; onClose: () 
             style={{ background: pad.c, opacity: lit === i ? 1 : 0.55, transform: lit === i ? "scale(1.06)" : "none" }}
             onClick={() => click(i)}
           >
-            {pad.name}
+            <EmojiIcon emoji={pad.name} size={28} />
           </button>
         ))}
       </div>

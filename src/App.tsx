@@ -34,6 +34,8 @@ import { currentStep, settledGroups, tutorialActive, tutorialTargets } from "./g
 import { invalidateGround } from "./world/draw";
 import { sound } from "./audio/sound";
 import { Icon, type IconName } from "./ui/icons/Icon";
+import { Modal, ConfirmDialog } from "./ui/components/Modal";
+import { StructureActionBar } from "./ui/world/StructureActionBar";
 import type { NpcId } from "./audio/sound";
 
 type Overlay = "shop" | "craft" | "denik" | "plna" | null;
@@ -130,35 +132,6 @@ function useGameSounds() {
       foxPet: !!state.tasksDone.fox_pet,
     };
   }, [state]);
-}
-
-function Overlay({
-  title,
-  icon,
-  onClose,
-  children,
-}: {
-  title: string;
-  icon?: IconName;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="overlay-modal paper" onClick={(e) => e.stopPropagation()}>
-        <div className="overlay-head">
-          <h2>
-            {icon && <Icon name={icon} size={22} className="overlay-ico" />}
-            {title}
-          </h2>
-          <button className="modal-close" onClick={onClose} aria-label="Zavřít">
-            <Icon name="close" size={18} />
-          </button>
-        </div>
-        <div className="overlay-body">{children}</div>
-      </div>
-    </div>
-  );
 }
 
 export default function App() {
@@ -401,9 +374,9 @@ export default function App() {
       <>
         <Intro onFullVersion={() => setOverlay("plna")} />
         {overlay === "plna" && (
-          <Overlay title="Plná verze" icon="wheat" onClose={() => setOverlay(null)}>
+          <Modal title="Plná verze" icon="wheat" onClose={() => setOverlay(null)}>
             <FullVersion />
-          </Overlay>
+          </Modal>
         )}
       </>
     );
@@ -644,91 +617,61 @@ export default function App() {
         />
       )}
       {pending && (
-        <div className="place-bar" role="dialog" aria-live="polite">
-          {/* Hlavička roste nahoru (lišta je ukotvená spodkem) a lišta má pevnou
-              šířku — hláška „sem to nejde" tak nikdy nepohne šipkami ani
-              tlačítky pod sebou. */}
-          <div className="place-bar-head">
-            {/* Název je v 1. pádu (katalog), tak ho nechávám vepředu — jinak by
-                z toho lezlo „Postavit Chalupa sem?". */}
-            <b>{pendingLabel}</b>
-            <span>— {pending.kind === "move" ? "přesunout" : "postavit"} sem?</span>
-            {pendingIssue && (
-              <span className="place-bar-warn">
-                <Icon name="warn" size={14} /> {pendingIssue.short}
-              </span>
-            )}
-          </div>
-          <div className="place-bar-row">
-            <div className="nudge-pad" role="group" aria-label="Posunout stavbu">
-              <button className="nudge up" aria-label="posunout nahoru" onClick={() => nudgePending(0, -1)}>
-                <Icon name="chevronUp" size={18} />
-              </button>
-              <button className="nudge left" aria-label="posunout vlevo" onClick={() => nudgePending(-1, 0)}>
-                <Icon name="chevronLeft" size={18} />
-              </button>
-              <button className="nudge right" aria-label="posunout vpravo" onClick={() => nudgePending(1, 0)}>
-                <Icon name="chevronRight" size={18} />
-              </button>
-              <button className="nudge down" aria-label="posunout dolů" onClick={() => nudgePending(0, 1)}>
-                <Icon name="chevronDown" size={18} />
-              </button>
-            </div>
-            <div className="place-bar-actions">
-              <button className="build-select-btn confirm" disabled={!pendingValid} onClick={commitPending}>
-                <Icon name="check" size={15} /> {pending.kind === "move" ? "Přesunout" : "Postavit"}
-              </button>
-              <button className="build-select-btn cancel" onClick={() => setPending(null)}>
-                <Icon name="close" size={15} /> Zrušit
-              </button>
-            </div>
-          </div>
-          <small className="place-bar-hint">Šipkami posuneš po dlaždicích · ťuknutím na louku přehodíš jinam</small>
-        </div>
+        // Název je v 1. pádu (katalog), tak ho nechávám vepředu — jinak by
+        // z toho lezlo „Postavit Chalupa sem?".
+        <StructureActionBar
+          mode="place"
+          label={pendingLabel}
+          kind={pending.kind}
+          issue={pendingIssue}
+          valid={pendingValid}
+          onNudge={nudgePending}
+          onConfirm={commitPending}
+          onCancel={() => setPending(null)}
+        />
       )}
       {/* přes přelet nad loukou repliku schovej — ukáže se až v záběru na Tomáše */}
       <DialogBox hidden={!!cinematic && !cinematic.talk} />
 
-      {overlay === "shop" && <Overlay title="Stánek" icon="stall" onClose={() => setOverlay(null)}><Shop /></Overlay>}
-      {overlay === "craft" && <Overlay title="Výroba" icon="tools" onClose={() => setOverlay(null)}><Craft /></Overlay>}
+      {overlay === "shop" && <Modal title="Stánek" icon="stall" onClose={() => setOverlay(null)}><Shop /></Modal>}
+      {overlay === "craft" && <Modal title="Výroba" icon="tools" onClose={() => setOverlay(null)}><Craft /></Modal>}
       {overlay === "denik" && (
-        <Overlay title="Deník" icon="book" onClose={() => setOverlay(null)}>
+        <Modal title="Deník" icon="book" onClose={() => setOverlay(null)}>
           <Journal onSelect={(a) => setSel(a)} />
-        </Overlay>
+        </Modal>
       )}
       {overlay === "plna" && (
-        <Overlay title="Plná verze" icon="wheat" onClose={() => { setOverlay(null); setDemoGateOpen(false); }}>
+        <Modal title="Plná verze" icon="wheat" onClose={() => { setOverlay(null); setDemoGateOpen(false); }}>
           <FullVersion demo={demoGateOpen} />
-        </Overlay>
+        </Modal>
       )}
 
       {npc && (
-        <Overlay title={PERSON_BY_ID[npc].name} onClose={() => setNpc(null)}>
+        <Modal title={PERSON_BY_ID[npc].name} onClose={() => setNpc(null)}>
           <NpcPanel
             person={PERSON_BY_ID[npc]}
             taught={!!state.flags[MG_REWARD[MG_FOR_NPC[npc]].flag]}
             mood={reactionFor(npc, { welfare: state.welfare, weather: state.weather, season: state.season, phase: state.phase, money: state.money })?.comment}
             onPlay={() => { setMinigame(MG_FOR_NPC[npc]); setNpc(null); }}
-            onClose={() => setNpc(null)}
           />
-        </Overlay>
+        </Modal>
       )}
       {minigame && (
-        <Overlay title={MG_TITLE[minigame]} icon={MG_ICON[minigame]} onClose={() => setMinigame(null)}>
-          {minigame === "herb" && <HerbQuiz onWin={() => winMinigame("herb")} onClose={() => setMinigame(null)} />}
-          {minigame === "chop" && <ChopWood onWin={() => winMinigame("chop")} onClose={() => setMinigame(null)} />}
-          {minigame === "tech" && <TechFix onWin={() => winMinigame("tech")} onClose={() => setMinigame(null)} />}
-        </Overlay>
+        <Modal title={MG_TITLE[minigame]} icon={MG_ICON[minigame]} onClose={() => setMinigame(null)}>
+          {minigame === "herb" && <HerbQuiz onWin={() => winMinigame("herb")} />}
+          {minigame === "chop" && <ChopWood onWin={() => winMinigame("chop")} />}
+          {minigame === "tech" && <TechFix onWin={() => winMinigame("tech")} />}
+        </Modal>
       )}
       {puzzle && (
-        <Overlay title="Lesní brána" icon="gate" onClose={() => setPuzzle(false)}>
-          <ForestGate onWin={solveGate} onClose={() => setPuzzle(false)} />
-        </Overlay>
+        <Modal title="Lesní brána" icon="gate" onClose={() => setPuzzle(false)}>
+          <ForestGate onWin={solveGate} />
+        </Modal>
       )}
       {clean && (
-        <Overlay title="Úklid u zvířat" icon="brush" onClose={() => setClean(null)}>
-          <CleanUp group={clean} onWin={winClean} onClose={() => setClean(null)} />
-        </Overlay>
+        <Modal title="Úklid u zvířat" icon="brush" onClose={() => setClean(null)}>
+          <CleanUp group={clean} onWin={winClean} />
+        </Modal>
       )}
 
       {play && <PlayBar animal={play} onDone={winPlay} onClose={() => setPlay(null)} />}
@@ -744,24 +687,17 @@ export default function App() {
       {devOpen && <DevPanel onClose={() => setDevOpen(false)} />}
 
       {exitConfirm && (
-        <div className="modal-backdrop" onClick={() => setExitConfirm(false)}>
-          <div className="modal confirm-modal paper" onClick={(e) => e.stopPropagation()}>
-            <h2>Opustit Louku?</h2>
-            <p>Postup je uložený.</p>
-            <div className="intro-actions">
-              <button
-                className="big-btn"
-                onClick={() => {
-                  flushSave();
-                  void exitApp();
-                }}
-              >
-                Ano, opustit
-              </button>
-              <button className="ghost-btn" onClick={() => setExitConfirm(false)}>Zpět</button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Opustit Louku?"
+          body="Postup je uložený."
+          confirmLabel="Ano, opustit"
+          cancelLabel="Zpět"
+          onConfirm={() => {
+            flushSave();
+            void exitApp();
+          }}
+          onCancel={() => setExitConfirm(false)}
+        />
       )}
     </div>
   );

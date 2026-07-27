@@ -11,6 +11,7 @@ import { SEASON_LABEL } from "../labels";
 import { sound } from "../../audio/sound";
 import { demoGateActive } from "../../platform";
 import { Icon } from "../icons/Icon";
+import { Modal, ConfirmDialog } from "./Modal";
 import type { PlayerProfile } from "../../game/types";
 
 type Stage = "af" | "choice" | "logo" | "outro" | "menu" | "creator";
@@ -454,12 +455,7 @@ export function Intro({ onFullVersion }: { onFullVersion?: () => void }) {
 
       {/* O Louce — příběh hry a průvodci (dřív rozházené po menu kartě) */}
       {about && (
-        <div className="modal-backdrop" onClick={() => setAbout(false)}>
-          <div className="modal about-modal paper" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setAbout(false)} aria-label="Zavřít">
-              <Icon name="close" size={18} />
-            </button>
-            <h2>O Louce</h2>
+        <Modal title="O Louce" onClose={() => setAbout(false)} className="about-modal">
             <p className="intro-text">
               Přijdeš na <b>zelenou louku</b> uprostřed lesů — a Tomáš tě provede od prvního kůlu.
               Postav si přístřešek, kuchyň, dílnu, chlívky i ohrady. Zvířátka už čekají na svůj domeček!
@@ -488,24 +484,19 @@ export function Intro({ onFullVersion }: { onFullVersion?: () => void }) {
               </a>
               ) — Licensed under Creative Commons: By Attribution 3.0
             </p>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Nová hra přes uložený postup — potvrzení, ať o něj hráč nepřijde omylem */}
       {confirmReset && (
-        <div className="modal-backdrop" onClick={() => setConfirmReset(false)}>
-          <div className="modal confirm-modal paper" onClick={(e) => e.stopPropagation()}>
-            <h2>Začít znovu?</h2>
-            <p className="intro-text">
-              Uložený postup (Den {state.day} · {SEASON_LABEL[state.season]}) se smaže a Louka začne od prvního dne.
-            </p>
-            <div className="intro-actions">
-              <button className="big-btn" onClick={() => { setConfirmReset(false); setStage("creator"); }}>Ano, začít znovu</button>
-              <button className="ghost-btn" onClick={() => setConfirmReset(false)}>Zpět</button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Začít znovu?"
+          body={`Uložený postup (Den ${state.day} · ${SEASON_LABEL[state.season]}) se smaže a Louka začne od prvního dne.`}
+          confirmLabel="Ano, začít znovu"
+          cancelLabel="Zpět"
+          onConfirm={() => { setConfirmReset(false); setStage("creator"); }}
+          onCancel={() => setConfirmReset(false)}
+        />
       )}
     </div>
   );
