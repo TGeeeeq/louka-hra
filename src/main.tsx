@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { GameProvider } from "./ui/store";
+import { RotateGate } from "./ui/components/RotateGate";
 import { bootstrapNative } from "./native";
 import { setupPwa } from "./pwa";
 import "./styles/global.css";
@@ -11,6 +12,9 @@ function render() {
     <StrictMode>
       <GameProvider>
         <App />
+        {/* Hra je naležato-only: na výšku leží přes všechno zámek orientace —
+            i nad rozehranou hrou, kdyby hráč telefon otočil během hraní. */}
+        <RotateGate />
       </GameProvider>
     </StrictMode>,
   );

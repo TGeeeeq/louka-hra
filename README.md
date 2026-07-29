@@ -94,6 +94,12 @@ projekt je ve složce `android/` (commitovaný do repa, kromě sestavovacích ar
 viz `android/.gitignore`). Orientace je natvrdo uzamčená na **landscape**
 (`android:screenOrientation="sensorLandscape"` v `android/app/src/main/AndroidManifest.xml`).
 
+Hra je **landscape-only** i na webu/PWA (manifest `orientation: "landscape"`).
+Kde zámek neplatí (prohlížeč, iOS), leží na výšku přes celou hru obrazovka
+`RotateGate` (`src/ui/components/RotateGate.tsx`) — animovaná výzva k otočení,
+která zároveň pozastaví intro; detekce a best-effort zámek jsou
+v `src/ui/orientation.ts`, UX spec v `design/ux/rotate-gate.md`.
+
 **Předpoklady:** [Android Studio](https://developer.android.com/studio) (obsahuje Android SDK)
 a Java 17+ (JDK).
 

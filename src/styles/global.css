@@ -1013,51 +1013,233 @@ button:disabled { cursor: not-allowed; }
 .stampede { transition: opacity 1.3s ease; }
 .stampede.out { opacity: 0; }
 
-/* volba orientace — místo direktivní výzvy si hráč vybere, jak hrát */
-.orient-splash { max-width: 480px; }
-.orient-eyebrow {
+/* Typografie úvodní obrazovky tvůrce postavy (dřív sdílená s volbou
+   orientace — ta padla, hra je naležato-only). */
+.cc-eyebrow {
   font-size: 0.68rem; font-weight: 600; letter-spacing: 0.24em; text-transform: uppercase;
   color: rgba(247, 242, 231, 0.55);
 }
-.orient-title { font-family: var(--font-serif); font-size: clamp(1.7rem, 5vw, 2.2rem); color: #f7f2e7; margin-top: 8px; }
-.orient-sub { margin-top: 8px; font-size: 0.88rem; color: rgba(247, 242, 231, 0.75); }
-.orient-cards { display: flex; gap: 14px; justify-content: center; margin-top: 24px; }
-.orient-card {
-  position: relative; width: 150px; padding: 20px 14px 16px; border-radius: 18px;
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  color: rgba(247, 242, 231, 0.85);
-  background: rgba(247, 242, 231, 0.06); border: 1px solid rgba(247, 242, 231, 0.22);
-  backdrop-filter: blur(4px);
-  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
-}
-.orient-card:hover { transform: translateY(-2px); border-color: rgba(247, 242, 231, 0.45); }
-.orient-card.on {
-  color: #fff; border-color: var(--accent); background: rgba(240, 232, 146, 0.12);
-  box-shadow: 0 0 0 1px var(--accent), 0 18px 36px -18px rgba(0, 0, 0, 0.6);
-}
-.orient-card b { font-size: 0.95rem; margin-top: 8px; }
-.orient-card small { font-size: 0.7rem; opacity: 0.75; line-height: 1.3; }
-.orient-badge {
-  position: absolute; top: -9px; left: 50%; transform: translateX(-50%);
-  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
-  background: var(--accent); color: var(--moss-deep); padding: 2px 10px; border-radius: 999px;
-}
-/* glyf telefonu — jen obrys, poměr stran napoví orientaci (výška bloku 64px) */
-.orient-glyph { border: 3px solid currentColor; border-radius: 8px; opacity: 0.9; }
-.orient-glyph.wide { width: 58px; height: 36px; margin: 11px 0; }
-.orient-glyph.tall { width: 36px; height: 58px; margin: 0; }
-.orient-go {
+.cc-title { font-family: var(--font-serif); font-size: clamp(1.7rem, 5vw, 2.2rem); color: #f7f2e7; margin-top: 8px; }
+.cc-lede { margin-top: 8px; font-size: 0.88rem; color: rgba(247, 242, 231, 0.75); }
+.cc-go {
   margin-top: 26px; padding: 13px 44px; border-radius: 999px;
   background: var(--cream); color: var(--moss-deep); font-weight: 700; font-size: 1rem;
   letter-spacing: 0.02em; box-shadow: 0 14px 34px -12px rgba(0, 0, 0, 0.55);
   transition: transform 0.14s ease, filter 0.14s ease;
 }
-.orient-go:hover { transform: translateY(-2px); filter: brightness(1.05); }
-.orient-card:focus-visible, .orient-go:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.cc-go:hover { transform: translateY(-2px); filter: brightness(1.05); }
+.cc-go:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ===== Zámek orientace (RotateGate) =====================================
+   Hra je naležato-only. Dokud je telefon na výšku, leží přes celou hru tahle
+   obrazovka: úsvit nad kopci (stejná scéna jako intro), doprostřed telefon,
+   který se sám otočí na šířku — a obraz louky uvnitř zůstane vzpřímený, takže
+   je vidět, že naležato se do rámu vejde celá. Načasování animací je jedno
+   společné (--rg-flip), ať oblouk, telefon i záře drží krok.
+   ======================================================================== */
+.rotate-gate {
+  --rg-flip: 4.4s;
+  position: fixed; inset: 0; z-index: 999; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0;
+  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right))
+           max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  text-align: center; color: var(--cream);
+  background: linear-gradient(#2a3a52 0%, #7a6a8a 45%, #c78a6a 78%, #8cc270 100%);
+  animation: rg-in 0.5s ease both;
+}
+@keyframes rg-in { from { opacity: 0; } to { opacity: 1; } }
+/* po otočení se neztrácí střihem, ale prolne do hry (viz OUT_MS) */
+.rotate-gate.out { animation: rg-out 0.44s ease forwards; pointer-events: none; }
+@keyframes rg-out { to { opacity: 0; transform: scale(1.03); } }
+
+/* --- scéna: slunce, kopce, pyly ----------------------------------------- */
+.rg-sky { position: absolute; inset: 0; pointer-events: none; }
+/* teplé podsvícení za telefonem — drží kompozici pohromadě, nedělá hnědý flek */
+.rg-sun {
+  position: absolute; left: 50%; top: 30%; width: 300px; height: 300px; margin: -150px 0 0 -150px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 243, 205, 0.8) 0%, rgba(255, 214, 130, 0.3) 44%, rgba(255, 211, 110, 0) 72%);
+  opacity: 0.55;
+}
+/* vinětace — prohloubí scénu, obsah nechá čistý (stejný trik jako v menu) */
+.rg-sky::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(115% 85% at 50% 42%, transparent 52%, rgba(24, 32, 40, 0.42) 100%);
+}
+/* „slice" místo „none": kopce si drží malovaný tvar a jen se odkrojí po
+   stranách — roztažené do výšky telefonu by z nich byly pilovité zuby */
+.rg-hills { position: absolute; left: -2%; right: -2%; width: 104%; bottom: 0; }
+.rg-hills.back { height: 24vh; opacity: 0.5; }
+.rg-hills.front { height: 17vh; opacity: 0.75; }
+.rg-mote {
+  position: absolute; bottom: 8%; border-radius: 50%; background: rgba(255, 245, 210, 0.75);
+  box-shadow: 0 0 10px 3px rgba(255, 235, 170, 0.35);
+  animation: rg-mote-rise linear infinite;
+}
+@keyframes rg-mote-rise {
+  0% { transform: translate(0, 0) scale(0.7); opacity: 0; }
+  18% { opacity: 0.9; }
+  100% { transform: translate(22px, -46vh) scale(1.15); opacity: 0; }
+}
+
+/* --- obsah -------------------------------------------------------------- */
+.rg-stage {
+  position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center;
+  max-width: 460px;
+}
+
+/* animace otáčení: rám se točí, obraz uvnitř se protáčí zpátky */
+.rg-anim {
+  position: relative; width: 224px; height: 224px; margin-bottom: 6px;
+  display: grid; place-items: center;
+  animation: rg-cycle var(--rg-flip) linear infinite;
+}
+/* v momentu „hotovo naležato" celý blok krátce zmizí a začne znovu z výšky —
+   je to čitelnější než zpětné otočení, které by hráče mátlo */
+@keyframes rg-cycle {
+  0%, 78% { opacity: 1; }
+  81%, 84% { opacity: 0; }
+  92%, 100% { opacity: 1; }
+}
+.rg-halo {
+  position: absolute; width: 260px; height: 260px; border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 226, 150, 0.42) 0%, rgba(255, 226, 150, 0) 68%);
+  opacity: 0; animation: rg-halo-pulse var(--rg-flip) ease-in-out infinite;
+}
+@keyframes rg-halo-pulse {
+  0%, 38% { opacity: 0; transform: scale(0.9); }
+  52% { opacity: 1; transform: scale(1.04); }
+  76%, 100% { opacity: 0; transform: scale(1); }
+}
+
+/* oblouk se šipkou — dokreslí se přesně v okamžiku otáčení telefonu */
+.rg-arc {
+  position: absolute; width: 224px; height: 224px; color: var(--gold);
+  animation: rg-arc-fade var(--rg-flip) ease infinite;
+}
+@keyframes rg-arc-fade {
+  0%, 12% { opacity: 0; }
+  20%, 46% { opacity: 1; }
+  62%, 100% { opacity: 0; }
+}
+.rg-arc-line {
+  stroke-dasharray: 250; stroke-dashoffset: 250;
+  animation: rg-arc-draw var(--rg-flip) cubic-bezier(0.5, 0, 0.2, 1) infinite;
+}
+@keyframes rg-arc-draw {
+  0%, 14% { stroke-dashoffset: 250; }
+  40%, 100% { stroke-dashoffset: 0; }
+}
+.rg-arc-tip { fill: currentColor; opacity: 0; animation: rg-tip var(--rg-flip) ease infinite; }
+@keyframes rg-tip {
+  0%, 32% { opacity: 0; }
+  40%, 100% { opacity: 1; }
+}
+
+.rg-phone {
+  position: relative; width: 108px; height: 190px; border-radius: 22px;
+  background: #1b2a20; border: 3px solid rgba(247, 242, 231, 0.92);
+  box-shadow: 0 22px 44px -16px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(31, 61, 42, 0.4);
+  animation: rg-flip var(--rg-flip) cubic-bezier(0.5, 0, 0.2, 1) infinite;
+}
+@keyframes rg-flip {
+  0%, 16% { transform: rotate(0deg) scale(1); }
+  40% { transform: rotate(-90deg) scale(1.05); }
+  46%, 82% { transform: rotate(-90deg) scale(1); }
+  82.6%, 100% { transform: rotate(0deg) scale(1); }
+}
+.rg-speaker {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  width: 26px; height: 3px; border-radius: 999px; background: rgba(247, 242, 231, 0.45);
+}
+.rg-screen { position: absolute; inset: 8px; border-radius: 15px; overflow: hidden; }
+/* obraz louky drží svět vzpřímený — proti-otočka přesně kopíruje rg-flip */
+.rg-screen-inner {
+  position: absolute; top: 50%; left: 50%; width: 196px; height: 196px; margin: -98px 0 0 -98px;
+  animation: rg-counter var(--rg-flip) cubic-bezier(0.5, 0, 0.2, 1) infinite;
+}
+@keyframes rg-counter {
+  0%, 16% { transform: rotate(0deg); }
+  40%, 82% { transform: rotate(90deg); }
+  82.6%, 100% { transform: rotate(0deg); }
+}
+.rg-mini { display: block; width: 100%; height: 100%; }
+
+/* --- text --------------------------------------------------------------- */
+.rg-eyebrow {
+  font-family: var(--font-serif); font-size: 0.72rem; font-weight: 700;
+  letter-spacing: 0.34em; text-transform: uppercase; color: var(--gold);
+  animation: rg-rise 0.6s var(--ease-out) 0.1s both;
+}
+.rg-title {
+  margin-top: 10px; font-size: clamp(1.55rem, 6.2vw, 2.05rem); color: var(--cream);
+  letter-spacing: 0.01em; text-shadow: 0 3px 22px rgba(20, 28, 22, 0.55);
+  animation: rg-rise 0.6s var(--ease-out) 0.18s both;
+}
+.rg-sub {
+  margin-top: 10px; font-size: 0.9rem; line-height: 1.5; max-width: 22em;
+  color: rgba(247, 242, 231, 0.82); text-shadow: 0 1px 10px rgba(20, 28, 22, 0.45);
+  animation: rg-rise 0.6s var(--ease-out) 0.26s both;
+}
+.rg-lock {
+  margin-top: 22px; padding: 12px 30px; border-radius: 999px;
+  background: linear-gradient(172deg, #fffdf6, var(--cream)); color: var(--moss-deep);
+  font-weight: 700; font-size: 0.92rem; letter-spacing: 0.06em;
+  box-shadow: inset 0 1px 0 #fff, 0 16px 34px -14px rgba(0, 0, 0, 0.6);
+  transition: transform 0.16s var(--ease-out), box-shadow 0.16s ease;
+  animation: rg-rise 0.6s var(--ease-out) 0.34s both;
+}
+.rg-lock:hover { transform: translateY(-2px); box-shadow: inset 0 1px 0 #fff, 0 22px 40px -14px rgba(0, 0, 0, 0.6), 0 0 26px rgba(217, 180, 94, 0.35); }
+.rg-lock:active { transform: translateY(0) scale(0.98); }
+.rg-lock:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.rg-hint {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 18px;
+  font-size: 0.74rem; letter-spacing: 0.04em; color: rgba(247, 242, 231, 0.6);
+  animation: rg-rise 0.6s var(--ease-out) 0.42s both;
+}
+.rg-dot {
+  width: 7px; height: 7px; border-radius: 999px; background: var(--gold);
+  box-shadow: 0 0 0 0 rgba(217, 180, 94, 0.55); animation: rg-ping 2s ease-out infinite;
+}
+@keyframes rg-ping {
+  0% { box-shadow: 0 0 0 0 rgba(217, 180, 94, 0.55); }
+  70%, 100% { box-shadow: 0 0 0 9px rgba(217, 180, 94, 0); }
+}
+.rg-foot {
+  position: absolute; left: 0; right: 0; bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 2; font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase;
+  color: rgba(247, 242, 231, 0.42);
+}
+@keyframes rg-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* nízké displeje naležato (a malé telefony): scéna se srazí, ať se text vejde */
+@media (max-height: 520px) {
+  .rg-anim { width: 168px; height: 168px; margin-bottom: 0; }
+  .rg-arc { width: 168px; height: 168px; }
+  .rg-phone { width: 84px; height: 148px; border-radius: 18px; }
+  .rg-halo { width: 190px; height: 190px; }
+  .rg-sub { display: none; }
+  .rg-foot { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* bez pohybu: telefon prostě LEŽÍ naležato a oblouk je dokreslený */
+  .rotate-gate, .rg-anim, .rg-halo, .rg-arc, .rg-arc-tip, .rg-mote,
+  .rg-eyebrow, .rg-title, .rg-sub, .rg-lock, .rg-hint, .rg-dot {
+    animation: none !important;
+  }
+  .rg-mote { display: none; }
+  .rg-halo { opacity: 0.5; }
+  .rg-arc, .rg-arc-tip { opacity: 1; }
+  .rg-arc-line { animation: none !important; stroke-dashoffset: 0; }
+  .rg-phone { animation: none !important; transform: rotate(-90deg); }
+  .rg-screen-inner { animation: none !important; transform: rotate(90deg); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .intro, .intro::before, .intro-sun, .intro-hills, .menu-hero, .menu-btn, .menu-foot,
-  .graze, .orient-splash, .runner, .runner-bob, .runner::after, .splash-logo, .splash-pen,
+  .graze, .runner, .runner-bob, .runner::after, .splash-logo, .splash-pen,
   .af-splash, .af-hero, .af-splash-sub { animation: none !important; transition: none !important; opacity: 1; }
   .splash-logo-img { animation: none !important; -webkit-mask-image: none; mask-image: none; }
   .intro { background: linear-gradient(#dcf1e4 0%, #a9d68f 55%, #8cc270 100%); }
@@ -1571,6 +1753,27 @@ button:disabled { cursor: not-allowed; }
 }
 .cc-variant.on { background: var(--accent); color: #2a2013; border-color: var(--accent); }
 .cc-actions { display: flex; gap: 14px; justify-content: center; align-items: center; margin-top: 22px; }
+/* Telefon naležato (nízký displej): tvůrce postavy se srazí a když je toho i
+   tak moc, scrolluje sám v sobě — na „Začít" se musí dát dosáhnout vždycky.
+   Bez toho ho `.intro { overflow: hidden }` odstřihne pod okrajem. */
+@media (max-height: 560px) {
+  .cc-screen {
+    max-height: calc(100vh - 36px); overflow-y: auto; overscroll-behavior: contain;
+    padding: 2px 4px 8px;
+  }
+  .cc-eyebrow, .cc-lede { display: none; }
+  .cc-title { font-size: 1.24rem; }
+  .cc-preview svg { height: min(168px, 30vh); width: auto; }
+  .cc-name { padding: 5px 12px; font-size: 0.92rem; }
+  .cc-body { margin-top: 8px; gap: 16px; }
+  .cc-controls { gap: 7px; }
+  .cc-presets { gap: 6px; }
+  .cc-preset { padding: 2px; border-radius: 11px; }
+  .cc-preset svg { height: 42px; width: auto; }
+  .cc-swatch { width: 23px; height: 23px; }
+  .cc-actions { margin-top: 10px; }
+  .cc-go { margin-top: 0; padding: 9px 28px; font-size: 0.9rem; }
+}
 .cc-actions .ghost-btn { color: rgba(247,242,231,0.8); }
 .cc-actions .ghost-btn:hover { background: rgba(255,255,255,0.1); }
 
@@ -1845,7 +2048,7 @@ button:disabled { cursor: not-allowed; }
 .build-select-btn,
 .build-chip,
 .nudge,
-.orient-go,
+.cc-go,
 .fullver-buy,
 .fullver-restore,
 .bag-item,
@@ -1871,7 +2074,7 @@ button:disabled { cursor: not-allowed; }
 .mg-opt:active:not(:disabled),
 .tech-node:active:not(:disabled),
 .build-select-btn:active,
-.orient-go:active,
+.cc-go:active,
 .bag-item:active,
 .enc-card:active,
 .task:active:not(:disabled),

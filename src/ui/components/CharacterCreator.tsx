@@ -64,9 +64,9 @@ export function CharacterCreator({
 
   return (
     <div className="intro-splash cc-screen">
-      <p className="orient-eyebrow">Nový začátek na Louce</p>
-      <h1 className="orient-title">Kdo se dnes stará o zvířata?</h1>
-      <p className="orient-sub">Vyber si podobu — na vzhledu Louce nezáleží, na srdci ano.</p>
+      <p className="cc-eyebrow">Nový začátek na Louce</p>
+      <h1 className="cc-title">Kdo se dnes stará o zvířata?</h1>
+      <p className="cc-lede">Vyber si podobu — na vzhledu Louce nezáleží, na srdci ano.</p>
 
       <div className="cc-body">
         <div className="cc-preview">
@@ -119,7 +119,7 @@ export function CharacterCreator({
 
       <div className="cc-actions">
         <button className="ghost-btn" onClick={onBack}>Zpět</button>
-        <button className="orient-go" onClick={() => onConfirm({ name: name.trim() || "Ty", appearance: app })}>
+        <button className="cc-go" onClick={() => onConfirm({ name: name.trim() || "Ty", appearance: app })}>
           Začít ▸
         </button>
       </div>

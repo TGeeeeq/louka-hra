@@ -10,12 +10,11 @@ import { CharacterCreator } from "./CharacterCreator";
 import { SEASON_LABEL } from "../labels";
 import { sound } from "../../audio/sound";
 import { demoGateActive } from "../../platform";
-import { Icon } from "../icons/Icon";
 import { Modal, ConfirmDialog } from "./Modal";
+import { isTouchDevice, tryLockLandscape, usePortraitBlocked } from "../orientation";
 import type { PlayerProfile } from "../../game/types";
 
-type Stage = "af" | "choice" | "logo" | "outro" | "menu" | "creator";
-type Orient = "landscape" | "portrait";
+type Stage = "af" | "logo" | "outro" | "menu" | "creator";
 
 // Zběsilá smečka úvodního přeběhu: dráha (bottom v %), velikost, tempo,
 // zpoždění a směr jsou ručně rozhozené, ať se zvířata míjejí a kříží.
@@ -120,32 +119,16 @@ const MENU_AT = OUTRO_AT + 1600;
 const AF_HOLD = 2000;
 const AF_FADE = 800;
 
-// Dotykové zařízení na výšku → nabídnout volbu, jak hrát (hra umí obojí,
-// naležato je ale pohodlnější). Desktop jde rovnou na intro.
-const needsChoice = () =>
-  typeof window !== "undefined" &&
-  window.matchMedia("(orientation: portrait)").matches &&
-  window.matchMedia("(pointer: coarse)").matches;
-
-// Volba „na šířku": zkusit fullscreen + zámek orientace. Best-effort —
-// iOS Safari neumí ani jedno, hra pak prostě běží tak, jak telefon drží.
-const tryLockLandscape = () => {
-  const el = document.documentElement as HTMLElement & { requestFullscreen?: () => Promise<void> };
-  const lock = () => {
-    const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
-    o?.lock?.("landscape").catch(() => {});
-  };
-  const fs = el.requestFullscreen?.();
-  if (fs) fs.then(lock).catch(lock);
-  else lock();
-};
-
 /**
- * Úvodní sekvence: (dotyk na výšku → volba orientace) → zvířecí stampede,
- * při které se štětcem „nakreslí" logo azylu → logo se rozpustí do východu
- * slunce → hlavní menu ve stejné scéně (plynulý crossfade, žádný střih).
+ * Úvodní sekvence: zvířecí stampede, při které se štětcem „nakreslí" logo
+ * azylu → logo se rozpustí do východu slunce → hlavní menu ve stejné scéně
+ * (plynulý crossfade, žádný střih).
  * Klik/klávesa přeskočí, prefers-reduced-motion jde rovnou na menu.
  * Vše CSS/SVG + jeden webp — žádné knihovny, žádné velké assety.
+ *
+ * Na výšku se intro NEROZJEDE: přes hru leží `RotateGate` a všechna zdejší
+ * načasování se drží, dokud hráč telefon neotočí — jinak by mu první záběr
+ * (znělka + malování loga) proběhl schovaný pod zámkem orientace.
  */
 export function Intro({ onFullVersion }: { onFullVersion?: () => void }) {
   const { state, dispatch } = useGame();
@@ -153,8 +136,9 @@ export function Intro({ onFullVersion }: { onFullVersion?: () => void }) {
   const reduced =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const [stage, setStage] = useState<Stage>(reduced ? "menu" : needsChoice() ? "choice" : "af");
-  const [orient, setOrient] = useState<Orient>("landscape");
+  const [stage, setStage] = useState<Stage>(reduced ? "menu" : "af");
+  // Telefon na výšku → intro se pozastaví (nad ním leží RotateGate).
+  const held = usePortraitBlocked();
   const [leaving, setLeaving] = useState(false);
   const [afLeaving, setAfLeaving] = useState(false);
   const [about, setAbout] = useState(false);
@@ -163,6 +147,7 @@ export function Intro({ onFullVersion }: { onFullVersion?: () => void }) {
   // Intro: nejdřív studiová znělka AF (crossfade do loga azylu), pak se v čase
   // OUTRO_AT logo rozpouští a scéna rozednívá, v MENU_AT nastoupí menu.
   useEffect(() => {
+    if (held) return; // na výšku se nic nerozjíždí — čeká se na otočení
     if (stage === "af") {
       sound.ensure();
       sound.ident();
@@ -184,12 +169,13 @@ export function Intro({ onFullVersion }: { onFullVersion?: () => void }) {
       const t = window.setTimeout(() => setStage("menu"), MENU_AT - OUTRO_AT);
       return () => window.clearTimeout(t);
     }
-  }, [stage]);
+  }, [stage, held]);
 
   // Jakýkoli klik/klávesa během intra skočí rovnou na menu. Schválně „click",
   // ne „pointerdown": menu by se jinak vykreslilo ještě před click fází a tentýž
   // ťuk by omylem zmáčkl tlačítko, které se objeví pod prstem.
   useEffect(() => {
+    if (held) return; // ťuknutí do zámku orientace nesmí přeskočit intro
     if (stage !== "af" && stage !== "logo" && stage !== "outro") return;
     const skip = () => setStage("menu");
     window.addEventListener("click", skip);
@@ -198,17 +184,21 @@ export function Intro({ onFullVersion }: { onFullVersion?: () => void }) {
       window.removeEventListener("click", skip);
       window.removeEventListener("keydown", skip);
     };
-  }, [stage]);
+  }, [stage, held]);
 
   // Menu téma (nahraný orchestrální track): spustí se při prvním gestu
   // uživatele (autoplay policy) — capture fáze, ať ho odchytí i přes
-  // stopPropagation() v confirmChoice. Nic nedělá, pokud je hudba vypnutá.
+  // stopPropagation() vnořených tlačítek. Nic nedělá, pokud je hudba vypnutá.
+  // Tentýž první dotek je zároveň jediná legální příležitost zamknout
+  // orientaci (fullscreen jde jen z gesta), ať telefon během hry nepřeklopí.
   useEffect(() => {
+    if (held) return; // pod zámkem orientace se hudba ani fullscreen neřeší
     let fired = false;
     const start = () => {
       if (fired) return;
       fired = true;
       sound.startMenuMusic();
+      if (isTouchDevice()) tryLockLandscape();
       window.removeEventListener("click", start, true);
       window.removeEventListener("keydown", start, true);
       window.removeEventListener("touchstart", start, true);
@@ -221,7 +211,7 @@ export function Intro({ onFullVersion }: { onFullVersion?: () => void }) {
       window.removeEventListener("keydown", start, true);
       window.removeEventListener("touchstart", start, true);
     };
-  }, []);
+  }, [held]);
 
   // Přechod do stage "menu" je druhá spouštěcí příležitost (kdyby k němu
   // došlo dřív než k prvnímu gestu — např. prefers-reduced-motion). Volání
@@ -230,16 +220,7 @@ export function Intro({ onFullVersion }: { onFullVersion?: () => void }) {
     if (stage === "menu") sound.startMenuMusic();
   }, [stage]);
 
-  const confirmChoice = (e: React.MouseEvent) => {
-    // nesmí probublat na window — skip listener intra by ho vzal jako „přeskoč"
-    e.stopPropagation();
-    sound.ensure();
-    sound.select();
-    if (orient === "landscape") tryLockLandscape();
-    setStage("af");
-  };
-
-  const start = (type: "START" | "RESET", profile?: PlayerProfile) => {
+  const start =(type: "START" | "RESET", profile?: PlayerProfile) => {
     sound.ensure();
     sound.stopMenuMusic(1.5);
     if (reduced) {
@@ -308,38 +289,6 @@ export function Intro({ onFullVersion }: { onFullVersion?: () => void }) {
 
       {stage === "creator" ? (
         <CharacterCreator initial={state.profile} onBack={() => setStage("menu")} onConfirm={finishCreator} />
-      ) : stage === "choice" ? (
-        <div className="intro-splash orient-splash">
-          <p className="orient-eyebrow">Nech mě růst uvádí</p>
-          <h1 className="orient-title">Jak chceš hrát?</h1>
-          <p className="orient-sub">Louku si nejlíp užiješ na šířku — ale je to na tobě.</p>
-          <div className="orient-cards" role="radiogroup" aria-label="Orientace obrazovky">
-            <button
-              className={`orient-card${orient === "landscape" ? " on" : ""}`}
-              role="radio"
-              aria-checked={orient === "landscape"}
-              onClick={() => setOrient("landscape")}
-            >
-              <span className="orient-badge">doporučeno</span>
-              <span className="orient-glyph wide" aria-hidden />
-              <b>Na šířku</b>
-              <small>celá Louka před tebou</small>
-            </button>
-            <button
-              className={`orient-card${orient === "portrait" ? " on" : ""}`}
-              role="radio"
-              aria-checked={orient === "portrait"}
-              onClick={() => setOrient("portrait")}
-            >
-              <span className="orient-glyph tall" aria-hidden />
-              <b>Na výšku</b>
-              <small>hraní jednou rukou</small>
-            </button>
-          </div>
-          <button className="orient-go" onClick={confirmChoice}>
-            Spustit <Icon name="chevronRight" size={17} />
-          </button>
-        </div>
       ) : stage === "menu" ? (
         <div className="menu-screen">
           {/* obloha: pomalu plující mraky + občasný pták — scéna dýchá */}
