@@ -54,7 +54,7 @@ export function TechFix({ onWin }: { onWin: () => void }) {
     return (
       <div className="mg">
         <h3><EmojiIcon emoji="🔌" size={22} /> Zapojeno!</h3>
-        <p className="mg-result">Všechno běží, jak má. S Tonyho vychytávkami si Louka skoro pomáhá sama — a tobě zbude víc sil na zvířata.</p>
+        <p className="mg-result">Všechno běží, jak má. S Tonyho vychytávkami si Louka skoro pomáhá sama — a tobě zbude víc sil na zvířata. Tony ti za pomoc přisypal pár korun.</p>
         <div className="mg-actions"><button className="big-btn" onClick={onWin}>Hotovo <EmojiIcon emoji="⚡" size={15} /></button></div>
       </div>
     );

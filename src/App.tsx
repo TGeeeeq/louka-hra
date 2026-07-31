@@ -65,10 +65,11 @@ const WELCOME_FLYOVER: CineShot[] = [
 const TOMAS_SHOT_EASE = 2.0;
 const MG_TITLE: Record<Minigame, string> = { herb: "Poznej bylinku", chop: "Naseč dřevo", tech: "Zapoj vynález" };
 const MG_ICON: Record<Minigame, IconName> = { herb: "leaf", chop: "axe", tech: "plug" };
-const MG_REWARD: Record<Minigame, { flag: string; first: RewardPayload; again: RewardPayload; speaker: string; msg: string }> = {
-  herb: { flag: "taught_maruska", first: { items: [{ item: "byliny", qty: 5 }] }, again: { items: [{ item: "byliny", qty: 1 }] }, speaker: "Maruška", msg: "Bylinkář se z tebe stává! Tahle hrst se hodí na mast." },
-  chop: { flag: "taught_tomas", first: { items: [{ item: "drevo", qty: 8 }] }, again: { items: [{ item: "drevo", qty: 2 }] }, speaker: "Tomáš", msg: "Máš v sobě sílu! Dřevo na zimu se vždycky hodí." },
-  tech: { flag: "taught_tony", first: { money: 120 }, again: { money: 20 }, speaker: "Tony", msg: "Zapojeno! Pár korun na další vychytávky — zasloužíš si." },
+// Odměna za minihru. Co se povedlo, hlásí výsledkový panel samotné minihry.
+const MG_REWARD: Record<Minigame, { flag: string; first: RewardPayload; again: RewardPayload }> = {
+  herb: { flag: "taught_maruska", first: { items: [{ item: "byliny", qty: 5 }] }, again: { items: [{ item: "byliny", qty: 1 }] } },
+  chop: { flag: "taught_tomas", first: { items: [{ item: "drevo", qty: 8 }] }, again: { items: [{ item: "drevo", qty: 2 }] } },
+  tech: { flag: "taught_tony", first: { money: 120 }, again: { money: 20 } },
 };
 const CEDULE_HELP = [
   "Vítej na Louce! 🌿 Chodíš šipkami / WASD (na mobilu křížem vlevo dole).",
@@ -388,8 +389,8 @@ export default function App() {
     sound.select();
     setClean(group);
   };
-  const winClean = () => {
-    if (clean) dispatch({ type: "CLEAN", group: clean });
+  const winClean = (factId: string) => {
+    if (clean) dispatch({ type: "CLEAN", group: clean, factId });
     setClean(null);
   };
 
@@ -407,7 +408,7 @@ export default function App() {
     const r = MG_REWARD[mg];
     const taught = !!state.flags[r.flag];
     dispatch({ type: "REWARD", ...(taught ? r.again : r.first), flag: r.flag });
-    dispatch({ type: "PUSH_DIALOG", speaker: r.speaker, lines: [r.msg] });
+    // Co se povedlo, hráč čte přímo ve výsledku minihry — dialog by to jen zopakoval.
     sound.questDone();
     setMinigame(null);
   };
@@ -416,7 +417,7 @@ export default function App() {
     openGate();
     invalidateGround();
     dispatch({ type: "SET_FLAG", key: "gate_open" });
-    dispatch({ type: "PUSH_DIALOG", speaker: "Louka", lines: ["Brána se rozevřela — k hájku teď vede volná cesta. 🌲"] });
+    // Otevření brány hlásí už výsledek minihry ForestGate.
     sound.build();
     setPuzzle(false);
   };

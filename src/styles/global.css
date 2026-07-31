@@ -1793,6 +1793,12 @@ button:disabled { cursor: not-allowed; }
 .mg-clue { font-family: var(--font-serif); font-style: italic; color: var(--moss-deep); font-size: 1.08rem; background: var(--surface-alt); padding: 12px; border-radius: var(--r); }
 .mg-q { font-weight: 700; }
 .mg-result { color: var(--text); }
+/* naučné faktum ve výsledku minihry — laděné stejně jako faktum v toastu */
+.mg-fact {
+  margin-top: 2px; padding-top: 10px; border-top: 1px solid var(--border);
+  text-align: left; width: 100%;
+}
+.mg-fact p { font-size: 0.82rem; color: var(--text); line-height: 1.45; }
 .mg-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .mg-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
 .mg-opt {

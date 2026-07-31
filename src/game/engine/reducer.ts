@@ -81,7 +81,8 @@ export type Action =
   | { type: "WATER" }
   | { type: "COLLECT_EGGS" }
   | { type: "SHEAR" }
-  | { type: "CLEAN"; group: FeedGroup }
+  // factId volí UI (aby mohlo faktum rovnou ukázat ve výsledku minihry)
+  | { type: "CLEAN"; group: FeedGroup; factId?: string }
   | { type: "PLAY"; animalId: string }
   | { type: "CHOP_WOOD" }
   | { type: "LIGHT_FIRE" }
@@ -483,12 +484,8 @@ function core(state: GameState, action: Action): GameState {
       s.tasksDone[`clean_${group}`] = true;
       s.welfare[group] = clamp(s.welfare[group] + WELFARE_CLEAN_GAIN, 0, 100);
       addLog(s, `Vyhrabal jsi podestýlku — u ${CLEAN_PLACE[group]} je čisto a sucho.`, "good");
-      flash(
-        s,
-        "Čisto a sucho. Zdravější zvířata, míň nemocí. 🧹",
-        "good",
-        learnFact(s, FACT_BY_ID[pick(CLEAN_FACTS)]),
-      );
+      // Výsledek i faktum ukazuje panel minihry (CleanUp) — žádný toast navíc.
+      learnFact(s, FACT_BY_ID[action.factId ?? pick(CLEAN_FACTS)]);
       return s;
     }
 
@@ -508,12 +505,8 @@ function core(state: GameState, action: Action): GameState {
       // Charaktery: okamžitý pocitový skok (bond + finální social se doladí v noci).
       if (s.animals[a.id]) s.animals[a.id].social = clamp(s.animals[a.id].social + SOCIAL_PLAY_INSTANT, 0, 100);
       addLog(s, `Pohrál sis s ${a.name} (${def.verb}).`, "good");
-      flash(
-        s,
-        firstToday ? def.win(a) : `${a.name} si s tebou zase rád(a) pohrál(a). 😊`,
-        "good",
-        firstToday ? learnFact(s, FACT_BY_ID[def.factId]) : undefined,
-      );
+      // Výsledek i faktum ukazuje panel minihry (PlayBar) — žádný toast navíc.
+      if (firstToday) learnFact(s, FACT_BY_ID[def.factId]);
       return s;
     }
 

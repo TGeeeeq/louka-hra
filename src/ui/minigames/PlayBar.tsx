@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import type { AnimalDef } from "../../game/types";
 import { AnimalSprite } from "../sprites/AnimalSprite";
 import { PLAY_KIND, playKindFor } from "../../game/content/play";
+import { FACT_BY_ID } from "../../game/content/facts";
 import { sound } from "../../audio/sound";
+import { useGame } from "../store";
 import { Icon } from "../icons/Icon";
 import { EmojiIcon } from "../icons/emojiMap";
+import { MgFact } from "./MgFact";
 
 // Lehká „ve světě" timing lišta dole přes obrazovku — zachyť okamžik ve správný
 // čas (uhýbání/trkání/mazlení). 3 kola, ke každému se něco poučného řekne.
@@ -13,6 +16,12 @@ const ROUNDS = 3;
 export function PlayBar({ animal, onDone, onClose }: { animal: AnimalDef; onDone: () => void; onClose: () => void }) {
   const kind = playKindFor(animal)!;
   const def = PLAY_KIND[kind];
+  const { state } = useGame();
+  // Stav se čte při otevření lišty — po dohrání už je zapsaný v reduceru.
+  const firstToday = useRef(!state.tasksDone[`play_${animal.id}`]);
+  const newFact = useRef(
+    firstToday.current && !state.knownFacts.includes(def.factId) ? FACT_BY_ID[def.factId] : undefined,
+  );
   const [round, setRound] = useState(0);
   const [hits, setHits] = useState(0);
   const [pos, setPos] = useState(0);
@@ -77,7 +86,8 @@ export function PlayBar({ animal, onDone, onClose }: { animal: AnimalDef; onDone
             <AnimalSprite animal={animal} size={56} />
             <div>
               <b>{good ? <>Krásně jste si pohráli! <EmojiIcon emoji="🎉" size={17} /></> : "Trochu nešikovně, ale legrace byla!"}</b>
-              <p>{def.win(animal)}</p>
+              <p>{firstToday.current ? def.win(animal) : `${animal.name} si s tebou zase rád(a) pohrál(a). 😊`}</p>
+              <MgFact fact={newFact.current} />
             </div>
           </div>
           <button className="big-btn" onClick={onDone}>Hotovo <Icon name="check" size={14} /></button>

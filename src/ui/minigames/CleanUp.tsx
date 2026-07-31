@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FeedGroup } from "../../game/types";
 import { GROUP_LABEL } from "../labels";
+import { CLEAN_FACTS, FACT_BY_ID } from "../../game/content/facts";
 import { sound } from "../../audio/sound";
+import { useGame } from "../store";
 import { Icon } from "../icons/Icon";
 import { EmojiIcon } from "../icons/emojiMap";
+import { MgFact } from "./MgFact";
 
 // „Vyhrabej podestýlku" — špinavá místa naskakují, naťukej je dřív, než vyprší čas.
 const CELLS = 9;
@@ -17,7 +20,11 @@ function seed(): (string | null)[] {
   return cells;
 }
 
-export function CleanUp({ group, onWin }: { group: FeedGroup; onWin: () => void }) {
+export function CleanUp({ group, onWin }: { group: FeedGroup; onWin: (factId: string) => void }) {
+  const { state } = useGame();
+  // Faktum vybírá minihra, aby ho mohla rovnou ukázat ve výsledku (reducer ho jen zapíše).
+  const factId = useMemo(() => CLEAN_FACTS[Math.floor(Math.random() * CLEAN_FACTS.length)], []);
+  const newFact = useRef(!state.knownFacts.includes(factId) ? FACT_BY_ID[factId] : undefined);
   const [dirty, setDirty] = useState<(string | null)[]>(seed);
   const [score, setScore] = useState(0);
   const [left, setLeft] = useState(TIME);
@@ -83,9 +90,10 @@ export function CleanUp({ group, onWin }: { group: FeedGroup; onWin: () => void 
             ? `Podestýlka u ${GROUP_LABEL[group].toLowerCase()} je čistá a suchá. Zvířata budou zdravější a spokojenější.`
             : `Stihl(a) jsi ${score} z ${TARGET} míst. Zkus to znovu, ať je hotovo.`}
         </p>
+        {win && <MgFact fact={newFact.current} />}
         <div className="mg-actions">
           {win ? (
-            <button className="big-btn" onClick={onWin}>Hotovo <Icon name="check" size={14} /></button>
+            <button className="big-btn" onClick={() => onWin(factId)}>Hotovo <Icon name="check" size={14} /></button>
           ) : (
             <button className="big-btn" onClick={reset}>Zkusit znovu</button>
           )}
