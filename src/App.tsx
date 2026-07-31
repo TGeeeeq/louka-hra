@@ -16,6 +16,7 @@ import { AnimalCard } from "./ui/components/AnimalCard";
 import { FlashToast } from "./ui/components/FlashToast";
 import { Intro } from "./ui/components/Intro";
 import { GameOver } from "./ui/components/GameOver";
+import { CLEAN_COST, PLAY_COST } from "./game/balance";
 import { ANIMAL_BY_ID } from "./game/content/animals";
 import { PERSON_BY_ID } from "./game/content/people";
 import { reactionFor } from "./game/content/npcReactions";
@@ -385,7 +386,8 @@ export default function App() {
   const paused = !!state.dialog || overlay !== null || !!sel || !!npc || !!minigame || puzzle || !!clean || !!play || !!state.gameOver;
 
   const openClean = (group: FeedGroup) => {
-    if (state.energy < 6) { dispatch({ type: "PUSH_DIALOG", speaker: "Tip", lines: ["Na úklid teď nemáš sílu. Nejdřív se najez a napij."] }); return; }
+    // Stejná cena jako v reduceru — jinak by šlo minihru dohrát a odměnu nedostat.
+    if (state.energy < CLEAN_COST(group)) { dispatch({ type: "PUSH_DIALOG", speaker: "Tip", lines: ["Na úklid teď nemáš sílu. Nejdřív se najez a napij."] }); return; }
     sound.select();
     setClean(group);
   };
@@ -395,7 +397,7 @@ export default function App() {
   };
 
   const openPlay = (a: AnimalDef) => {
-    if (state.energy < 4) { dispatch({ type: "PUSH_DIALOG", speaker: "Tip", lines: ["Na hraní teď nemáš sílu. Nejdřív se najez a napij."] }); return; }
+    if (state.energy < PLAY_COST) { dispatch({ type: "PUSH_DIALOG", speaker: "Tip", lines: ["Na hraní teď nemáš sílu. Nejdřív se najez a napij."] }); return; }
     setSel(null);
     setPlay(a);
   };

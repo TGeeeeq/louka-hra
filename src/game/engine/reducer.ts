@@ -15,6 +15,8 @@ import {
   STARTING_POPULATION,
   VET_BILL,
   WELFARE_CLEAN_GAIN,
+  CLEAN_COST,
+  PLAY_COST,
   WELFARE_FEED_GAIN,
   WELFARE_PLAY_GAIN,
   WELFARE_NIGHT_OPEN_PENALTY,
@@ -478,7 +480,7 @@ function core(state: GameState, action: Action): GameState {
       if (state.tasksDone[`clean_${group}`])
         return warnReturn(state, "Tady už je čisto a sucho.");
       const s = cloneState(state);
-      const cost = group === "drubez" ? 7 : 5;
+      const cost = CLEAN_COST(group);
       if (notEnoughEnergy(s, cost)) return s;
       s.energy -= cost;
       s.tasksDone[`clean_${group}`] = true;
@@ -495,9 +497,8 @@ function core(state: GameState, action: Action): GameState {
       const kind = playKindFor(a);
       if (!kind) return state;
       const s = cloneState(state);
-      const cost = 4;
-      if (notEnoughEnergy(s, cost)) return s;
-      s.energy -= cost;
+      if (notEnoughEnergy(s, PLAY_COST)) return s;
+      s.energy -= PLAY_COST;
       const def = PLAY_KIND[kind];
       const firstToday = !s.tasksDone[`play_${a.id}`];
       s.tasksDone[`play_${a.id}`] = true;

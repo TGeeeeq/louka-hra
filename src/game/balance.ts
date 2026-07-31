@@ -27,6 +27,12 @@ export const WELFARE_SKIP_FEED_PENALTY = 30; // když skupinu za den nenakrmíš
 export const WELFARE_NIGHT_OPEN_PENALTY = 18; // nezavřená zvířata v noci
 export const WELFARE_SICK_THRESHOLD = 25; // pod touto hranicí hrozí nemoc
 
+// Cena úklidu podestýlky. Sdílí ji reducer i UI, aby minihra nešla dohrát
+// s energií, na kterou pak akce nedosáhne.
+export const CLEAN_COST = (group: FeedGroup) => (group === "drubez" ? 7 : 5);
+// Cena pohrání si se zvířetem (PlayBar).
+export const PLAY_COST = 4;
+
 // Kolik žroutů má každá skupina (challenge: přes sto zvířat celkem).
 export const STARTING_POPULATION: Record<FeedGroup, number> = {
   drubez: 64, // slepice, husy, kachny, holubi
