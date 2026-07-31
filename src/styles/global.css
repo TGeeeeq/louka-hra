@@ -548,11 +548,14 @@ button:disabled { cursor: not-allowed; }
 .build-toggle em { margin-left: auto; font-style: normal; color: var(--muted); display: grid; }
 .bp-chev { transition: transform 0.16s var(--ease-out); }
 .bp-chev.open { transform: rotate(180deg); }
-.build-clear, .build-done {
+.build-clear, .build-done, .build-zoom {
   flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px;
   padding: 6px 11px; border-radius: 999px; font-size: 0.8rem; font-weight: 700;
   background: var(--surface-alt); border: 1px solid var(--border); color: var(--muted);
 }
+/* lupa: oddálí kameru, ať je při stavění vidět celá ohrada */
+.build-zoom { padding: 6px 9px; }
+.build-zoom.on { background: var(--moss); border-color: var(--moss-deep); color: var(--cream); }
 .build-done { background: var(--accent); border-color: var(--amber); color: #2a2013; }
 .build-done:hover { filter: brightness(1.05); }
 .build-tabs { margin-bottom: 0; overflow-x: auto; }

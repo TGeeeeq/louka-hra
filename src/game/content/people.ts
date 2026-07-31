@@ -96,3 +96,25 @@ export const PERSON_BY_ID: Record<string, PersonDef> = Object.fromEntries(
 
 // NPC, se kterými si můžeš povídat a hrát minihry (mimo hráče "ty").
 export const NPCS = ["tomas", "maruska", "tony"];
+
+// Když hráč postaví stavbu přímo na někoho, ten slušně uhne a něco prohodí.
+const STEP_ASIDE: Record<string, string[]> = {
+  tomas: [
+    "Hele, tady zrovna stojím! …no nic, uhnu.",
+    "Kdyby ses ptal, tak tenhle metr byl můj. 😄",
+  ],
+  maruska: [
+    "Jejda! Skoro jsi mě zazdil. Popojdu kousek.",
+    "Ty stavíš rychleji, než stačím uhýbat. 🙂",
+  ],
+  tony: [
+    "Pozor na kabely, člověče! Ustupuju.",
+    "Chvilku a měl jsem střechu nad hlavou. Tak jo, jdu vedle.",
+  ],
+};
+
+/** Hláška NPC, které muselo uhnout nové stavbě. */
+export function stepAsideLine(npcId: string): string {
+  const lines = STEP_ASIDE[npcId] ?? ["Uhýbám, uhýbám!"];
+  return lines[Math.floor(Math.random() * lines.length)];
+}

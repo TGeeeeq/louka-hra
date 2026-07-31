@@ -150,6 +150,8 @@ export default function App() {
   const [play, setPlay] = useState<AnimalDef | null>(null);
   const [devOpen, setDevOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  // Oddálená kamera ve stavebním módu — přepínač lupy v panelu stavění.
+  const [buildZoomOut, setBuildZoomOut] = useState(false);
   // Stavební mód: katalogové defId právě vybrané v BuildPanelu (null = zatím
   // nic, klepnutím na louku se pak vybírá existující stavba k přesunu/zboření).
   const [buildSelection, setBuildSelection] = useState<string | null>(null);
@@ -336,7 +338,7 @@ export default function App() {
     if (clean) { setClean(null); return true; }
     if (play) { setPlay(null); return true; }
     if (overlay) { setOverlay(null); setDemoGateOpen(false); return true; }
-    if (editMode) { setEditMode(false); return true; }
+    if (editMode) { setEditMode(false); setBuildZoomOut(false); return true; }
     return false;
   };
 
@@ -592,7 +594,7 @@ export default function App() {
         season={state.season} phase={state.phase} paused={paused} welfare={state.welfare} weather={state.weather} money={state.money} built={state.built}
         tutorialTargets={tutorialTargets(state)} settledGroups={settledGroups(state.built)} tutorial={tutorialActive(state)} turbo={state.dev.turbo}
         foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} appearance={state.profile.appearance}
-        structures={state.structures} editMode={buildModeOn} buildSelection={buildSelection}
+        structures={state.structures} editMode={buildModeOn} zoomedOut={buildZoomOut} buildSelection={buildSelection}
         cinematic={cinematic} onSkipCinematic={skipCinematic}
         onPlaceRequest={(defId, tx, ty) => setPending({ kind: "new", defId, tx, ty })}
         onMoveRequest={(uid, tx, ty) => {
@@ -604,7 +606,7 @@ export default function App() {
         onEditReject={(reason) => dispatch({ type: "PUSH_DIALOG", speaker: "Stavění", lines: [reason ?? "Sem se to nevejde — je tam les, voda nebo jiná stavba."] })}
         onInteract={onInteract} onEvent={onWorldEvent}
       />
-      <Hud onOpen={(p) => { if (p === "plna") setDemoGateOpen(false); setOverlay(p); }} onDevUnlock={unlockDev} editMode={editMode} onToggleEdit={() => setEditMode((v) => { const next = !v; if (!next) setBuildSelection(null); return next; })} />
+      <Hud onOpen={(p) => { if (p === "plna") setDemoGateOpen(false); setOverlay(p); }} onDevUnlock={unlockDev} editMode={editMode} onToggleEdit={() => setEditMode((v) => { const next = !v; if (!next) { setBuildSelection(null); setBuildZoomOut(false); } return next; })} />
       <Controls />
       {/* přes dotaz „postavit sem?" panel schovej — stavba je už vybraná a
           lišta s posunem/potvrzením potřebuje spodek obrazovky pro sebe */}
@@ -617,6 +619,8 @@ export default function App() {
           onSelect={setBuildSelection}
           restrictTo={restrictTo}
           onDone={editMode && !tut ? () => setEditMode(false) : undefined}
+          zoomedOut={buildZoomOut}
+          onToggleZoom={() => setBuildZoomOut((v) => !v)}
         />
       )}
       {pending && (

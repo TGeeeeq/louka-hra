@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { MAP, isSolidTile } from "../../world/tiles";
-import { AUTO_LAYOUT } from "./placement";
+import { AUTO_LAYOUT, footprintRect, occupancyOf, rectsOverlap } from "./placement";
 import { BUILDABLE_BY_ID } from "../content/buildables";
 import { WORLD_FEATURES, openGate } from "../../world/entities";
 describe("AUTO_LAYOUT fits the meadow", () => {
@@ -10,6 +10,26 @@ describe("AUTO_LAYOUT fits the meadow", () => {
       for (let dy = 0; dy < d.fh; dy++)
         for (let dx = 0; dx < d.fw; dx++)
           expect(isSolidTile(p.tx + dx, p.ty + dy)).toBe(false);
+    }
+  });
+  it("no core building stands on an authored point of interest", () => {
+    for (const p of AUTO_LAYOUT) {
+      const d = BUILDABLE_BY_ID[p.defId];
+      const foot = footprintRect(d, p.tx, p.ty);
+      for (const f of WORLD_FEATURES)
+        expect(
+          rectsOverlap(foot, { x0: f.tx, y0: f.ty, x1: f.tx + f.fw, y1: f.ty + f.fh }),
+          `${p.defId} × ${f.label}`,
+        ).toBe(false);
+    }
+  });
+  it("every pen stays inside the map", () => {
+    for (const p of AUTO_LAYOUT) {
+      const occ = occupancyOf(BUILDABLE_BY_ID[p.defId], p.tx, p.ty);
+      expect(occ.x0).toBeGreaterThanOrEqual(0);
+      expect(occ.y0).toBeGreaterThanOrEqual(0);
+      expect(occ.x1).toBeLessThanOrEqual(MAP.w);
+      expect(occ.y1).toBeLessThanOrEqual(MAP.h);
     }
   });
 });

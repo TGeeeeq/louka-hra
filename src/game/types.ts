@@ -222,6 +222,20 @@ export interface LogEntry {
 
 export type BuildCategory = "zaklad" | "upgrade" | "ohrada" | "dekorace";
 
+/**
+ * Ohrada (výběh) patřící ke stavbě — kreslí se kolem ní a stěhuje se s ní.
+ * `ox`/`oy` je posun levého horního rohu proti `tx`/`ty` stavby (obvykle záporný,
+ * protože stavba stojí uvnitř výběhu).
+ */
+export interface BuildablePen {
+  ox: number;
+  oy: number;
+  w: number;
+  h: number;
+  group: FeedGroup;
+  label: string;
+}
+
 /** Katalogová definice — CO lze postavit. */
 export interface Buildable {
   id: string;
@@ -233,6 +247,8 @@ export interface Buildable {
   cost: { money?: number; wood?: number };
   unique: boolean;
   solid: boolean;
+  /** Zvířecí příbytky si kolem sebe nesou výběh — zabírá místo při stavění. */
+  pen?: BuildablePen;
 }
 
 /** Instance — CO hráč postavil. */

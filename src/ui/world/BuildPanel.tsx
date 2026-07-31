@@ -33,6 +33,9 @@ interface Props {
   /** Ukončení stavebního módu — tlačítko „Hotovo" v hlavičce panelu.
    *  `undefined` v tutoriálu (odtamtud se odejít nedá). */
   onDone?: () => void;
+  /** Oddálená kamera — ať je vidět celý stavební prostor i s výběhem. */
+  zoomedOut: boolean;
+  onToggleZoom: () => void;
 }
 
 /** Cenovka stavby — ikonky mincí/dřeva, nebo „zdarma". */
@@ -57,7 +60,7 @@ function Price({ id, free }: { id: string; free: boolean }) {
   );
 }
 
-export function BuildPanel({ money, wood, structures, selection, onSelect, restrictTo, onDone }: Props) {
+export function BuildPanel({ money, wood, structures, selection, onSelect, restrictTo, onDone, zoomedOut, onToggleZoom }: Props) {
   const restrictCategory = restrictTo ? BUILDABLE_BY_ID[restrictTo]?.category : undefined;
   const [tab, setTab] = useState<BuildCategory>(restrictCategory ?? "zaklad");
   // Katalog je rozbalený jen když si hráč vybírá. Jakmile stavbu vybere,
@@ -115,6 +118,14 @@ export function BuildPanel({ money, wood, structures, selection, onSelect, restr
             <Icon name="close" size={14} />
           </button>
         )}
+        <button
+          className={zoomedOut ? "build-zoom on" : "build-zoom"}
+          onClick={onToggleZoom}
+          title={zoomedOut ? "Přiblížit kameru" : "Oddálit kameru — uvidíš celou ohradu"}
+          aria-pressed={zoomedOut}
+        >
+          <Icon name={zoomedOut ? "zoomIn" : "zoomOut"} size={16} />
+        </button>
         {onDone && (
           <button className="build-done" onClick={onDone}>
             <Icon name="check" size={14} /> Hotovo

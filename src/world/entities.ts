@@ -3,7 +3,7 @@ import { ANIMALS_BY_GROUP } from "../game/content/animals";
 import { NPCS } from "../game/content/people";
 import type { FeedGroup, Placed } from "../game/types";
 import { BUILDABLE_BY_ID } from "../game/content/buildables";
-import { rebuildInteractables } from "../game/build/placement";
+import { AUTO_LAYOUT, rebuildInteractables } from "../game/build/placement";
 import { COMPANION_ANIMAL_IDS } from "../game/balance";
 
 const SPAWN_TX = 45;
@@ -115,6 +115,8 @@ export function setStructures(structures: Placed[]) {
   INTERACTABLES.push(...built, ...WORLD_FEATURES);
   INTERACTABLE_BY_ID = Object.fromEntries(INTERACTABLES.map((i) => [i.id, i]));
   for (const it of INTERACTABLES) carveClearing(it.tx, it.ty, it.fw, it.fh, 1);
+  // Výběhy patří ke stavbám — po přesunu kurníku jde plot s ním.
+  PADDOCKS = paddocksFrom(structures);
 }
 
 // Od volného stavění (v0.12) smí hráč přesunout/zbořit VŠECHNY postavené
@@ -153,7 +155,9 @@ export function openGate() {
   for (const [gx, gy] of GATE_TILES) setTile(gx, gy, TILE.PATH);
 }
 
-// Výběhy (ohrady) zvířat — jen vizuální ploty, hráč jimi projde.
+// Výběhy (ohrady) zvířat — jen vizuální ploty, hráč jimi projde. Nejsou to
+// samostatné objekty: každý výběh patří ke svému příbytku (`Buildable.pen`),
+// takže se stěhuje spolu s ním a při stavění zabírá místo (viz occupancyOf).
 export interface Paddock {
   group: FeedGroup;
   label: string;
@@ -162,11 +166,33 @@ export interface Paddock {
   w: number;
   h: number;
 }
-export const PADDOCKS: Paddock[] = [
-  { group: "drubez", label: "Drůbeží výběh", tx: 30, ty: 27, w: 9, h: 8 },
-  { group: "prasata", label: "Prasečí výběh", tx: 33, ty: 37, w: 9, h: 8 },
-  { group: "stado", label: "Pastvina", tx: 48, ty: 34, w: 15, h: 10 },
-];
+
+function paddocksFrom(structures: Placed[]): Paddock[] {
+  const out: Paddock[] = [];
+  for (const s of structures) {
+    const pen = BUILDABLE_BY_ID[s.defId]?.pen;
+    if (!pen) continue;
+    out.push({ group: pen.group, label: pen.label, tx: s.tx + pen.ox, ty: s.ty + pen.oy, w: pen.w, h: pen.h });
+  }
+  return out;
+}
+
+// Výchozí rozvržení (nová hra se načteným AUTO_LAYOUTem) — přepíše ho první
+// `setStructures`. `let` schválně: importy drží živou vazbu, takže kreslení
+// i zvířata vidí aktuální výběhy bez dalšího předávání.
+export let PADDOCKS: Paddock[] = paddocksFrom(AUTO_LAYOUT);
+
+/** Hranice výběhu skupiny (world px), nebo `undefined` — ta skupina výběh nemá. */
+export function paddockBoundsFor(group: FeedGroup): Bounds | undefined {
+  const pad = PADDOCKS.find((p) => p.group === group);
+  if (!pad) return undefined;
+  return {
+    x0: (pad.tx + 0.6) * TS,
+    y0: (pad.ty + 0.6) * TS,
+    x1: (pad.tx + pad.w - 0.6) * TS,
+    y1: (pad.ty + pad.h - 0.6) * TS,
+  };
+}
 
 // Zahrádka — sem míří uprchlá zvířata.
 export const GARDEN = { x: (33 + 1) * TS, y: (12 + 1) * TS };
@@ -370,10 +396,7 @@ function buildSpawns(): AnimalSpawn[] {
     const list = ANIMALS_BY_GROUP[z.group].filter(
       (a) => z.group !== "mazlici" || !COMPANION_ANIMAL_IDS.includes(a.id),
     );
-    const pad = PADDOCKS.find((p) => p.group === z.group);
-    const bounds: Bounds | undefined = pad
-      ? { x0: (pad.tx + 0.6) * TS, y0: (pad.ty + 0.6) * TS, x1: (pad.tx + pad.w - 0.6) * TS, y1: (pad.ty + pad.h - 0.6) * TS }
-      : undefined;
+    const bounds = paddockBoundsFor(z.group);
     const cols = Math.ceil(Math.sqrt(list.length));
     const rows = Math.ceil(list.length / cols);
     list.forEach((a, i) => {

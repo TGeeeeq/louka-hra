@@ -1,77 +1,90 @@
-import type { Buildable, Placed } from "../types";
+import type { Buildable, BuildablePen, Placed } from "../types";
 
 type Footprint = { fw: number; fh: number };
 type FootprintOf = (defId: string) => Footprint;
 
+/** Obdélník v dlaždicích — `x1`/`y1` je první dlaždice ZA obdélníkem. */
+export interface Rect {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** Minimum z `Buildable`, které geometrie potřebuje znát. */
+export interface OccupancyDef {
+  fw: number;
+  fh: number;
+  pen?: BuildablePen;
+}
+
+type DefOf = (defId: string) => OccupancyDef | undefined;
+
 interface CanPlaceArgs {
   structures: Placed[];
   isSolid: (tx: number, ty: number) => boolean;
-  def: Footprint;
+  def: OccupancyDef;
   tx: number;
   ty: number;
-  footprintOf?: FootprintOf;
+  /** Katalog pro obálky už postavených staveb. Bez něj se překryv neřeší. */
+  defOf?: DefOf;
 }
 
-function overlaps(ax: number, ay: number, aw: number, ah: number, bx: number, by: number, bw: number, bh: number) {
-  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+/** Protínají se dva obdélníky? */
+export function rectsOverlap(a: Rect, b: Rect): boolean {
+  return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
 }
 
-export function canPlace(args: CanPlaceArgs): { ok: boolean; reason?: string } {
-  const { structures, isSolid, def, tx, ty, footprintOf } = args;
+/** Půdorys samotné stavby (bez výběhu). */
+export function footprintRect(def: OccupancyDef, tx: number, ty: number): Rect {
+  return { x0: tx, y0: ty, x1: tx + def.fw, y1: ty + def.fh };
+}
+
+/** Výběh stavby na dané pozici, nebo `null` (stavba žádný nemá). */
+export function penRect(def: OccupancyDef, tx: number, ty: number): Rect | null {
+  const p = def.pen;
+  if (!p) return null;
+  return { x0: tx + p.ox, y0: ty + p.oy, x1: tx + p.ox + p.w, y1: ty + p.oy + p.h };
+}
+
+/**
+ * Kolik místa stavba doopravdy zabere — půdorys i s výběhem. Tohle je jediný
+ * zdroj pravdy pro kolize při stavění: díky němu nejde postavit stánek doprostřed
+ * výběhu ani výběh přes stánek.
+ */
+export function occupancyOf(def: OccupancyDef, tx: number, ty: number): Rect {
+  const f = footprintRect(def, tx, ty);
+  const p = penRect(def, tx, ty);
+  if (!p) return f;
+  return {
+    x0: Math.min(f.x0, p.x0),
+    y0: Math.min(f.y0, p.y0),
+    x1: Math.max(f.x1, p.x1),
+    y1: Math.max(f.y1, p.y1),
+  };
+}
+
+export function canPlace(args: CanPlaceArgs): { ok: boolean; reason?: string; blocker?: Placed } {
+  const { structures, isSolid, def, tx, ty, defOf } = args;
+  // Les, voda a okraj mapy vadí jen pod samotnou stavbou — výběh je otevřená
+  // louka, kterou hráč projde, takže mu kraj hájku nevadí.
   for (let dy = 0; dy < def.fh; dy++)
     for (let dx = 0; dx < def.fw; dx++)
       if (isSolid(tx + dx, ty + dy)) return { ok: false, reason: "Sem stavět nejde." };
-  if (footprintOf) {
+  if (defOf) {
+    const mine = occupancyOf(def, tx, ty);
     for (const s of structures) {
-      const f = footprintOf(s.defId);
-      if (overlaps(tx, ty, def.fw, def.fh, s.tx, s.ty, f.fw, f.fh))
-        return { ok: false, reason: "Tady už něco stojí." };
+      const d = defOf(s.defId);
+      if (!d) continue;
+      if (rectsOverlap(mine, occupancyOf(d, s.tx, s.ty)))
+        return { ok: false, reason: "Tady už něco stojí.", blocker: s };
     }
   }
   return { ok: true };
 }
 
-// --- Dvorek zvířat ----------------------------------------------------------
-// Zvířecí příbytek si kolem sebe drží kus louky. Nejde tak postavit chlívek a
-// pak kolem něj obehnat ohradu pro někoho jiného ani nacpat dva výběhy na sebe
-// — každá parta zvířat musí mít svoje místo.
-
-/** Stavby, ve kterých bydlí zvířata (drží si dvorek). */
+/** Stavby, ve kterých bydlí zvířata (mají výběh). */
 export const ANIMAL_HOME_KINDS: readonly string[] = ["kurnik", "chlivek", "pastvina", "buda"];
-
-/** Kolik dlaždic kolem sebe si příbytek nárokuje. */
-export const HOME_CLAIM_MARGIN = 1;
-
-/** Minimum z `Buildable`, které pravidlo dvorku potřebuje znát. */
-export interface ClaimDef {
-  kind: string;
-  category: string;
-  fw: number;
-  fh: number;
-}
-
-interface ClaimArgs {
-  structures: Placed[];
-  defOf: (defId: string) => ClaimDef | undefined;
-  def: ClaimDef;
-  tx: number;
-  ty: number;
-}
-
-/** Zabírá tahle stavba dvorek nějakého příbytku? Vrací ten příbytek, jinak `null`. */
-export function claimedBy({ structures, defOf, def, tx, ty }: ClaimArgs): Placed | null {
-  // Dvorek respektují jen další příbytky a ohrady — studna, cedule nebo
-  // dekorace u výběhu nikomu nevadí.
-  const respects = ANIMAL_HOME_KINDS.includes(def.kind) || def.category === "ohrada";
-  if (!respects) return null;
-  const m = HOME_CLAIM_MARGIN;
-  for (const s of structures) {
-    const d = defOf(s.defId);
-    if (!d || !ANIMAL_HOME_KINDS.includes(d.kind)) continue;
-    if (overlaps(tx, ty, def.fw, def.fh, s.tx - m, s.ty - m, d.fw + m * 2, d.fh + m * 2)) return s;
-  }
-  return null;
-}
 
 export function structureAt(structures: Placed[], tx: number, ty: number, footprintOf: FootprintOf): Placed | null {
   for (const s of structures) {

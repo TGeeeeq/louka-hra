@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { canPlace, claimedBy, structureAt, hasBuilt, AUTO_LAYOUT, type ClaimDef } from "./placement";
+import {
+  AUTO_LAYOUT,
+  canPlace,
+  hasBuilt,
+  occupancyOf,
+  penRect,
+  rectsOverlap,
+  structureAt,
+  type OccupancyDef,
+} from "./placement";
+import { BUILDABLE_BY_ID } from "../content/buildables";
 import type { Placed } from "../types";
 
 const wall = new Set(["10,10"]); // one solid tile for tests
@@ -12,53 +22,74 @@ describe("canPlace", () => {
     expect(canPlace({ structures: [], isSolid, def: { fw: 1, fh: 1 }, tx: 5, ty: 5 }).ok).toBe(true);
   });
   it("rejects out of bounds", () => {
-    expect(canPlace({ structures: [], isSolid, def: { fw: 1, fh: 1 }, tx: 19, ty: 19, }).ok).toBe(true);
+    expect(canPlace({ structures: [], isSolid, def: { fw: 1, fh: 1 }, tx: 19, ty: 19 }).ok).toBe(true);
     expect(canPlace({ structures: [], isSolid, def: { fw: 2, fh: 2 }, tx: 19, ty: 19 }).ok).toBe(false);
   });
   it("rejects a solid tile under the footprint", () => {
     expect(canPlace({ structures: [], isSolid, def: { fw: 1, fh: 1 }, tx: 10, ty: 10 }).ok).toBe(false);
   });
   it("rejects overlap with an existing structure", () => {
-    const structures = [at("stanek", 5, 5)]; // fw/fh come from lookup below
-    expect(canPlace({ structures, isSolid, def: { fw: 1, fh: 1 }, tx: 5, ty: 5, footprintOf: () => ({ fw: 2, fh: 2 }) }).ok).toBe(false);
-    expect(canPlace({ structures, isSolid, def: { fw: 1, fh: 1 }, tx: 9, ty: 9, footprintOf: () => ({ fw: 2, fh: 2 }) }).ok).toBe(true);
+    const structures = [at("stanek", 5, 5)];
+    const defOf = () => ({ fw: 2, fh: 2 });
+    expect(canPlace({ structures, isSolid, def: { fw: 1, fh: 1 }, tx: 5, ty: 5, defOf }).ok).toBe(false);
+    expect(canPlace({ structures, isSolid, def: { fw: 1, fh: 1 }, tx: 9, ty: 9, defOf }).ok).toBe(true);
   });
 });
 
-describe("claimedBy (dvorek zvířat)", () => {
-  const DEFS: Record<string, ClaimDef> = {
-    chlivek: { kind: "chlivek", category: "zaklad", fw: 3, fh: 2 },
-    kurnik: { kind: "kurnik", category: "zaklad", fw: 3, fh: 2 },
-    plot: { kind: "cedule", category: "ohrada", fw: 1, fh: 1 },
-    studna: { kind: "studna", category: "upgrade", fw: 1, fh: 1 },
-    cedule_deko: { kind: "cedule", category: "dekorace", fw: 1, fh: 1 },
+describe("occupancyOf (stavba i s výběhem)", () => {
+  const kurnik: OccupancyDef = { fw: 3, fh: 2, pen: { ox: -4, oy: -3, w: 9, h: 8, group: "drubez", label: "Drůbeží výběh" } };
+
+  it("bez výběhu je obálka jen půdorys", () => {
+    expect(occupancyOf({ fw: 3, fh: 2 }, 5, 5)).toEqual({ x0: 5, y0: 5, x1: 8, y1: 7 });
+    expect(penRect({ fw: 3, fh: 2 }, 5, 5)).toBeNull();
+  });
+  it("s výběhem obálka obalí i ohradu", () => {
+    // kurník na 10,10 → ohrada 6..14 × 7..14
+    expect(occupancyOf(kurnik, 10, 10)).toEqual({ x0: 6, y0: 7, x1: 15, y1: 15 });
+    expect(penRect(kurnik, 10, 10)).toEqual({ x0: 6, y0: 7, x1: 15, y1: 15 });
+  });
+  it("obálka se posouvá spolu se stavbou", () => {
+    const a = occupancyOf(kurnik, 10, 10);
+    const b = occupancyOf(kurnik, 13, 12);
+    expect(b.x0 - a.x0).toBe(3);
+    expect(b.y0 - a.y0).toBe(2);
+  });
+});
+
+describe("kolize s výběhem", () => {
+  const DEFS: Record<string, OccupancyDef> = {
+    kurnik: { fw: 3, fh: 2, pen: { ox: -4, oy: -3, w: 9, h: 8, group: "drubez", label: "Drůbeží výběh" } },
+    chlivek: { fw: 3, fh: 2, pen: { ox: -5, oy: -3, w: 9, h: 8, group: "prasata", label: "Prasečí výběh" } },
+    stanek: { fw: 2, fh: 2 },
+    studna: { fw: 1, fh: 1 },
   };
   const defOf = (id: string) => DEFS[id];
-  // chlívek na 5,5 zabírá 5-7 × 5-6, jeho dvorek je 4-8 × 4-7
-  const structures = [at("chlivek", 5, 5)];
-  const claim = (defId: string, tx: number, ty: number) =>
-    claimedBy({ structures, defOf, def: DEFS[defId], tx, ty });
+  const free = (tx: number, ty: number) => tx < 0 || ty < 0 || tx >= 60 || ty >= 60;
+  // kurník na 20,20 → ohrada 16..24 × 17..24
+  const structures = [at("kurnik", 20, 20)];
+  const place = (defId: string, tx: number, ty: number) =>
+    canPlace({ structures, isSolid: free, def: DEFS[defId], tx, ty, defOf }).ok;
 
-  it("nepustí ohradu do dvorku cizího příbytku", () => {
-    expect(claim("plot", 4, 4)?.defId).toBe("chlivek"); // roh dvorku
-    expect(claim("plot", 8, 7)?.defId).toBe("chlivek"); // protilehlý roh
-    expect(claim("plot", 6, 4)?.defId).toBe("chlivek"); // těsně nad chlívkem
+  it("stánek nejde postavit doprostřed výběhu", () => {
+    expect(place("stanek", 18, 22)).toBe(false);
+    expect(place("stanek", 16, 17)).toBe(false); // roh ohrady
   });
-  it("pustí ohradu o dlaždici dál", () => {
-    expect(claim("plot", 3, 3)).toBeNull();
-    expect(claim("plot", 9, 5)).toBeNull();
-    expect(claim("plot", 5, 8)).toBeNull();
+  it("ani studna nebo cokoli jiného do výběhu nepatří", () => {
+    expect(place("studna", 23, 23)).toBe(false);
   });
-  it("nepustí druhý výběh těsně vedle", () => {
-    expect(claim("kurnik", 8, 5)?.defId).toBe("chlivek"); // dotýká se dvorku
-    expect(claim("kurnik", 9, 5)).toBeNull(); // dlaždice mezera stačí
+  it("kousek za ohradou už to jde", () => {
+    expect(place("stanek", 25, 25)).toBe(true);
+    expect(place("studna", 15, 20)).toBe(true);
   });
-  it("studny, cedule a dekorace u výběhu nevadí", () => {
-    expect(claim("studna", 4, 4)).toBeNull();
-    expect(claim("cedule_deko", 6, 4)).toBeNull();
+  it("výběh nesmí překrýt stojící stavbu", () => {
+    const withStanek = [at("stanek", 30, 30)];
+    // chlívek na 34,32 → ohrada 29..37 × 29..36, stánek 30..31 × 30..31 je uvnitř
+    expect(canPlace({ structures: withStanek, isSolid: free, def: DEFS.chlivek, tx: 34, ty: 32, defOf }).ok).toBe(false);
+    expect(canPlace({ structures: withStanek, isSolid: free, def: DEFS.chlivek, tx: 44, ty: 40, defOf }).ok).toBe(true);
   });
-  it("bez zvířecího příbytku v okolí nic neblokuje", () => {
-    expect(claimedBy({ structures: [], defOf, def: DEFS.plot, tx: 5, ty: 5 })).toBeNull();
+  it("dva výběhy se nesmí prolnout", () => {
+    expect(place("chlivek", 24, 20)).toBe(false);
+    expect(place("chlivek", 31, 20)).toBe(true);
   });
 });
 
@@ -88,23 +119,17 @@ describe("AUTO_LAYOUT", () => {
     const uids = AUTO_LAYOUT.map((p) => p.uid);
     expect(new Set(uids).size).toBe(uids.length);
   });
-  it("respects every animal's yard", () => {
-    const defs: Record<string, ClaimDef> = {
-      chalupa: { kind: "chalupa", category: "zaklad", fw: 3, fh: 2 },
-      stanek: { kind: "stanek", category: "zaklad", fw: 2, fh: 2 },
-      dilna: { kind: "dilna", category: "zaklad", fw: 2, fh: 2 },
-      ohniste: { kind: "ohniste", category: "zaklad", fw: 2, fh: 2 },
-      kurnik: { kind: "kurnik", category: "zaklad", fw: 3, fh: 2 },
-      chlivek: { kind: "chlivek", category: "zaklad", fw: 3, fh: 2 },
-      pastvina: { kind: "pastvina", category: "zaklad", fw: 3, fh: 2 },
-      buda: { kind: "buda", category: "zaklad", fw: 2, fh: 2 },
-      studna: { kind: "studna", category: "upgrade", fw: 1, fh: 1 },
-    };
-    for (const p of AUTO_LAYOUT) {
-      const others = AUTO_LAYOUT.filter((o) => o.uid !== p.uid);
-      expect(
-        claimedBy({ structures: others, defOf: (id) => defs[id], def: defs[p.defId], tx: p.tx, ty: p.ty }),
-      ).toBeNull();
-    }
+  it("žádné dvě obálky (stavba + výběh) se nepřekrývají", () => {
+    const boxes = AUTO_LAYOUT.map((p) => ({ p, r: occupancyOf(BUILDABLE_BY_ID[p.defId], p.tx, p.ty) }));
+    for (let i = 0; i < boxes.length; i++)
+      for (let j = i + 1; j < boxes.length; j++)
+        expect(
+          rectsOverlap(boxes[i].r, boxes[j].r),
+          `${boxes[i].p.defId} × ${boxes[j].p.defId}`,
+        ).toBe(false);
+  });
+  it("každý zvířecí příbytek má svůj výběh", () => {
+    for (const id of ["kurnik", "chlivek", "pastvina", "buda"])
+      expect(BUILDABLE_BY_ID[id].pen, id).toBeDefined();
   });
 });

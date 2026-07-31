@@ -20,13 +20,13 @@ describe("empty onboarding start", () => {
   });
 });
 
-// Volná pozice (grass, žádný překryv) pro každý krok tutoriálu v pořadí
-// TUTORIAL_STEPS — spočteno tak, aby žádná stavba nekolidovala s předchozí
-// a aby výběhy (kurník, chlívek, pastvina, bouda) měly kolem sebe dvorek
-// šířky jedné dlaždice (viz claimedBy v placement.ts). Na stánek už v řadě
-// y=30 nezbylo volné místo, staví se tedy o řádek níž.
-const STEP_TX = [30, 34, 37, 39, 42, 47, 52, 57, 35];
-const STEP_TY = [30, 30, 30, 30, 30, 30, 30, 30, 34];
+// Volná pozice pro každý krok tutoriálu v pořadí TUTORIAL_STEPS. Zvířecí
+// příbytky si nesou svůj výběh (Buildable.pen), takže potřebují pořádný odstup —
+// bereme rovnou rozvržení z AUTO_LAYOUT, o kterém placement.test.ts hlídá, že se
+// v něm žádné dvě obálky nepřekrývají.
+// pořadí: chalupa, ohniště, studna, dílna, kurník, chlívek, pastvina, bouda, stánek
+const STEP_TX = [44, 46, 42, 40, 34, 38, 52, 48, 50];
+const STEP_TY = [30, 36, 28, 34, 30, 40, 38, 28, 32];
 
 describe("guided tutorial placement", () => {
   it("placing the current step's building advances the tutorial", () => {

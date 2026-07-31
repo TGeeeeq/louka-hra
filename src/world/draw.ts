@@ -1047,7 +1047,8 @@ export function drawBuilding(
 }
 
 /** Poloprůhledný náhled („duch") přetahované stavby v edit módu.
- *  Zelený rámeček = lze umístit, červený = nelze. */
+ *  Zelený rámeček = lze umístit, červený = nelze. `pen` (nepovinně) je výběh,
+ *  který ke stavbě patří — hráč tak dopředu vidí, kolik místa to celé zabere. */
 export function drawGhost(
   ctx: CanvasRenderingContext2D,
   it: Interactable,
@@ -1057,20 +1058,50 @@ export function drawGhost(
   camY: number,
   valid: boolean,
   time: number,
+  pen?: { x0: number; y0: number; x1: number; y1: number } | null,
 ) {
   const x = tx * TS - camX;
   const y = ty * TS - camY;
   const w = it.fw * TS;
   const h = it.fh * TS;
   ctx.save();
+  const stroke = valid ? "rgba(120,210,120,0.95)" : "rgba(224,90,74,0.95)";
+  const fill = valid ? "rgba(120,210,120,0.18)" : "rgba(224,90,74,0.2)";
+  // Nejdřív výběh (leží pod stavbou), ať je vidět celý stavební prostor.
+  if (pen) {
+    const px = pen.x0 * TS - camX;
+    const py = pen.y0 * TS - camY;
+    const pw = (pen.x1 - pen.x0) * TS;
+    const ph = (pen.y1 - pen.y0) * TS;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 7]);
+    ctx.strokeStyle = stroke;
+    ctx.fillStyle = valid ? "rgba(120,210,120,0.1)" : "rgba(224,90,74,0.12)";
+    roundRect(ctx, px + 1, py + 1, pw - 2, ph - 2, 10);
+    ctx.fill();
+    ctx.stroke();
+    // naznačené kůly plotu, ať je jasné, že to bude ohrada
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = "#7a5230";
+    for (let sx = px; sx <= px + pw + 1; sx += TS) {
+      ctx.fillRect(sx - 2, py - 6, 4, 9);
+      ctx.fillRect(sx - 2, py + ph - 6, 4, 9);
+    }
+    for (let sy = py; sy <= py + ph + 1; sy += TS) {
+      ctx.fillRect(px - 2, sy - 6, 4, 9);
+      ctx.fillRect(px + pw - 2, sy - 6, 4, 9);
+    }
+    ctx.globalAlpha = 1;
+  }
   ctx.globalAlpha = 0.35;
   drawStructure(ctx, it.kind, x, y, w, h, time);
   drawStructureOverlay(ctx, it.kind, x, y, w, h);
   ctx.globalAlpha = 1;
   ctx.lineWidth = 2;
   ctx.setLineDash([6, 4]);
-  ctx.strokeStyle = valid ? "rgba(120,210,120,0.95)" : "rgba(224,90,74,0.95)";
-  ctx.fillStyle = valid ? "rgba(120,210,120,0.18)" : "rgba(224,90,74,0.2)";
+  ctx.strokeStyle = stroke;
+  ctx.fillStyle = fill;
   roundRect(ctx, x + 1, y + 1, w - 2, h - 2, 6);
   ctx.fill();
   ctx.stroke();

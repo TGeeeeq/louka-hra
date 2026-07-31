@@ -10,6 +10,7 @@ import {
   isBlocked,
   isBoxBlocked,
   nearestFreeSpot,
+  paddockBoundsFor,
   setConstructed,
   setStructures,
   unstuckFromBuildings,
@@ -20,12 +21,12 @@ import { TUTORIAL_BUILDING_IDS } from "../../game/content/tutorial";
 import { COMPANION_ANIMAL_IDS } from "../../game/balance";
 import { BUILDABLE_BY_ID } from "../../game/content/buildables";
 import { structureAt } from "../../game/build/placement";
-import { footprintOf, placementIssue, type PlacementIssue } from "../../game/build/preview";
+import { footprintOf, penRectOf, placementIssue, type PlacementIssue } from "../../game/build/preview";
 import { findPath, nearestWalkable, type Pt } from "../../world/pathfind";
 import { NPC_LIFE } from "../../game/content/npcLife";
 import { reactionFor, idleLine, ESCAPE_HELP, ESCAPE_SHRUG } from "../../game/content/npcReactions";
 import { pick } from "../../game/engine/util";
-import { PERSON_BY_ID } from "../../game/content/people";
+import { PERSON_BY_ID, stepAsideLine } from "../../game/content/people";
 import { drawBlueprint, drawBuilding, drawGhost, drawGround, drawPaddocks, drawWaterShimmer, getMinimapBase, roundRect } from "../../world/draw";
 import { drawCloudShadows, drawColorGrade, drawSoftBloom, drawVignetteGrain, drawWindGrass } from "../../world/atmosphere";
 import { drawSeasonParticles } from "../../world/particles";
@@ -100,6 +101,8 @@ interface Props {
   structures: Placed[];
   /** Stavební mód: `true` = zapnuto (HUD „🔨 Stavět"). */
   editMode: boolean;
+  /** Oddálená kamera ve stavebním módu — je vidět celý půdorys i s výběhem. */
+  zoomedOut?: boolean;
   /** Katalogové `defId` právě vybrané v BuildPanelu k umístění, nebo `null`
    *  (pak se v edit módu klepnutím vybírá existující stavba k přesunu/zboření). */
   buildSelection: string | null;
@@ -193,6 +196,8 @@ function standOf(id: string, phase: Phase) {
 
 const SPEED = 165; // px/s
 const INTERACT_RANGE = TS * 1.5;
+// Oddálení ve stavebním módu — na jednu obrazovku se vejde i pastvina 15×10.
+const BUILD_ZOOM_OUT = 0.55;
 // Čekací zóna zvířat u vjezdu (tutoriál) — než dostaví svůj výběh.
 const WAIT_CENTER = { x: 24.5 * TS, y: 22.5 * TS };
 const WAIT_RADIUS = TS * 1.9;
@@ -219,13 +224,13 @@ const BUILDING_VERB: Record<string, string> = {
   seniste: "Seniště (kosit / sušit / obracet)",
 };
 
-export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, onMoveRequest, pending, onDemolishStructure, onEditReject, onInteract, onEvent }: Props) {
+export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, zoomedOut, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, onMoveRequest, pending, onDemolishStructure, onEditReject, onInteract, onEvent }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // měnící se props čteme přes ref, ať smyčku nemusíme restartovat
-  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, onMoveRequest, pending, onDemolishStructure, onEditReject, onInteract, onEvent });
-  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, onMoveRequest, pending, onDemolishStructure, onEditReject, onInteract, onEvent };
+  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, zoomedOut, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, onMoveRequest, pending, onDemolishStructure, onEditReject, onInteract, onEvent });
+  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, zoomedOut, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, onMoveRequest, pending, onDemolishStructure, onEditReject, onInteract, onEvent };
 
   // Vybraná existující stavba v edit módu (bez buildSelection) — místní React
   // stav, protože řídí DOM lištu Přesunout/Zbořit/Zrušit pod canvasem.
@@ -265,12 +270,42 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
         return !prev || prev.tx !== p.tx || prev.ty !== p.ty;
       })
       .map((p) => (BUILDABLE_BY_ID[p.defId]?.unique ? p.defId : p.uid));
+    // Výběh patří ke stavbě — když se příbytek přesune, jdou zvířata s ním.
+    for (const p of structures) {
+      const pen = BUILDABLE_BY_ID[p.defId]?.pen;
+      if (!pen) continue;
+      const prev = prevByUid.get(p.uid);
+      if (!prev || (prev.tx === p.tx && prev.ty === p.ty)) continue;
+      const dx = (p.tx - prev.tx) * TS;
+      const dy = (p.ty - prev.ty) * TS;
+      for (const m of mobs.current) {
+        if (m.group !== pen.group || m.escaped) continue;
+        m.x += dx; m.y += dy;
+        m.hx += dx; m.hy += dy;
+        m.tx += dx; m.ty += dy;
+        if (isBlocked(m.x, m.y)) {
+          const spot = nearestFreeSpot(m.x, m.y);
+          if (spot) { m.x = spot.x; m.y = spot.y; m.tx = spot.x; m.ty = spot.y; }
+        }
+      }
+    }
+    // Hranice bloudění vždy podle aktuálních výběhů (i toho právě postaveného).
+    for (const m of mobs.current) m.bounds = paddockBoundsFor(m.group);
     builtPrev.current = built;
     structuresPrev.current = structures;
     const toUnstick = [...added, ...changed]; // stavba se mohla přesunout na hráče
     if (toUnstick.length) {
       const spot = unstuckFromBuildings(player.current.x, player.current.y, toUnstick);
       if (spot) { player.current.x = spot.x; player.current.y = spot.y; }
+      // …a stejně tak na někoho z lidí. NPC stavbu neblokují, jen slušně uhnou.
+      for (const a of npcs.current) {
+        const moved = unstuckFromBuildings(a.x, a.y, toUnstick);
+        if (!moved) continue;
+        a.x = moved.x;
+        a.y = moved.y;
+        a.path.length = 0; // přepočítá se sám v další fázi dne
+        a.bubble = { text: stepAsideLine(a.id), until: performance.now() + 4000 };
+      }
     }
   }, [built, structures]);
 
@@ -282,9 +317,12 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
   const wildKey = useRef("");
   const npcPhase = useRef<Phase>(phase);
   const cam = useRef({ x: 0, y: 0 });
+  // Oddálení ve stavebním módu (1 = normál) — ať je vidět celý stavební prostor
+  // i s výběhem. Ref, ne state: mění se jen mezi snímky, překreslení řeší `loop`.
+  const zoom = useRef(1);
   // Stavební mód: náhled dlaždice pod prstem (nová stavba i přesun vybrané) —
   // jen ref, bez re-renderu (kreslí se každý snímek v `loop`).
-  const buildGhost = useRef<{ it: Interactable; tx: number; ty: number; valid: boolean; issue: PlacementIssue | null } | null>(null);
+  const buildGhost = useRef<{ it: Interactable; defId: string; tx: number; ty: number; valid: boolean; issue: PlacementIssue | null } | null>(null);
   const stepAcc = useRef(0);
   const escapeAcc = useRef(0);
   const lastPhase = useRef<Phase>(phase);
@@ -438,10 +476,12 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       sound.interact();
     };
 
-    // Převod z obrazovky do world souřadnic (ctx transform je 1:1 v CSS px).
+    // Převod z obrazovky do world souřadnic. Svět se kreslí přes ctx.scale(zoom),
+    // takže obrazovkové pixely je potřeba zoomem podělit.
     const toWorld = (e: PointerEvent) => {
       const r = canvas.getBoundingClientRect();
-      return { wx: e.clientX - r.left + cam.current.x, wy: e.clientY - r.top + cam.current.y };
+      const z = zoom.current;
+      return { wx: (e.clientX - r.left) / z + cam.current.x, wy: (e.clientY - r.top) / z + cam.current.y };
     };
     // Náhled půdorysu pod prstem. Validitu (zelená/červená) počítá stejný
     // helper jako potvrzovací lišta i reducer — nikdy se nerozejdou.
@@ -454,7 +494,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       const ty = Math.round(wy / TS - fh / 2);
       const issue = placementIssue(propsRef.current.structures, defId, tx, ty, ignoreUid);
       const it: Interactable = { id: "__ghost", kind: def?.kind ?? "cedule", label: def?.label ?? "", tx, ty, fw, fh, solid: def?.solid ?? true };
-      return { it, tx, ty, valid: !issue, issue };
+      return { it, defId, tx, ty, valid: !issue, issue };
     };
     /** Co se právě chystá umístit — nová stavba, přesun, nebo rozestavěný
      *  půdorys čekající na potvrzení (ten se dá ťuknutím přehodit jinam). */
@@ -855,8 +895,14 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       }
 
       // --- kamera ---
-      const viewW = cssW;
-      const viewH = cssH;
+      // Cíl zoomu drží prop; dojezd je plynulý, ať oddálení neškubne.
+      const zoomTarget = P.editMode && P.zoomedOut ? BUILD_ZOOM_OUT : 1;
+      zoom.current += (zoomTarget - zoom.current) * (1 - Math.exp(-9 * dt));
+      if (Math.abs(zoom.current - zoomTarget) < 0.002) zoom.current = zoomTarget;
+      const z = zoom.current;
+      // viewW/viewH jsou ve world jednotkách — po oddálení je vidět víc louky.
+      const viewW = cssW / z;
+      const viewH = cssH / z;
       const mapPixW = MAP_W * TS;
       const mapPixH = MAP_H * TS;
       // Uvítací sestřih: kamera míří na scénickou dlaždici místo na hráče.
@@ -957,7 +1003,9 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       }
 
       // --- RENDER ---
-      ctx.clearRect(0, 0, viewW, viewH);
+      ctx.clearRect(0, 0, cssW, cssH);
+      ctx.save();
+      if (z !== 1) ctx.scale(z, z);
       drawGround(ctx, camX, camY, viewW, viewH, P.season);
       // putující stíny mraků + vlnící se tráva leží na terénu, ale POD zvířaty
       drawCloudShadows(ctx, camX, camY, viewW, viewH, now, P.weather);
@@ -1033,7 +1081,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       if (P.editMode) {
         const g = buildGhost.current;
         if (g) {
-          drawGhost(ctx, g.it, g.tx, g.ty, camX, camY, g.valid, now);
+          drawGhost(ctx, g.it, g.tx, g.ty, camX, camY, g.valid, now, penRectOf(g.defId, g.tx, g.ty));
         } else if (P.pending) {
           // Rozestavěná stavba čekající na potvrzení — půdorys svítí na svém
           // místě, dokud ho hráč nepotvrdí, neposune šipkami nebo nezruší.
@@ -1042,7 +1090,7 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
           const { fw, fh } = footprintOf(pd.defId);
           const valid = !placementIssue(P.structures, pd.defId, pd.tx, pd.ty, pd.uid);
           const it: Interactable = { id: "__ghost", kind: def?.kind ?? "cedule", label: def?.label ?? "", tx: pd.tx, ty: pd.ty, fw, fh, solid: def?.solid ?? true };
-          drawGhost(ctx, it, pd.tx, pd.ty, camX, camY, valid, now);
+          drawGhost(ctx, it, pd.tx, pd.ty, camX, camY, valid, now, penRectOf(pd.defId, pd.tx, pd.ty));
         } else if (selectedRef.current && !movingRef.current) {
           const sel = selectedRef.current;
           const f = footprintOf(sel.defId);
@@ -1066,15 +1114,16 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       if (P.wildActive.kaneCircle && P.phase === "poledne") drawKaneCircle(ctx, camX, camY, now);
 
       drawWaterShimmer(ctx, camX, camY, viewW, viewH, now);
+      ctx.restore(); // konec světa — dál se kreslí v obrazovkových pixelech
       // atmosféra: barevný grade hodiny/počasí → částice → bloom → vinětace+zrno
-      drawColorGrade(ctx, viewW, viewH, dt, P.phase, P.season, P.weather);
-      drawSeasonParticles(ctx, P.season, viewW, viewH, dt, now);
-      drawSoftBloom(ctx, viewW, viewH);
-      drawVignetteGrain(ctx, viewW, viewH, now);
+      drawColorGrade(ctx, cssW, cssH, dt, P.phase, P.season, P.weather);
+      drawSeasonParticles(ctx, P.season, cssW, cssH, dt, now);
+      drawSoftBloom(ctx, cssW, cssH);
+      drawVignetteGrain(ctx, cssW, cssH, now);
       // kontextová akční nápověda
-      if (actionLabel) drawActionChip(ctx, viewW, viewH, actionLabel);
+      if (actionLabel) drawActionChip(ctx, cssW, cssH, actionLabel);
       // mini-mapa (pod horní HUD lištou — na mobilu na výšku ji nepřekryje)
-      drawMinimap(ctx, viewW, topInset.current, p.x, p.y, nearest, P.built, P.tutorialTargets, P.hiddenIds);
+      drawMinimap(ctx, cssW, topInset.current, p.x, p.y, nearest, P.built, P.tutorialTargets, P.hiddenIds);
 
       raf = requestAnimationFrame(loop);
     };

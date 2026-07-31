@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { NPC_LIFE } from "../content/npcLife";
-import { NPCS } from "../content/people";
-import { isSolidTile } from "../../world/tiles";
+import { NPCS, stepAsideLine } from "../content/people";
+import { TS, isSolidTile } from "../../world/tiles";
 import { AUTO_LAYOUT } from "./placement";
 import { BUILDABLE_BY_ID } from "../content/buildables";
+import { isTileBlocked, setConstructed, setStructures, unstuckFromBuildings } from "../../world/entities";
 import type { Phase } from "../types";
 
 // Hráč startuje tady (PLAYER_START v world/entities.ts).
@@ -57,6 +58,25 @@ describe("NPC stanoviště leží na velké domovské louce", () => {
           expect(inside, `${id}/${p} stojí v ${b.defId}`).toBe(false);
         }
       }
+  });
+
+  // Stavba postavená na člověku ho nezablokuje — NPC z ní slušně uhne
+  // (WorldCanvas na ně pouští stejný unstuckFromBuildings jako na hráče).
+  it("stavba na stanovišti NPC ho vystrčí na volné místo", () => {
+    const s = NPC_LIFE.tomas.schedule.rano;
+    // chalupa přesně přes Tomášovo ranní stanoviště
+    setStructures([{ uid: "t-chalupa", defId: "chalupa", tx: s.tx, ty: s.ty }]);
+    setConstructed(["chalupa"]);
+    const spot = unstuckFromBuildings((s.tx + 0.5) * TS, (s.ty + 0.5) * TS, ["chalupa"]);
+    expect(spot, "NPC by měl dostat nové místo").not.toBeNull();
+    expect(isTileBlocked(Math.floor(spot!.x / TS), Math.floor(spot!.y / TS))).toBe(false);
+    // ať test neovlivní ostatní — vrať louku do výchozího rozvržení
+    setStructures(AUTO_LAYOUT);
+    setConstructed([]);
+  });
+
+  it("každý NPC má hlášku, když musí uhnout", () => {
+    for (const id of NPCS) expect(stepAsideLine(id).length).toBeGreaterThan(0);
   });
 
   // Regrese: po přechodu na mapu 96x72 zůstaly souřadnice ze staré malé mapy,
