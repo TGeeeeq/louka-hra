@@ -2378,3 +2378,198 @@ button:disabled { cursor: not-allowed; }
 }
 /* Dialog má vlastní tmavý rám — vnitřní bílou linku by tam bylo vidět jako šum. */
 .dialog-box.paper { box-shadow: var(--shadow-paper-lg); }
+
+/* =========================================================================
+   ORIENTACE: denní plán, ukazatel „teď je potřeba tohle", velká mapa
+   -------------------------------------------------------------------------
+   Ze začátku hry se hráč topil v chaosu — nevěděl, co má dělat ani kam jít.
+   Tři vrstvy pomoci: (1) rozbalený panel úkolů v HUD = celý seznam kroků
+   fáze dne, (2) ukazatel s Tomášovou hláškou + pulzující bod ve světě,
+   (3) velká mapa s pojmenovanými místy a akutními body.
+   ========================================================================= */
+
+/* --- HUD: rozbalený panel úkolů (celý plán fáze dne) --- */
+.quest-body { display: flex; flex-direction: column; gap: 4px; padding-bottom: 4px; }
+.quest-steps { list-style: none; display: flex; flex-direction: column; gap: 1px; margin: 2px 0 0; }
+.quest-steps li {
+  display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 5px;
+  font-size: 0.76rem; font-weight: 600; color: var(--text); line-height: 1.3;
+}
+.quest-steps li .ic { color: var(--muted); }
+.quest-steps li.done { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(90,102,96,0.5); }
+.quest-steps li.done .ic { color: var(--good); }
+.quest-steps li.now { color: var(--moss-deep); font-weight: 800; }
+.quest-steps li.now .ic { color: var(--terracotta); }
+.quest-steps li.locked { opacity: 0.5; }
+.quest-steps em { font-style: normal; font-size: 0.62rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.quest-links { display: flex; gap: 6px; margin-top: 5px; pointer-events: auto; }
+.quest-links button {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.72rem; font-weight: 700; color: var(--moss-deep);
+  background: rgba(31, 61, 42, 0.08); padding: 4px 9px; border-radius: 999px;
+  transition: background 0.14s ease;
+}
+.quest-links button:hover { background: rgba(31, 61, 42, 0.16); }
+.quest-alarm {
+  font-size: 0.74rem; font-weight: 700; color: var(--bad); line-height: 1.32;
+  background: rgba(164, 66, 44, 0.1); border-radius: var(--r-sm); padding: 4px 7px;
+}
+/* Akutní stav panelu — červený pruh, který jemně dýchá. */
+.hud-quest.alarm { border-left-color: var(--bad); animation: alarm-breathe 1.6s ease-in-out infinite; }
+.hud-quest.alarm .quest-label { color: var(--bad); }
+@keyframes alarm-breathe {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 10px 24px -12px rgba(31,61,42,0.5); }
+  50% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 0 0 3px rgba(164, 66, 44, 0.18), 0 10px 24px -12px rgba(31,61,42,0.5); }
+}
+
+/* --- Ukazatel průvodce (Tomáš ukazuje, co teď) --- */
+.guide-card, .guide-chip {
+  position: absolute; right: calc(12px + env(safe-area-inset-right, 0px)); top: 200px;
+  z-index: var(--z-hud); pointer-events: auto;
+  width: min(330px, 64vw); border-radius: var(--r);
+  border-left: 4px solid var(--accent);
+  padding: 8px 10px 9px;
+  animation: guide-in 0.42s var(--ease-out-back) both;
+}
+.guide-card { display: flex; flex-direction: column; gap: 5px; max-height: 44vh; overflow: hidden; }
+.guide-card.urgent { border-left-color: var(--bad); animation: guide-in 0.42s var(--ease-out-back) both, alarm-breathe 1.5s ease-in-out infinite 0.5s; }
+@keyframes guide-in { from { opacity: 0; transform: translateX(18px) scale(0.96); } to { opacity: 1; transform: none; } }
+.guide-head { display: grid; grid-template-columns: 40px 1fr 24px; align-items: center; gap: 8px; }
+.guide-portrait {
+  width: 40px; height: 40px; border-radius: 50%; overflow: hidden; display: grid; place-items: center;
+  background: var(--sand); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.7);
+}
+.guide-portrait img { width: 100%; height: 100%; object-fit: cover; }
+.guide-bang { font-size: 1.25rem; font-family: var(--font-emoji); }
+.guide-titles { min-width: 0; display: flex; flex-direction: column; }
+.guide-speaker { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--terracotta); }
+.guide-speaker em { font-style: normal; color: var(--muted); font-weight: 600; }
+.guide-titles b { font-family: var(--font-serif); font-size: 0.92rem; line-height: 1.2; color: var(--moss-deep); }
+.guide-close { width: 24px; height: 24px; border-radius: 8px; color: var(--muted); display: grid; place-items: center; }
+.guide-close:hover { background: rgba(31, 61, 42, 0.08); }
+.guide-hint {
+  font-size: 0.78rem; line-height: 1.36; color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
+}
+.guide-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.guide-place {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.72rem; font-weight: 700; color: #6a4d18;
+  background: linear-gradient(160deg, rgba(217, 180, 94, 0.22), rgba(201, 152, 88, 0.16));
+  box-shadow: inset 0 0 0 1px var(--gold-soft);
+  padding: 3px 9px; border-radius: 999px;
+}
+.guide-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.72rem; font-weight: 700; color: var(--moss-deep);
+  background: rgba(31, 61, 42, 0.08); padding: 4px 9px; border-radius: 999px;
+  transition: background 0.14s ease;
+}
+.guide-btn:hover { background: rgba(31, 61, 42, 0.16); }
+/* Sbalený stav — jeden řádek s ukazující ručičkou. */
+.guide-chip { display: flex; align-items: center; gap: 7px; text-align: left; }
+.guide-chip b { font-family: var(--font-serif); font-size: 0.84rem; color: var(--moss-deep); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guide-chip .ic { color: var(--muted); }
+.guide-hand { font-family: var(--font-emoji); font-size: 1rem; animation: guide-point 1.3s ease-in-out infinite; }
+@keyframes guide-point {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(4px); }
+}
+
+/* --- Deník: denní plán na kartě Úkoly --- */
+.plan-card {
+  background: var(--surface-alt); border-radius: var(--r); padding: 12px 14px 10px;
+  box-shadow: inset 0 0 0 1px rgba(31, 61, 42, 0.07); margin-bottom: var(--s4);
+}
+.plan-card h4 { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
+.plan-card h4 .ic { color: var(--terracotta); }
+.plan-card .panel-lead { margin-bottom: 8px; }
+.plan-alarm {
+  font-size: 0.82rem; line-height: 1.4; color: var(--bad);
+  background: rgba(164, 66, 44, 0.1); border-radius: var(--r-sm);
+  padding: 7px 9px; margin-bottom: 8px;
+}
+.plan-alarm b { display: block; }
+.plan-steps { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.plan-steps li { display: grid; grid-template-columns: 22px 1fr; gap: 7px; align-items: start; }
+.plan-mark { display: grid; place-items: center; padding-top: 1px; color: var(--muted); }
+.plan-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.plan-text b { font-size: 0.87rem; color: var(--text); }
+.plan-hint { font-size: 0.76rem; color: var(--muted); line-height: 1.34; }
+.plan-extra {
+  font-style: normal; align-self: flex-start; font-size: 0.62rem; font-weight: 800;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--amber);
+}
+.plan-steps li.done .plan-text b { color: var(--muted); text-decoration: line-through; }
+.plan-steps li.locked { opacity: 0.55; }
+.plan-steps li.now .plan-text b { color: var(--moss-deep); font-weight: 800; }
+.plan-foot {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(31, 61, 42, 0.14);
+  font-size: 0.8rem; color: var(--muted);
+}
+.plan-story-head { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
+.plan-story-head .ic { color: var(--moss); }
+
+/* --- Velká mapa --- */
+.map-modal { width: min(920px, 97vw); }
+.map-modal .overlay-body { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.map-wrap {
+  position: relative; height: min(56vh, 440px); min-height: 200px;
+  background: #24402c; overflow: hidden;
+}
+.map-canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.map-canvas:active { cursor: grabbing; }
+.map-tools {
+  position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 5px;
+  padding: 5px; border-radius: 15px;
+  background: linear-gradient(178deg, rgba(255, 253, 247, 0.94), rgba(244, 237, 222, 0.9));
+  box-shadow: 0 8px 20px -10px rgba(31, 61, 42, 0.6);
+}
+.map-alert {
+  position: absolute; top: 10px; left: 10px; max-width: 62%;
+  display: flex; flex-direction: column; gap: 1px;
+  background: rgba(164, 66, 44, 0.94); color: #fff;
+  padding: 6px 11px; border-radius: var(--r);
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.6);
+  animation: map-alert-pulse 1.5s ease-in-out infinite;
+}
+.map-alert b { font-size: 0.84rem; }
+.map-alert span { font-size: 0.72rem; opacity: 0.92; }
+@keyframes map-alert-pulse {
+  0%, 100% { box-shadow: 0 10px 24px -12px rgba(0,0,0,0.6); }
+  50% { box-shadow: 0 10px 24px -12px rgba(0,0,0,0.6), 0 0 0 4px rgba(232, 120, 90, 0.3); }
+}
+.map-foot { padding: 10px var(--s4) var(--s4); display: flex; flex-direction: column; gap: 8px; }
+.map-sel { font-size: 0.82rem; line-height: 1.4; color: var(--text); display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; }
+.map-sel .ic { color: var(--terracotta); }
+.map-sel.muted { color: var(--muted); }
+.link-btn { font-size: 0.8rem; font-weight: 700; color: var(--terracotta); text-decoration: underline; }
+.map-legend { list-style: none; display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); }
+.map-legend li { display: inline-flex; align-items: center; }
+.lg { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; box-shadow: 0 0 0 1.5px rgba(255,255,255,0.8); }
+.lg-you { background: #3f9bcd; }
+.lg-todo { background: #f0d06e; }
+.lg-urgent { background: #e8785a; }
+.lg-npc { background: #8fb26a; }
+
+/* Menší displeje: ukazatel se posune pod nižší HUD lištu a zúží se. */
+@media (max-width: 620px) {
+  .guide-card, .guide-chip { top: 152px; width: min(300px, 70vw); padding: 7px 9px 8px; }
+  .guide-titles b { font-size: 0.86rem; }
+  .guide-hint { font-size: 0.74rem; -webkit-line-clamp: 4; }
+  .map-wrap { height: min(52vh, 340px); }
+}
+/* Mobil na ležato: výšky je málo, plán i ukazatel zůstanou, jen kompaktně. */
+@media (max-height: 460px) {
+  .guide-card { max-height: 40vh; }
+  .guide-card, .guide-chip { top: 128px; width: min(260px, 54vw); }
+  .guide-hint { -webkit-line-clamp: 3; }
+  .hud-quest .quest-body small { display: none; }
+  .quest-steps li { font-size: 0.72rem; }
+  .map-wrap { height: 58vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-card, .guide-chip, .guide-hand, .hud-quest.alarm, .map-alert { animation: none !important; }
+}

@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { AnimalDef, FeedGroup } from "./game/types";
 import { useGame, flushSave } from "./ui/store";
 import { registerBackButton, registerLifecycle, exitApp } from "./native";
-import { WorldCanvas, type InteractTarget, type PendingPlacement, type WorldEvent } from "./ui/world/WorldCanvas";
+import { WorldCanvas, type GuideTarget, type InteractTarget, type PendingPlacement, type Waypoint, type WorldEvent } from "./ui/world/WorldCanvas";
 import { Hud } from "./ui/world/Hud";
+import { GuideHint } from "./ui/world/GuideHint";
+import { MapPanel } from "./ui/world/MapPanel";
 import { DialogBox } from "./ui/world/DialogBox";
 import { Controls } from "./ui/world/Controls";
 import { DevPanel } from "./ui/world/DevPanel";
@@ -32,6 +34,8 @@ import { CleanUp } from "./ui/minigames/CleanUp";
 import { PlayBar } from "./ui/minigames/PlayBar";
 import { openGate } from "./world/entities";
 import { currentStep, settledGroups, tutorialActive, tutorialTargets } from "./game/content/tutorial";
+import { dayPlan } from "./game/content/objectives";
+import { getAlerts, subscribeAlerts } from "./world/markers";
 import { invalidateGround } from "./world/draw";
 import { sound } from "./audio/sound";
 import { Icon, type IconName } from "./ui/icons/Icon";
@@ -39,7 +43,7 @@ import { Modal, ConfirmDialog } from "./ui/components/Modal";
 import { StructureActionBar } from "./ui/world/StructureActionBar";
 import type { NpcId } from "./audio/sound";
 
-type Overlay = "shop" | "craft" | "denik" | "plna" | null;
+type Overlay = "shop" | "craft" | "denik" | "plna" | "mapa" | null;
 type Minigame = "herb" | "chop" | "tech";
 
 type RewardPayload = { money?: number; energy?: number; items?: { item: string; qty: number }[] };
@@ -76,7 +80,8 @@ const CEDULE_HELP = [
   "Vítej na Louce! 🌿 Chodíš šipkami / WASD (na mobilu křížem vlevo dole).",
   "Dojdi ke zvířeti nebo stavení a zmáčkni MEZERNÍK (nebo tlačítko A) — uděláš, co je třeba.",
   "Ráno vypusť a nakrm, přes den vyráběj a sbírej byliny, večer zvířata zavři na klidnou noc a jdi spát.",
-  "Sleduj úkoly nahoře. A ber to s klidem — zvířata na tebe počkají. (Většinou.)",
+  "Vlevo nahoře máš plán dne — rozklikni ho a vidíš všechny kroky. Ukazatel s Tomášem ti ukáže, co je na řadě a kam jít.",
+  "Ťukni na mapu v pravém horním rohu — otevře se velká mapa Louky, na které si můžeš zapíchnout, kam chceš jít. A ber to s klidem, zvířata na tebe počkají. (Většinou.)",
 ];
 
 function useGameSounds() {
@@ -139,6 +144,10 @@ function useGameSounds() {
 export default function App() {
   const { state, dispatch, demoGateHit } = useGame();
   const [overlay, setOverlay] = useState<Overlay>(null);
+  // Deník se dá otevřít rovnou na kartě Úkoly („Celý plán" z HUD/ukazatele).
+  const [journalTab, setJournalTab] = useState<"zvirata" | "ukoly">("zvirata");
+  // Bod zapíchnutý na velké mapě — ve světě k němu ukazuje modrá šipka.
+  const [waypoint, setWaypoint] = useState<Waypoint | null>(null);
   // Byla obrazovka „Plná verze" otevřená demo bránou (a ne ručně z HUD/menu)?
   // Ovlivňuje jen nadpis ve FullVersion — samotná brána žije ve store.tsx.
   const [demoGateOpen, setDemoGateOpen] = useState(false);
@@ -373,6 +382,11 @@ export default function App() {
     });
   }, []);
 
+  // Denní plán („co teď") a akutní věci ze světa (utečené zvíře). Plán je
+  // odvozený z herního stavu, upozornění hlásí herní smyčka přes markers.ts.
+  const plan = dayPlan(state);
+  const alerts = useSyncExternalStore(subscribeAlerts, getAlerts, getAlerts);
+
   if (!state.started)
     return (
       <>
@@ -466,7 +480,10 @@ export default function App() {
         const npcName = PERSON_BY_ID[e.npcId]?.name ?? "Kolega";
         lines.push(`${npcName}: ${e.line}`);
       }
-      if (!e.helped) lines.push("Tak honem — dožeň ho a zmáčkni akci, ať ho zaženeš zpátky! 🏃");
+      if (!e.helped)
+        lines.push(
+          "Tak honem — dožeň ho a zmáčkni akci, ať ho zaženeš zpátky! 🏃 Kde je, poznáš podle šipky u kraje obrazovky a červeného bodu na mapě.",
+        );
       dispatch({ type: "PUSH_DIALOG", speaker: "Pozor!", lines });
     } else if (e.type === "raid") {
       // zvíře se dorvalo do zahrádky — hudba přejde do plného poplachu
@@ -586,6 +603,17 @@ export default function App() {
   const flyover = !!cinematic && !cinematic.talk;
   const pendingLabel = pending ? BUILDABLE_BY_ID[pending.defId]?.label ?? "stavbu" : "";
 
+  // Ukazatel na aktuální krok plánu. Ve stavebním módu (mimo tutoriál) se
+  // schová — tam hráč řeší půdorysy, ne krmení.
+  const guideStep = plan.next;
+  const guide: GuideTarget | null =
+    guideStep && (!editMode || tut) && !cinematic
+      ? { label: guideStep.label, emoji: guideStep.emoji, target: guideStep.target, targets: guideStep.targets }
+      : null;
+  // Průvodce (Tomášova hláška) ustoupí dialogům, modálům i rozestavěné stavbě.
+  const showGuide = !paused && !cinematic && !pending && !state.gameOver && (alerts.length > 0 || !!guideStep);
+  const openPlan = () => { setJournalTab("ukoly"); setOverlay("denik"); };
+
   return (
     <div className="game-world">
       {/* měkké rozednění po startu hry (místo tvrdého střihu z intra) */}
@@ -596,6 +624,7 @@ export default function App() {
         foxStage={foxStage} wildActive={wildActive} hiddenIds={hiddenIds} appearance={state.profile.appearance}
         structures={state.structures} editMode={buildModeOn} zoomedOut={buildZoomOut} buildSelection={buildSelection}
         cinematic={cinematic} onSkipCinematic={skipCinematic}
+        guide={guide} waypoint={waypoint} onOpenMap={() => setOverlay("mapa")} onWaypointReached={() => setWaypoint(null)}
         onPlaceRequest={(defId, tx, ty) => setPending({ kind: "new", defId, tx, ty })}
         onMoveRequest={(uid, tx, ty) => {
           const inst = state.structures.find((s) => s.uid === uid);
@@ -606,7 +635,21 @@ export default function App() {
         onEditReject={(reason) => dispatch({ type: "PUSH_DIALOG", speaker: "Stavění", lines: [reason ?? "Sem se to nevejde — je tam les, voda nebo jiná stavba."] })}
         onInteract={onInteract} onEvent={onWorldEvent}
       />
-      <Hud onOpen={(p) => { if (p === "plna") setDemoGateOpen(false); setOverlay(p); }} onDevUnlock={unlockDev} editMode={editMode} onToggleEdit={() => setEditMode((v) => { const next = !v; if (!next) { setBuildSelection(null); setBuildZoomOut(false); } return next; })} />
+      <Hud
+        onOpen={(p) => { if (p === "plna") setDemoGateOpen(false); if (p === "denik") setJournalTab("zvirata"); setOverlay(p); }}
+        onOpenPlan={openPlan}
+        onDevUnlock={unlockDev}
+        editMode={editMode}
+        onToggleEdit={() => setEditMode((v) => { const next = !v; if (!next) { setBuildSelection(null); setBuildZoomOut(false); } return next; })}
+      />
+      {showGuide && (
+        <GuideHint
+          objective={guideStep}
+          alert={alerts[0] ?? null}
+          onOpenPlan={openPlan}
+          onOpenMap={() => setOverlay("mapa")}
+        />
+      )}
       <Controls />
       {/* přes dotaz „postavit sem?" panel schovej — stavba je už vybraná a
           lišta s posunem/potvrzením potřebuje spodek obrazovky pro sebe */}
@@ -644,8 +687,17 @@ export default function App() {
       {overlay === "craft" && <Modal title="Výroba" icon="tools" onClose={() => setOverlay(null)}><Craft /></Modal>}
       {overlay === "denik" && (
         <Modal title="Deník" icon="book" onClose={() => setOverlay(null)}>
-          <Journal onSelect={(a) => setSel(a)} />
+          <Journal onSelect={(a) => setSel(a)} initialTab={journalTab} />
         </Modal>
+      )}
+      {overlay === "mapa" && (
+        <MapPanel
+          onClose={() => setOverlay(null)}
+          waypoint={waypoint}
+          onWaypoint={setWaypoint}
+          alerts={alerts}
+          hiddenIds={hiddenIds}
+        />
       )}
       {overlay === "plna" && (
         <Modal title="Plná verze" icon="wheat" onClose={() => { setOverlay(null); setDemoGateOpen(false); }}>

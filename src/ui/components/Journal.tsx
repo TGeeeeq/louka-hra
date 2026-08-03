@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import type { AnimalDef, FactCategory } from "../../game/types";
 import { ANIMALS } from "../../game/content/animals";
 import { WILD_ANIMALS } from "../../game/content/wild";
 import { FACTS } from "../../game/content/facts";
 import { QUEST_LINES } from "../../game/content/quests";
+import { dayPlan } from "../../game/content/objectives";
+import { getAlerts, subscribeAlerts } from "../../world/markers";
 import { ACHIEVEMENTS } from "../../game/achievements";
 import { AnimalSprite } from "../sprites/AnimalSprite";
 import { useGame } from "../store";
@@ -60,9 +62,17 @@ const TAB_META: { id: Tab; label: string; icon: IconName }[] = [
   { id: "olouce", label: "O Louce", icon: "leaf" },
 ];
 
-export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
+export function Journal({
+  onSelect,
+  initialTab = "zvirata",
+}: {
+  onSelect: (a: AnimalDef) => void;
+  initialTab?: Tab;
+}) {
   const { state } = useGame();
-  const [tab, setTab] = useState<Tab>("zvirata");
+  const [tab, setTab] = useState<Tab>(initialTab);
+  const plan = dayPlan(state);
+  const alerts = useSyncExternalStore(subscribeAlerts, getAlerts, getAlerts);
 
   const known = new Set(state.knownFacts);
   const ownedFacts = FACTS;
@@ -81,6 +91,62 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
 
       {tab === "ukoly" && (
         <div className="facts">
+          {/* Denní plán je to hlavní: co všechno musím udělat, než se den
+              posune dál. Příběhové linky jsou až pod tím. */}
+          <div className="plan-card">
+            <h4>
+              <Icon name="clipboard" size={17} /> {plan.title}
+              <small className="quest-progress">
+                {plan.requiredDone}/{plan.requiredTotal} povinných
+              </small>
+            </h4>
+            <p className="panel-lead">{plan.lead}</p>
+            {alerts.map((a) => (
+              <p key={a.id} className="plan-alarm">
+                <b>{a.emoji} {a.label}</b> {a.hint}
+              </p>
+            ))}
+            <ul className="plan-steps">
+              {plan.steps.map((o) => (
+                <li
+                  key={o.id}
+                  className={o.done ? "done" : o.locked ? "locked" : o.id === plan.next?.id ? "now" : ""}
+                >
+                  <span className="plan-mark">
+                    {o.done ? (
+                      <Icon name="check" size={14} className="ic-good" />
+                    ) : o.locked ? (
+                      <Icon name="lock" size={13} />
+                    ) : (
+                      <EmojiIcon emoji={o.emoji} size={15} />
+                    )}
+                  </span>
+                  <span className="plan-text">
+                    <b>{o.label}</b>
+                    {!o.required && <em className="plan-extra">navíc</em>}
+                    {!o.done && <span className="plan-hint">{o.hint}</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="plan-foot">
+              {plan.ready ? (
+                <>
+                  <Icon name="check" size={14} className="ic-good" /> Povinné kroky máš hotové — dál pokračuje{" "}
+                  <b>{plan.nextPhase}</b>.
+                </>
+              ) : (
+                <>
+                  <Icon name="chevronRight" size={14} /> Až budou povinné kroky hotové, pokračuje{" "}
+                  <b>{plan.nextPhase}</b>.
+                </>
+              )}
+            </p>
+          </div>
+
+          <h4 className="plan-story-head">
+            <Icon name="book" size={18} /> Příběhové linky
+          </h4>
           {QUEST_LINES.filter((l) => l.unlocked(state)).map((l) => {
             const idx = state.questProgress[l.id] ?? 0;
             const current = l.quests[idx];
@@ -106,8 +172,10 @@ export function Journal({ onSelect }: { onSelect: (a: AnimalDef) => void }) {
                         <p>{q.hint}</p>
                       </>
                     ) : (
+                      // Zamčené kroky ukazujeme i s názvem — hráč má vidět,
+                      // co ho v lince čeká, ne jen tři tečky.
                       <b className="lock">
-                        <Icon name="lock" size={14} /> …
+                        <Icon name="lock" size={14} /> {q.title}
                       </b>
                     )}
                   </div>

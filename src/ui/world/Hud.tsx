@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useGame } from "../store";
 import { sound } from "../../audio/sound";
 import { PHASE_LABEL, SEASON_LABEL } from "../labels";
@@ -8,10 +8,12 @@ import { PHASE_ICON_NAME, SEASON_ICON_NAME, WEATHER_ICON_NAME } from "../icons/m
 import { useTween } from "../hud/useTween";
 import { weatherName } from "../../game/engine/reducer";
 import { MAIN_QUESTS, QUEST_LINES } from "../../game/content/quests";
-import { CHAPTER_COUNT, currentStep, tutorialActive } from "../../game/content/tutorial";
+import { tutorialActive } from "../../game/content/tutorial";
+import { dayPlan } from "../../game/content/objectives";
 import { ITEM_BY_ID } from "../../game/content/items";
 import { invCount } from "../../game/engine/util";
 import { demoGateActive } from "../../platform";
+import { getAlerts, subscribeAlerts } from "../../world/markers";
 
 /** Under this share of the maximum a stat starts pulsing for attention. */
 const CRITICAL = 0.22;
@@ -57,11 +59,14 @@ function initialQuestOpen(): boolean {
 
 export function Hud({
   onOpen,
+  onOpenPlan,
   onDevUnlock,
   editMode,
   onToggleEdit,
 }: {
-  onOpen: (panel: "denik" | "plna") => void;
+  onOpen: (panel: "denik" | "plna" | "mapa") => void;
+  /** Otevřít deník rovnou na kartě Úkoly (celý denní plán). */
+  onOpenPlan: () => void;
   onDevUnlock?: () => void;
   editMode: boolean;
   onToggleEdit: () => void;
@@ -95,11 +100,14 @@ export function Hud({
   // Přepnutí do stavebního módu zavře rozbalené menu (překrývalo by panel).
   useEffect(() => { if (editMode) setMenu(false); }, [editMode]);
 
-  const quest = MAIN_QUESTS[state.questProgress.main ?? state.questLine];
   const tut = tutorialActive(state);
-  const step = currentStep(state);
+  const plan = dayPlan(state);
+  // Akutní věci (utečené zvíře) žijí mimo GameState — hlásí je herní smyčka.
+  const alerts = useSyncExternalStore(subscribeAlerts, getAlerts, getAlerts);
 
-  // Nejrozdělanější vedlejší linka — ukáže se kompaktně pod hlavním úkolem.
+  // Příběh běží vedle denního plánu: hlavní linka + nejrozdělanější vedlejší.
+  // Denní plán je „co teď", tohle je „kam to celé vede".
+  const mainQuest = MAIN_QUESTS[state.questProgress.main ?? state.questLine];
   const sideLine = QUEST_LINES.filter(
     (l) =>
       l.id !== "main" &&
@@ -124,18 +132,27 @@ export function Hud({
   // schovají pod „…", ať se horní lišta vejde do jediného řádku.
   const secondary: { key: string; icon: IconName; label: string; act: () => void }[] = [
     { key: "bag", icon: "backpack", label: "Batoh / najíst se", act: () => setBag((b) => !b) },
+    { key: "mapa", icon: "map", label: "Mapa Louky", act: () => onOpen("mapa") },
     { key: "denik", icon: "book", label: "Deník", act: () => onOpen("denik") },
     { key: "plna", icon: "wheat", label: "Plná verze", act: () => onOpen("plna") },
     { key: "zvuk", icon: muted ? "soundOff" : "soundOn", label: muted ? "Zapnout zvuk" : "Vypnout zvuk", act: () => setMuted(sound.toggleMute()) },
     { key: "hudba", icon: music ? "musicOn" : "musicOff", label: music ? "Vypnout hudbu" : "Zapnout hudbu", act: () => setMusic(sound.toggleMusic()) },
   ];
 
-  const questBox: { cls: string; icon: IconName; label: string; title: string; hint: string } =
-    tut && step
-      ? { cls: "", icon: "hammer", label: `Kapitola ${step.chapterIndex}/${CHAPTER_COUNT} — ${step.chapter}`, title: `Postav: ${step.buildLabel}`, hint: "Vyber stavbu v panelu dole, klepni na louku a potvrď — před potvrzením ji ještě můžeš posunout šipkami." }
-      : quest
-        ? { cls: "", icon: "clipboard", label: `Úkol ${(state.questProgress.main ?? 0) + 1}/${MAIN_QUESTS.length}`, title: quest.title, hint: quest.hint }
-        : { cls: " done", icon: "party", label: "Hotovo", title: "Všechny úkoly splněné!", hint: "Teď je Louka jen tvoje — hospodař, jak umíš." };
+  // Hlavička panelu: co je teď na řadě. Uvnitř (po rozbalení) je pak CELÝ
+  // seznam kroků fáze dne — dřív tam byla jen jedna věta a hráč nevěděl, co
+  // ho ještě dělí od dalšího dílu dne.
+  const questBox: { cls: string; icon: IconName; label: string; title: string } =
+    alerts.length > 0
+      ? { cls: " alarm", icon: "warn", label: "Akutně!", title: alerts[0].label }
+      : plan.next
+        ? {
+            cls: "",
+            icon: tut ? "hammer" : "clipboard",
+            label: `${plan.title} · ${plan.requiredDone}/${plan.requiredTotal}`,
+            title: plan.next.label,
+          }
+        : { cls: " done", icon: "party", label: plan.title, title: tut ? "Zázemí stojí!" : `Hotovo — můžeš na ${plan.nextPhase.toLowerCase()}` };
 
   return (
     <>
@@ -211,8 +228,51 @@ export function Hud({
             <Icon name={questOpen ? "chevronDown" : "chevronRight"} size={13} />
           </em>
         </button>
-        {questOpen && <small>{questBox.hint}</small>}
+        {questOpen && (
+          <div className="quest-body">
+            {alerts.map((a) => (
+              <p key={a.id} className="quest-alarm">
+                {a.emoji} {a.hint}
+              </p>
+            ))}
+            <small>{plan.next ? plan.next.hint : plan.lead}</small>
+            <ul className="quest-steps">
+              {plan.steps.map((o) => (
+                <li
+                  key={o.id}
+                  className={o.done ? "done" : o.locked ? "locked" : o.id === plan.next?.id ? "now" : ""}
+                >
+                  <Icon
+                    name={o.done ? "check" : o.locked ? "lock" : o.id === plan.next?.id ? "chevronRight" : "clipboard"}
+                    size={13}
+                  />
+                  <span>{o.label}</span>
+                  {!o.required && !o.done && <em>navíc</em>}
+                </li>
+              ))}
+            </ul>
+            <div className="quest-links">
+              <button onClick={onOpenPlan}>
+                <Icon name="clipboard" size={13} /> Celý plán
+              </button>
+              <button onClick={() => onOpen("mapa")}>
+                <Icon name="map" size={13} /> Mapa
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {!tut && questOpen && mainQuest && (
+        <div className="hud-quest paper side open">
+          <span className="quest-label">
+            <EmojiIcon emoji="📋" size={13} />
+            Příběh · Život na Louce
+          </span>
+          <b>{mainQuest.title}</b>
+          <small>{mainQuest.hint}</small>
+        </div>
+      )}
 
       {!tut && questOpen && sideQuest && (
         <div className="hud-quest paper side open">

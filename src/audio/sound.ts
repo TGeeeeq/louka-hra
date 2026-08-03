@@ -195,6 +195,8 @@ class SoundEngine {
   private dangerOsc: OscillatorNode | null = null;
   private dangerLfo: OscillatorNode | null = null;
   private reliefTimer: number | null = null;
+  /** Pojistka: napětí se samo rozpustí, když ho nic neobnoví (viz setTension). */
+  private tensionDecay: number | null = null;
 
   // Cooldowny
   private lastNpcSpeak: Record<string, number> = {};
@@ -900,12 +902,15 @@ class SoundEngine {
   // ─── TENSION SYSTEM — mix vrstev + tempo ───────────────────────────────────
 
   setTension(level: TensionLevel) {
-    if (this.tensionLevel === level) return;
-    this.tensionLevel = level;
-    this.applyTensionMix(level);
-    this.updateAmbientTension(level);
-    if (level === 2) this.startDangerDrone();
-    else this.stopDangerDrone();
+    // Časovače se přenastavují i při „stejné" úrovni — opakovaný poplach
+    // (další útěk, další zakvokání) tak napětí prodlouží.
+    if (this.tensionLevel !== level) {
+      this.tensionLevel = level;
+      this.applyTensionMix(level);
+      this.updateAmbientTension(level);
+      if (level === 2) this.startDangerDrone();
+      else this.stopDangerDrone();
+    }
     // relief se po 2 s sám rozpustí do klidu
     if (this.reliefTimer != null) { window.clearTimeout(this.reliefTimer); this.reliefTimer = null; }
     if (level === 3) {
@@ -913,6 +918,16 @@ class SoundEngine {
         this.reliefTimer = null;
         this.setTension(0);
       }, 2000);
+    }
+    // Pojistka proti „zaseknuté akční hudbě": napětí 1/2 se samo vrátí do
+    // klidu, když ho nic neobnoví. Dřív mohl poplach (utečená ovce, liška u
+    // lesa) hrát klidně celý den, i když už bylo dávno vyřešeno.
+    if (this.tensionDecay != null) { window.clearTimeout(this.tensionDecay); this.tensionDecay = null; }
+    if (level === 1 || level === 2) {
+      this.tensionDecay = window.setTimeout(() => {
+        this.tensionDecay = null;
+        this.setTension(0);
+      }, level === 2 ? 40_000 : 25_000);
     }
   }
 

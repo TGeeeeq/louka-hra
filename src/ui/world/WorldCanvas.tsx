@@ -6,6 +6,7 @@ import {
   ANIMAL_SPAWNS,
   GARDEN,
   INTERACTABLES,
+  INTERACTABLE_BY_ID,
   PLAYER_START,
   isBlocked,
   isBoxBlocked,
@@ -37,6 +38,7 @@ import { PEOPLE } from "../../game/content/people";
 import { consumeAction, input } from "../../world/input";
 import { sound } from "../../audio/sound";
 import { StructureActionBar } from "./StructureActionBar";
+import { liveMarkers, setAlerts } from "../../world/markers";
 
 /**
  * Rozestavěná stavba čekající na potvrzení — buď nová z katalogu (`new`),
@@ -50,6 +52,27 @@ export type PendingPlacement = {
   tx: number;
   ty: number;
 };
+
+/**
+ * Kam právě ukazuje průvodce („teď je potřeba tohle"). Cíl se zadává id
+ * objektu z INTERACTABLES — pozice se dohledá až při kreslení, takže ukazatel
+ * sedí i po přesunutí stavby ve stavebním módu.
+ */
+export interface GuideTarget {
+  label: string;
+  emoji: string;
+  /** Jeden cíl (kurník, chalupa…). */
+  target?: string;
+  /** Víc možných cílů (bylinky) — vezme se nejbližší k hráči. */
+  targets?: string[];
+}
+
+/** Ručně zapíchnutý bod z velké mapy („chci se dostat sem"). */
+export interface Waypoint {
+  tx: number;
+  ty: number;
+  label: string;
+}
 
 export type InteractTarget =
   | { kind: "building"; it: Interactable }
@@ -113,6 +136,15 @@ interface Props {
   cinematic?: { tx: number; ty: number; ease?: number } | null;
   /** Klepnutí/kliknutí do světa během sestřihu ho předčasně přeruší. */
   onSkipCinematic?: () => void;
+  /** Aktuální krok denního plánu — kreslí se jako pulzující ukazatel na cíli
+   *  a jako šipka u kraje obrazovky, když je cíl mimo záběr. */
+  guide?: GuideTarget | null;
+  /** Bod zapíchnutý hráčem na velké mapě (modrý ukazatel). */
+  waypoint?: Waypoint | null;
+  /** Ťuknutí na mini-mapu = otevřít velkou (detailní) mapu. */
+  onOpenMap?: () => void;
+  /** Hráč došel k zapíchnutému bodu — ukazatel už není k čemu. */
+  onWaypointReached?: () => void;
   /** Hráč vybral místo pro novou stavbu. Nestaví se hned — App si nechá
    *  potvrdit „opravdu sem?" a teprve pak pošle PLACE_STRUCTURE. */
   onPlaceRequest: (defId: string, tx: number, ty: number) => void;
@@ -224,13 +256,13 @@ const BUILDING_VERB: Record<string, string> = {
   seniste: "Seniště (kosit / sušit / obracet)",
 };
 
-export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, zoomedOut, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, onMoveRequest, pending, onDemolishStructure, onEditReject, onInteract, onEvent }: Props) {
+export function WorldCanvas({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, zoomedOut, buildSelection, cinematic, onSkipCinematic, guide, waypoint, onOpenMap, onWaypointReached, onPlaceRequest, onMoveRequest, pending, onDemolishStructure, onEditReject, onInteract, onEvent }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // měnící se props čteme přes ref, ať smyčku nemusíme restartovat
-  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, zoomedOut, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, onMoveRequest, pending, onDemolishStructure, onEditReject, onInteract, onEvent });
-  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, zoomedOut, buildSelection, cinematic, onSkipCinematic, onPlaceRequest, onMoveRequest, pending, onDemolishStructure, onEditReject, onInteract, onEvent };
+  const propsRef = useRef({ season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, zoomedOut, buildSelection, cinematic, onSkipCinematic, guide, waypoint, onOpenMap, onWaypointReached, onPlaceRequest, onMoveRequest, pending, onDemolishStructure, onEditReject, onInteract, onEvent });
+  propsRef.current = { season, phase, paused, welfare, weather, money, built, tutorialTargets, settledGroups, tutorial, turbo, foxStage, wildActive, hiddenIds, appearance, structures, editMode, zoomedOut, buildSelection, cinematic, onSkipCinematic, guide, waypoint, onOpenMap, onWaypointReached, onPlaceRequest, onMoveRequest, pending, onDemolishStructure, onEditReject, onInteract, onEvent };
 
   // Vybraná existující stavba v edit módu (bez buildSelection) — místní React
   // stav, protože řídí DOM lištu Přesunout/Zbořit/Zrušit pod canvasem.
@@ -327,6 +359,11 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
   const escapeAcc = useRef(0);
   const lastPhase = useRef<Phase>(phase);
   const topInset = useRef(56); // výška horní HUD lišty — pod ni sázíme mini-mapu
+  // Obdélník mini-mapy na obrazovce (px) — ťuknutí do něj otevírá velkou mapu.
+  const miniRect = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  // Kdo právě utekl (id spojená čárkou) — jen pro detekci ZMĚNY, ať se
+  // upozornění a hudba nepřepočítávají každý snímek.
+  const escapeKey = useRef("");
 
   // init mobů jednou — zvířata bez postaveného výběhu čekají u vjezdu
   if (mobs.current.length === 0) {
@@ -518,6 +555,20 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       e.preventDefault();
       const P = propsRef.current;
       if (P.cinematic) { P.onSkipCinematic?.(); return; } // ťuknutí = přeskočit sestřih
+      // Mini-mapa je klikací: ťuknutí na ni otevře velkou detailní mapu.
+      // Musí se testovat DŘÍV než stavění, jinak by se pod mapou stavělo.
+      const mr = miniRect.current;
+      if (mr && P.onOpenMap) {
+        const r = canvas.getBoundingClientRect();
+        const lx = e.clientX - r.left;
+        const ly = e.clientY - r.top;
+        const pad = 8; // prstová rezerva kolem rámečku
+        if (lx >= mr.x - pad && lx <= mr.x + mr.w + pad && ly >= mr.y - pad && ly <= mr.y + mr.h + pad) {
+          sound.select();
+          P.onOpenMap();
+          return;
+        }
+      }
       if (P.editMode) {
         const pl = activePlacement();
         if (pl) {
@@ -580,6 +631,9 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
     // jednou pro celý běh efektu, aby nevznikalo GC tlaku každý snímek.
     type Item = { y: number; draw: () => void };
     const items: Item[] = [];
+    // Ukazatele „tady je teď něco potřeba" (world px). Pole je znovupoužité —
+    // bývají 1-3 a přepočítávají se každý snímek.
+    const pointers: Pointer[] = [];
 
     const loop = (now: number) => {
       perfFrame(now);
@@ -726,6 +780,37 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
             propsRef.current.onEvent({ type: "raid", animalId: m.id });
           }
         }
+      }
+
+      // --- živé značky pro mapu a akutní upozornění pro HUD ----------------
+      // Pozice se přepisují každý snímek (bez React re-renderu), seznam
+      // upozornění se přepočítá jen při skutečné změně (viz escapeKey).
+      liveMarkers.player.x = p.x;
+      liveMarkers.player.y = p.y;
+      liveMarkers.escapes.length = 0;
+      for (const m of mobs.current)
+        if (m.escaped)
+          liveMarkers.escapes.push({ id: m.id, label: ANIMAL_BY_ID[m.id]?.name ?? "Zvíře", x: m.x, y: m.y });
+      liveMarkers.npcs.length = 0;
+      for (const a of npcs.current)
+        liveMarkers.npcs.push({ id: a.id, label: PERSON_BY_ID[a.id]?.name ?? a.id, x: a.x, y: a.y });
+      const eKey = liveMarkers.escapes.map((e) => e.id).join(",");
+      if (eKey !== escapeKey.current) {
+        escapeKey.current = eKey;
+        setAlerts(
+          liveMarkers.escapes.map((e) => ({
+            id: `escape_${e.id}`,
+            label: `Útěk z výběhu: ${e.label}`,
+            hint: "Dojdi až k němu a zmáčkni akci — zaženeš ho zpátky. Na mapě bliká červeně, směr ukazuje šipka.",
+            emoji: "❗",
+            markerId: e.id,
+          })),
+        );
+        // Napětí v hudbě patří k útěku. Když se útěk vyřeší jinak než chycením
+        // (přes noc, nebo ho dohnalo NPC mimo obraz), nikdo by ho nevypnul —
+        // a „akční" hudba by hrála dál. Úlevovou fanfáru (level 3) nerušíme.
+        const t = sound.getTension();
+        if (!eKey && (t === 1 || t === 2)) sound.setTension(0);
       }
 
       // --- divocí sousedé: liška, káně, ježek, srnka -----------------------
@@ -1110,6 +1195,33 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
         }
       }
 
+      // --- ukazatele cílů: pulzující bod na místě + šipka u kraje obrazovky ---
+      // Priorita: akutní (uprchlík) → aktuální krok plánu → zapíchnutý bod.
+      pointers.length = 0;
+      if (!P.editMode && !P.cinematic) {
+        for (const e of liveMarkers.escapes)
+          pointers.push({ x: e.x, y: e.y, label: `Útěk: ${e.label}`, emoji: "❗", tone: "red" });
+        const g = P.guide;
+        if (g) {
+          const spot = guideSpot(g, p.x, p.y);
+          if (spot) pointers.push({ x: spot.x, y: spot.y, label: g.label, emoji: g.emoji, tone: "gold" });
+        }
+        if (P.waypoint) {
+          const wx = (P.waypoint.tx + 0.5) * TS;
+          const wy = (P.waypoint.ty + 0.5) * TS;
+          // Došel jsi tam? Pak ukazatel zhasni, ať nesvítí pod nohama.
+          if (Math.hypot(wx - p.x, wy - p.y) < TS * 1.6) P.onWaypointReached?.();
+          else pointers.push({ x: wx, y: wy, label: P.waypoint.label, emoji: "📍", tone: "blue" });
+        }
+      }
+      for (const ptr of pointers) {
+        const sx = ptr.x - camX;
+        const sy = ptr.y - camY;
+        // Uvnitř záběru? Pak pulzující kruh na zemi + cedulka nad ním.
+        if (sx > -TS && sx < viewW + TS && sy > -TS * 2 && sy < viewH + TS)
+          drawBeacon(ctx, sx, sy, now, ptr, Math.hypot(ptr.x - p.x, ptr.y - p.y));
+      }
+
       // káně krouží nad drůbežím výběhem (jen stín a silueta — nikdy neútočí)
       if (P.wildActive.kaneCircle && P.phase === "poledne") drawKaneCircle(ctx, camX, camY, now);
 
@@ -1120,10 +1232,28 @@ export function WorldCanvas({ season, phase, paused, welfare, weather, money, bu
       drawSeasonParticles(ctx, P.season, cssW, cssH, dt, now);
       drawSoftBloom(ctx, cssW, cssH);
       drawVignetteGrain(ctx, cssW, cssH, now);
+      // šipky k cílům mimo záběr (v obrazovkových px, ať nejsou pod zoomem)
+      for (const ptr of pointers) {
+        const sx = (ptr.x - camX) * z;
+        const sy = (ptr.y - camY) * z;
+        if (sx > 0 && sx < cssW && sy > 0 && sy < cssH) continue; // je vidět, šipka netřeba
+        const steps = Math.round(Math.hypot(ptr.x - p.x, ptr.y - p.y) / TS);
+        drawEdgeArrow(ctx, cssW, cssH, topInset.current, sx, sy, ptr, steps, now);
+      }
       // kontextová akční nápověda
       if (actionLabel) drawActionChip(ctx, cssW, cssH, actionLabel);
       // mini-mapa (pod horní HUD lištou — na mobilu na výšku ji nepřekryje)
-      drawMinimap(ctx, cssW, topInset.current, p.x, p.y, nearest, P.built, P.tutorialTargets, P.hiddenIds);
+      miniRect.current = minimapRect(cssW, topInset.current);
+      drawMinimap(ctx, miniRect.current, {
+        now,
+        px: p.x,
+        py: p.y,
+        nearest,
+        built: P.built,
+        tutorialTargets: P.tutorialTargets,
+        hiddenIds: P.hiddenIds,
+        pointers,
+      });
 
       raf = requestAnimationFrame(loop);
     };
@@ -1451,22 +1581,206 @@ function drawActionChip(ctx: CanvasRenderingContext2D, vw: number, vh: number, l
   ctx.textAlign = "center";
 }
 
+// --- ukazatele cílů ---------------------------------------------------------
+
+type PointerTone = "gold" | "red" | "blue";
+interface Pointer {
+  /** World souřadnice cíle (px). */
+  x: number;
+  y: number;
+  label: string;
+  emoji: string;
+  tone: PointerTone;
+}
+
+const TONE: Record<PointerTone, { ink: string; glow: string }> = {
+  gold: { ink: "#b8863c", glow: "rgba(240,208,110,0.95)" },
+  red: { ink: "#a4422c", glow: "rgba(232,120,90,0.95)" },
+  blue: { ink: "#2f6b8f", glow: "rgba(120,190,235,0.95)" },
+};
+
+/**
+ * Kde přesně ukazatel stojí. `target`/`targets` jsou id z INTERACTABLES, takže
+ * pozice se čte živě — po přesunutí kurníku ukazuje ukazatel na nové místo.
+ * Z několika cílů (bylinky) vybere ten nejbližší hráči.
+ */
+function guideSpot(g: GuideTarget, px: number, py: number): { x: number; y: number } | null {
+  const ids = g.targets ?? (g.target ? [g.target] : []);
+  let best: { x: number; y: number } | null = null;
+  let bestD = Infinity;
+  for (const id of ids) {
+    const it = INTERACTABLE_BY_ID[id];
+    if (!it) continue;
+    const x = (it.tx + it.fw / 2) * TS;
+    const y = (it.ty + it.fh) * TS;
+    const d = Math.hypot(x - px, y - py);
+    if (d < bestD) { bestD = d; best = { x, y }; }
+  }
+  return best;
+}
+
+/**
+ * Pulzující ukazatel na cíli: rozpínající se kruh na zemi + poskakující
+ * cedulka s emoji. Když u toho hráč už stojí, ukazatel se zprůhlední, aby
+ * nepřekrýval samotnou akci.
+ */
+function drawBeacon(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  now: number,
+  ptr: Pointer,
+  dist: number,
+) {
+  const tone = TONE[ptr.tone];
+  const near = dist < TS * 2;
+  const fade = near ? 0.34 : 1;
+  const t = (now % 1500) / 1500; // 0..1 rozpínání kruhu
+  ctx.save();
+  ctx.globalAlpha = 0.6 * (1 - t) * fade;
+  ctx.strokeStyle = tone.glow;
+  ctx.lineWidth = 3;
+  const r = 9 + t * 30;
+  ctx.beginPath();
+  ctx.ellipse(sx, sy, r, r * 0.44, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  // stálý kroužek přímo na místě, ať je cíl čitelný i mezi pulzy
+  ctx.globalAlpha = 0.5 * fade;
+  ctx.beginPath();
+  ctx.ellipse(sx, sy, 11, 5, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  // cedulka nad cílem
+  const bob = Math.sin(now * 0.005) * 4;
+  const cy = sy - TS * 2.1 + bob;
+  ctx.save();
+  ctx.globalAlpha = fade;
+  ctx.font = `18px ${EMOJI_FONT}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const w = 30;
+  const h = 30;
+  ctx.fillStyle = "rgba(247,242,231,0.97)";
+  ctx.strokeStyle = tone.ink;
+  ctx.lineWidth = 2;
+  roundRect(ctx, sx - w / 2, cy - h / 2, w, h, 10);
+  ctx.fill();
+  ctx.stroke();
+  // špička dolů k cíli
+  ctx.beginPath();
+  ctx.moveTo(sx - 5, cy + h / 2 - 1);
+  ctx.lineTo(sx, cy + h / 2 + 7);
+  ctx.lineTo(sx + 5, cy + h / 2 - 1);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(247,242,231,0.97)";
+  ctx.fill();
+  ctx.fillStyle = "#2a2420";
+  ctx.fillText(ptr.emoji, sx, cy + 1);
+  ctx.restore();
+}
+
+/**
+ * Šipka u kraje obrazovky k cíli, který není v záběru — plus popisek a
+ * vzdálenost v krocích. Přesně tohle chybělo, když utekla ovce a hráč ji
+ * nikde nenašel.
+ */
+function drawEdgeArrow(
+  ctx: CanvasRenderingContext2D,
+  vw: number,
+  vh: number,
+  topInset: number,
+  sx: number,
+  sy: number,
+  ptr: Pointer,
+  steps: number,
+  now: number,
+) {
+  const tone = TONE[ptr.tone];
+  const cx = vw / 2;
+  const cy = vh / 2;
+  const dx = sx - cx;
+  const dy = sy - cy;
+  const len = Math.hypot(dx, dy) || 1;
+  const ang = Math.atan2(dy, dx);
+  // vnitřní okraj, na kterém šipka „visí" (pod HUD lištou, nad ovládáním)
+  const halfW = Math.max(40, vw / 2 - 46);
+  const top = topInset + 56;
+  const bottom = vh - 132;
+  const halfH = Math.max(40, Math.min(cy - top, bottom - cy));
+  const k = Math.min(halfW / Math.max(1, Math.abs(dx)), halfH / Math.max(1, Math.abs(dy)));
+  const pulse = Math.sin(now * 0.006) * 3;
+  const ax = cx + (dx / len) * (len * k + pulse);
+  const ay = cy + (dy / len) * (len * k + pulse);
+
+  ctx.save();
+  // trojúhelníková šipka směrem k cíli
+  ctx.translate(ax, ay);
+  ctx.rotate(ang);
+  ctx.fillStyle = tone.glow;
+  ctx.strokeStyle = tone.ink;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(15, 0);
+  ctx.lineTo(-9, -11);
+  ctx.lineTo(-4, 0);
+  ctx.lineTo(-9, 11);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  // popisek se drží uvnitř obrazovky (od šipky směrem do středu)
+  const label = `${ptr.emoji} ${ptr.label} · ${steps} kroků`;
+  ctx.save();
+  ctx.font = '700 12px "Plus Jakarta Sans", sans-serif';
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "center";
+  const tw = ctx.measureText(label).width + 18;
+  let lx = ax - (dx / len) * 34;
+  let ly = ay - (dy / len) * 30;
+  lx = Math.max(tw / 2 + 6, Math.min(vw - tw / 2 - 6, lx));
+  ly = Math.max(top - 30, Math.min(vh - 40, ly));
+  ctx.fillStyle = "rgba(26,31,28,0.86)";
+  roundRect(ctx, lx - tw / 2, ly - 12, tw, 24, 12);
+  ctx.fill();
+  ctx.strokeStyle = tone.glow;
+  ctx.lineWidth = 1.4;
+  roundRect(ctx, lx - tw / 2, ly - 12, tw, 24, 12);
+  ctx.stroke();
+  ctx.fillStyle = "#f7f2e7";
+  ctx.fillText(label, lx, ly + 1);
+  ctx.restore();
+}
+
+/** Obdélník mini-mapy na obrazovce — společný pro kreslení i hit-test ťuknutí. */
+function minimapRect(viewW: number, topInset: number) {
+  const base = getMinimapBase();
+  const w = Math.min(160, Math.max(viewW * 0.3, 116));
+  const h = (w * base.height) / base.width;
+  return { x: viewW - w - 12, y: topInset + 12, w, h };
+}
+
 function drawMinimap(
   ctx: CanvasRenderingContext2D,
-  viewW: number,
-  topInset: number,
-  px: number,
-  py: number,
-  nearest: InteractTarget | null,
-  built: string[],
-  tutorialTargets: string[],
-  hiddenIds: string[],
+  rect: { x: number; y: number; w: number; h: number },
+  o: {
+    now: number;
+    px: number;
+    py: number;
+    nearest: InteractTarget | null;
+    built: string[];
+    tutorialTargets: string[];
+    hiddenIds: string[];
+    pointers: Pointer[];
+  },
 ) {
+  const { px, py, nearest, built, tutorialTargets, hiddenIds } = o;
   const base = getMinimapBase();
-  const mw = Math.min(160, Math.max(viewW * 0.3, 116));
-  const mh = (mw * base.height) / base.width;
-  const x = viewW - mw - 12;
-  const y = topInset + 12; // vždy pod horní lištou (i když se na mobilu zalomí)
+  const mw = rect.w;
+  const mh = rect.h;
+  const x = rect.x;
+  const y = rect.y;
   ctx.save();
   ctx.fillStyle = "rgba(26,31,28,0.62)";
   roundRect(ctx, x - 5, y - 5, mw + 10, mh + 10, 10);
@@ -1476,7 +1790,7 @@ function drawMinimap(
   ctx.font = '700 9px "Plus Jakarta Sans", sans-serif';
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText("MAPA", x, y - 7);
+  ctx.fillText("MAPA · ŤUKNI PRO DETAIL", x, y - 7);
   roundRect(ctx, x, y, mw, mh, 6);
   ctx.clip();
   ctx.imageSmoothingEnabled = false;
@@ -1499,14 +1813,37 @@ function drawMinimap(
     ctx.arc(cx, cy, isTarget || isNear ? 3.4 : 2, 0, Math.PI * 2);
     ctx.fill();
   }
+  // Body, kde je něco potřeba — akutní (uprchlík) pulzuje výrazně červeně,
+  // aktuální krok plánu zlatě. Přesně to hráči chybělo: „něco se děje TAM".
+  for (const ptr of o.pointers) {
+    const cx = x + (ptr.x / TS) * tx;
+    const cy = y + (ptr.y / TS) * ty;
+    const tone = TONE[ptr.tone];
+    const t = (o.now % 1100) / 1100;
+    ctx.save();
+    ctx.globalAlpha = 0.85 * (1 - t);
+    ctx.strokeStyle = tone.glow;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3 + t * 7, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = tone.glow;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = tone.ink;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
   const pxm = x + (px / TS) * tx;
   const pym = y + (py / TS) * ty;
-  ctx.fillStyle = "#ff5a4a";
+  ctx.fillStyle = "#3f9bcd";
   ctx.beginPath();
   ctx.arc(pxm, pym, 3.2, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = "#fff";
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = 1.4;
   ctx.stroke();
   ctx.restore();
 }
